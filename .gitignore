@@ -9,6 +9,11 @@ lerna-debug.log*
 
 node_modules
 dist
+
+# Local secrets (copy server/.env.example to server/.env)
+.env
+.env.*
+!.env.example
 dist-ssr
 *.local
 

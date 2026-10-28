@@ -1,122 +1,96 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect, useState } from 'react'
+import { subDays } from 'date-fns'
+import TopBar, { type Theme } from './components/TopBar'
+import CalendarPage from './features/calendar/CalendarPage'
+import DashboardPage from './features/dashboard/DashboardPage'
+import FinancePage from './features/finance/FinancePage'
+import FitnessPage from './features/fitness/FitnessPage'
+import StreaksPage from './features/streaks/StreaksPage'
+import TimePage from './features/time/TimePage'
+import { toDateKey, todayKey } from './lib/dates'
+import type { CalendarEvent, Tracker } from './types'
 
-function App() {
-  const [count, setCount] = useState(0)
+const PAGES = [
+  { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
+  { id: 'streaks', label: 'Streaks', icon: '🔥' },
+  { id: 'finance', label: 'Finances', icon: '💰' },
+  { id: 'fitness', label: 'Fitness', icon: '💪' },
+  { id: 'time', label: 'Time', icon: '⏱️' },
+  { id: 'calendar', label: 'Calendar', icon: '📅' },
+] as const
+
+type PageId = (typeof PAGES)[number]['id']
+
+const SEED_TRACKERS: Tracker[] = [
+  { id: 't1', name: 'Daily reading', startDate: toDateKey(subDays(new Date(), 12)), color: '#4f46e5' },
+  { id: 't2', name: 'No soda', startDate: toDateKey(subDays(new Date(), 45)), color: '#db2777' },
+]
+
+const SEED_EVENTS: CalendarEvent[] = [{ id: 'e1', title: 'Dentist', date: todayKey() }]
+
+export default function App() {
+  const [page, setPage] = useState<PageId>('dashboard')
+  const [theme, setTheme] = useState<Theme>('system')
+  const [displayName, setDisplayName] = useState('Guest')
+  // Trackers and events are shared so the calendar can show them.
+  const [trackers, setTrackers] = useState<Tracker[]>(SEED_TRACKERS)
+  const [events, setEvents] = useState<CalendarEvent[]>(SEED_EVENTS)
+
+  useEffect(() => {
+    const root = document.documentElement
+    if (theme === 'system') root.removeAttribute('data-theme')
+    else root.setAttribute('data-theme', theme)
+  }, [theme])
+
+  // Every page stays mounted (just hidden) so switching tabs doesn't lose
+  // in-memory state, such as a running timer or the dashboard layout.
+  const show = (id: PageId) => ({ hidden: page !== id })
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="app">
+      <nav className="sidebar">
+        <div className="brand">Jackal</div>
+        {PAGES.map((p) => (
+          <button
+            key={p.id}
+            className={`nav-item ${page === p.id ? 'active' : ''}`}
+            onClick={() => setPage(p.id)}
+            aria-current={page === p.id ? 'page' : undefined}
+          >
+            <span aria-hidden>{p.icon}</span>
+            {p.label}
+          </button>
+        ))}
+      </nav>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <div className="main-col">
+        <TopBar
+          theme={theme}
+          onThemeChange={setTheme}
+          displayName={displayName}
+          onDisplayNameChange={setDisplayName}
+        />
+        <main className="content">
+          <div {...show('dashboard')}>
+            <DashboardPage />
+          </div>
+          <div {...show('streaks')}>
+            <StreaksPage trackers={trackers} setTrackers={setTrackers} />
+          </div>
+          <div {...show('finance')}>
+            <FinancePage />
+          </div>
+          <div {...show('fitness')}>
+            <FitnessPage />
+          </div>
+          <div {...show('time')}>
+            <TimePage />
+          </div>
+          <div {...show('calendar')}>
+            <CalendarPage trackers={trackers} events={events} setEvents={setEvents} />
+          </div>
+        </main>
+      </div>
+    </div>
   )
 }
-
-export default App
