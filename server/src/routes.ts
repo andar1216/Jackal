@@ -1,4 +1,6 @@
 import { Router } from 'express'
+import { auth } from './auth/routes.js'
+import { currentUserId, requireAuth } from './auth/middleware.js'
 import { integrations } from './integrations/routes.js'
 import { crudRouter, requireId } from './lib/crud.js'
 import { HttpError } from './lib/errors.js'
@@ -16,6 +18,10 @@ import {
 
 export const api = Router()
 
+// Sign-up and sign-in are public. Everything below this line needs a signed-in user.
+api.use('/auth', auth)
+api.use(requireAuth)
+
 api.use('/integrations', integrations)
 
 /* ---------- Skills (dashboard) ---------- */
@@ -26,7 +32,7 @@ const skills = crudRouter(Skill, { schema: skillSchema, sort: { createdAt: 1 } }
 // Logging a day before the skill's start date moves the start date back to that day.
 skills.post('/:id/logs/:date/toggle', async (req, res) => {
   const date = dateString.parse(req.params.date)
-  const skill = await Skill.findById(requireId(req.params.id))
+  const skill = await Skill.findOne({ _id: requireId(req.params.id), userId: currentUserId(req) })
   if (!skill) throw new HttpError(404, 'Not found')
 
   if (skill.logs.includes(date)) {

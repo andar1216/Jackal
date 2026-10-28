@@ -1,4 +1,4 @@
-import type { Integration, Skill } from '../types'
+import type { Integration, Skill, Transaction, User } from '../types'
 
 // Dev: Vite proxies /api to the backend. For a separate API host, set VITE_API_URL.
 const BASE = import.meta.env.VITE_API_URL ?? '/api'
@@ -11,11 +11,18 @@ export class ApiError extends Error {
   }
 }
 
+// Called when the server says the session is gone (expired, signed out elsewhere), so the app can show sign-in.
+let onUnauthorized: () => void = () => {}
+export const setUnauthorizedHandler = (handler: () => void) => {
+  onUnauthorized = handler
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response
   try {
     res = await fetch(BASE + path, {
       method,
+      credentials: 'include', // send the session cookie, also when the API is on another host
       headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
@@ -40,9 +47,19 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
         : res.status >= 500
           ? "Can't reach the server. Is the backend running?"
           : `Request failed (${res.status})`
+    // A 401 on the auth routes just means "wrong password" or "not signed in yet", which the forms show themselves.
+    if (res.status === 401 && !path.startsWith('/auth/')) onUnauthorized()
     throw new ApiError(res.status, message)
   }
   return data as T
+}
+
+export const authApi = {
+  me: () => request<User>('GET', '/auth/me'),
+  register: (input: { email: string; name: string; password: string }) => request<User>('POST', '/auth/register', input),
+  login: (input: { email: string; password: string }) => request<User>('POST', '/auth/login', input),
+  logout: () => request<void>('POST', '/auth/logout'),
+  updateName: (name: string) => request<User>('PATCH', '/auth/me', { name }),
 }
 
 export type NewSkill = Pick<Skill, 'name' | 'color' | 'startDate'>
@@ -59,5 +76,41 @@ export const skillsApi = {
 export const integrationsApi = {
   list: () => request<Integration[]>('GET', '/integrations'),
   connect: (id: string) => request<void>('POST', `/integrations/${id}/connect`),
-  disconnect: (id: string) => request<void>('DELETE', `/integrations/${id}/connection`),
+  disconnect: async (id: string) => {
+    await request<void>('DELETE', `/integrations/${id}/connection`)
+    if (id === 'plaid') notifyTransactionsChanged()
+  },
+}
+
+/** Pages showing transactions listen for this, so they refresh after a bank import. */
+export const TRANSACTIONS_CHANGED = 'jackal:transactions-changed'
+const notifyTransactionsChanged = () => window.dispatchEvent(new Event(TRANSACTIONS_CHANGED))
+
+export type NewTransaction = Pick<Transaction, 'type' | 'amountCents' | 'category' | 'date' | 'note'>
+
+export const transactionsApi = {
+  // Both dates are YYYY-MM-DD, inclusive.
+  list: (from: string, to: string) => request<Transaction[]>('GET', `/transactions?from=${from}&to=${to}`),
+  create: (t: NewTransaction) => request<Transaction>('POST', '/transactions', t),
+  remove: (id: string) => request<void>('DELETE', `/transactions/${id}`),
+}
+
+export type PlaidSyncResult = { added: number; modified: number; removed: number; notReady: boolean }
+
+export const plaidApi = {
+  linkToken: () => request<{ linkToken: string }>('POST', '/integrations/plaid/link-token'),
+  exchange: async (publicToken: string, institutionName?: string) => {
+    const res = await request<{ institution: string; sync: PlaidSyncResult | { error: string } }>(
+      'POST',
+      '/integrations/plaid/exchange',
+      { publicToken, institutionName },
+    )
+    notifyTransactionsChanged()
+    return res
+  },
+  sync: async () => {
+    const res = await request<PlaidSyncResult>('POST', '/integrations/plaid/sync')
+    notifyTransactionsChanged()
+    return res
+  },
 }

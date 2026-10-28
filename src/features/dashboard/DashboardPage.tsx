@@ -127,10 +127,6 @@ export default function DashboardPage() {
         setSkills((prev) => [...prev, created])
         setSelectedId(created.id)
       }),
-    removeSkill: (id) => {
-      setSkills((prev) => prev.filter((s) => s.id !== id))
-      writes.enqueue(() => skillsApi.remove(id))
-    },
     toggleDay: (id, key) => {
       // Update the screen right away, then save.
       setSkills((prev) => prev.map((s) => (s.id === id ? withDayToggled(s, key) : s)))

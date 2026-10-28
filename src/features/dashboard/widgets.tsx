@@ -11,7 +11,6 @@ export type WidgetCtx = {
   status: 'loading' | 'ready' | 'error'
   select: (id: string) => void
   addSkill: (name: string) => void
-  removeSkill: (id: string) => void
   toggleDay: (id: string, dateKey: string) => void
   setAvgWeeks: (id: string, weeks: number) => void
 }
@@ -90,13 +89,6 @@ export function SkillsWidget({ ctx }: { ctx: WidgetCtx }) {
                     aria-pressed={done}
                   >
                     {done ? '✓ Done today' : 'Mark today'}
-                  </button>
-                  <button
-                    className="link"
-                    aria-label={`Delete ${s.name}`}
-                    onClick={() => ctx.removeSkill(s.id)}
-                  >
-                    ✕
                   </button>
                 </span>
               </li>

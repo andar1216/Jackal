@@ -2,13 +2,13 @@
 
 Jackal is a personal "track anything in life" app. It combines streak tracking, finances, fitness and calories, time tracking, and a calendar in one React app.
 
-> **Status:** the frontend UI is built and interactive, and a Node + MongoDB backend API (`server/`) is set up and tested. **The Dashboard is connected to the API**: skills, logged days and per-skill average weeks are saved in MongoDB. The other screens (Streaks, Finances, Fitness, Time, Calendar) are not connected yet. They keep state in memory, reset on refresh, and start with sample data. The dashboard widget layout and the theme are also not saved yet.
+> **Status:** the frontend UI is built and interactive, and a Node + MongoDB backend API (`server/`) is set up and tested. **You sign in with an account (email + password), and your data is private to it.** **The Dashboard is connected to the API**: skills, logged days and per-skill average weeks are saved in MongoDB. The other screens (Streaks, Finances, Fitness, Time, Calendar) are not connected yet. They keep state in memory, reset on refresh, and start with sample data. The dashboard widget layout and the theme are also not saved yet.
 
 ---
 
 ## Features
 
-The app has a **top bar** with a **Settings** menu (theme: system/light/dark, display name) and a **profile** menu at the top right. Account actions are placeholders for now.
+The app has a **top bar** with a **Settings** menu (theme: system/light/dark, display name) and a **profile** menu at the top right. The profile menu shows your account and lets you sign out.
 
 | Screen | What it does today (UI) | Planned |
 | --- | --- | --- |
@@ -69,7 +69,7 @@ You can also run them separately: `npm run dev` for the frontend and `npm run se
 
 The database starts empty, so the Dashboard shows no skills at first. Add some in the Skills widget, or run `npm run seed` inside `server/` to add the defaults (Exercise, Calories, Finances) with sample history. The seed does nothing if skills already exist.
 
-**No MongoDB installed?** Run `npm run dev:memory` inside `server/` instead of `npm run server`. It starts the API on a temporary in-memory database, already seeded with the default skills. Data is lost when you stop it. The first run downloads a MongoDB binary.
+**No MongoDB installed?** Run `npm run dev:memory` inside `server/` instead of `npm run server`. It starts the API on a temporary in-memory database, with a demo account (`demo@jackal.local` / `demo-password-1`) and the default skills. Data is lost when you stop it. The first run downloads a MongoDB binary.
 
 If the backend isn't reachable, the Dashboard shows an error banner with a Retry button. By default the frontend calls `/api` (proxied by Vite in development). To point it at an API on another host, set `VITE_API_URL` (for example `https://api.example.com/api`) when building, and set `CLIENT_ORIGIN` on the server to the frontend's URL.
 
@@ -78,7 +78,7 @@ Backend scripts (run inside `server/`, or from the root with the `server:*` scri
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Start the API with auto-restart on changes |
-| `npm run dev:memory` | Start the API on a temporary in-memory MongoDB, seeded with the default skills |
+| `npm run dev:memory` | Start the API on a temporary in-memory MongoDB, with a demo account (`demo@jackal.local` / `demo-password-1`) and the default skills |
 | `npm run seed` | Add the default skills to your database if it has none |
 | `npm run build` | Compile to `server/dist/` |
 | `npm start` | Run the compiled build |
@@ -174,6 +174,8 @@ Each folder under `features/` is one screen. Trackers and calendar events are he
 
 Base URL `http://localhost:4000/api`. All bodies are JSON. Documents are returned with a string `id` (no `_id` or `__v`) plus `createdAt` and `updatedAt`. Invalid input returns `400` with `{ "error": "...", "issues": [...] }`, a missing document returns `404`, and unknown fields in a request body are rejected.
 
+**Everything except /health and /auth/* requires a signed-in user** (otherwise 401), and every query is limited to that user's own documents. Another user's document looks like it doesn't exist (404).
+
 Every resource below supports `GET /`, `GET /:id`, `POST /`, `PATCH /:id` (send only the fields to change), and `DELETE /:id` (returns `204`).
 
 | Resource | Path | Extra query filters |
@@ -188,13 +190,20 @@ Every resource below supports `GET /`, `GET /:id`, `POST /`, `PATCH /:id` (send 
 
 Other endpoints:
 
+- Accounts: `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `PATCH /auth/me` (change your name). Sign-in sets an httpOnly session cookie.
 - `GET /integrations` lists the planned integrations with their connection state; `POST /integrations/:id/connect` starts connecting (returns `501` until that integration is built); `DELETE /integrations/:id/connection` disconnects.
 - `GET /health` returns `{ "status": "ok", "db": true }`.
 - `POST /skills/:id/logs/:date/toggle` turns a day on or off for a skill (the dashboard calendar click). Logging a day before the start date moves the start date back.
 
 Meals and workouts default `date` to today when it isn't sent. A running timer is a time entry with no `end`; stop it with `PATCH /time-entries/:id` and an `end`.
 
-**Not built yet:** authentication and per-user data. Right now there is a single shared dataset, so don't expose the API publicly. The profile menu in the UI is a placeholder for this.
+### Accounts and security
+
+- Passwords are hashed with scrypt (never stored or logged). Sign-in errors are identical for a wrong password and an unknown email, and repeated failures are rate limited (in memory, per email and address).
+- Sessions are random tokens in an httpOnly, SameSite=Lax cookie (Secure in production). Only a hash of the token is stored in MongoDB, and sessions expire after 30 days of inactivity.
+- Writes from any browser origin other than CLIENT_ORIGIN are refused, and the API listens on 127.0.0.1 only (HOST to change).
+- **The first account created adopts any data saved before accounts existed.** After that, set ALLOW_REGISTRATION=false in .env if you don't want anyone else to sign up.
+- Not built yet: password change/reset and email verification. Browse the app at http://localhost:5173 (not 127.0.0.1), because that is the allowed origin.
 
 ---
 
@@ -205,11 +214,27 @@ The Dashboard's **Connect** button lists the outside services we want to pull da
 | Service | Kind | Status |
 | --- | --- | --- |
 | Google Calendar | Official API (OAuth) | Not started |
-| Plaid (bank accounts) | Official API (Plaid Link) | Not started |
+| Plaid (bank accounts) | Official API (Plaid Link) | **Built** (Sandbox tested; see below) |
 | MyFitnessPal | Likely partner-only API | Not started, may not be possible |
 | Crunch Fitness | Unofficial, can break | Not started |
 | Samsung S23 screen time | No public API, needs a companion app | Not started |
 | Windows screen time | Needs a local background agent | Not started |
+
+### Plaid (bank accounts)
+
+Set these in the root `.env` (see `.env.example`): `PLAID_CLIENT_ID`, `PLAID_ENV` (`sandbox` or `production`), the matching secret (`PLAID_SANDBOX_SECRET` or `PLAID_PRODUCTION_SECRET`), and `INTEGRATION_ENCRYPTION_KEY` (32 random bytes, base64). **Back the key up: if you lose it you have to reconnect your banks.** Restart the API after changing `.env`.
+
+How it works:
+
+1. **Connect** (Dashboard) asks the server for a one-time link token and opens Plaid Link in the browser.
+2. When you finish, Link gives the browser a one-time `public_token`, which the server trades for a long-lived `access_token`. The access token is stored **AES-256-GCM encrypted** in MongoDB (`PlaidItem`) and is never sent to the browser.
+3. The server imports your history with Plaid's cursor-based `/transactions/sync` (up to 365 days) and saves it as normal `Transaction`s marked `source: 'plaid'`. Syncing again never duplicates, and picks up changes and removals. **Sync banks** (Finances) and **Sync now** (Connect dialog) fetch the latest. There are no webhooks yet, so nothing syncs by itself.
+4. Plaid says money out is positive. Jackal turns that into expense/income, maps Plaid's categories onto the Finances budgets (Food, Rent, Transport, Fun, Other), and **skips transfers between your accounts and credit card payments** so nothing counts twice.
+5. **Disconnect** revokes access at Plaid, deletes the stored token, and removes the imported transactions (ones you typed in stay).
+
+Testing with fake banks: in Sandbox, Plaid Link accepts the username `user_good` and password `pass_good` (use `1234` if asked for a code). A fresh link can take several seconds before transactions show up; the Connect dialog keeps checking for about 25 seconds.
+
+Going to real banks: Plaid's Trial plan uses `PLAID_ENV=production` with your Production secret and allows 10 linked banks in total (removing one does not free a slot). Banks that sign in through their own site or app (OAuth) need an **https** `PLAID_REDIRECT_URI` registered in the Plaid dashboard, so run those once Jackal is served over HTTPS.
 
 ---
 
@@ -228,7 +253,7 @@ See `src/types.ts` for the full types: `Skill`, `Tracker`, `Transaction`, `Meal`
 1. ~~UI for all five screens~~ (done)
 2. ~~Backend: Node + MongoDB API for all resources~~ (done)
 3. **Connect the remaining screens to the API** (Streaks, Finances, Fitness, Time, Calendar). ~~Dashboard~~ is done. Also save the dashboard layout and theme (`localStorage` or a user settings document).
-4. **Auth and per-user data:** accounts, sessions, and a `userId` on every document.
+4. ~~Auth and per-user data: accounts, sessions, and a `userId` on every document~~ (done). Password change/reset and email verification are still to do.
 5. **Calendar:** week and day views, event editing, overlay of workouts and time entries.
 6. **Streaks:** reset history and longest streak.
 7. **Finance and fitness:** choose a date per entry, add monthly/daily history, and add charts (e.g. `recharts`).

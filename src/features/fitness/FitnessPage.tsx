@@ -141,13 +141,6 @@ export default function FitnessPage() {
                     </span>
                     <span className="row">
                       <strong>{m.calories} kcal</strong>
-                      <button
-                        className="link"
-                        aria-label="Delete meal"
-                        onClick={() => setMeals((p) => p.filter((x) => x.id !== m.id))}
-                      >
-                        ✕
-                      </button>
                     </span>
                   </li>
                 ))}
@@ -197,13 +190,6 @@ export default function FitnessPage() {
                     </span>
                     <span className="row">
                       <strong>{w.caloriesBurned} kcal</strong>
-                      <button
-                        className="link"
-                        aria-label="Delete workout"
-                        onClick={() => setWorkouts((p) => p.filter((x) => x.id !== w.id))}
-                      >
-                        ✕
-                      </button>
                     </span>
                   </li>
                 ))}

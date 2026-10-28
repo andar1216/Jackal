@@ -33,8 +33,6 @@ export default function StreaksPage({ trackers, setTrackers }: Props) {
   const reset = (id: string) =>
     setTrackers((prev) => prev.map((t) => (t.id === id ? { ...t, startDate: todayKey() } : t)))
 
-  const remove = (id: string) => setTrackers((prev) => prev.filter((t) => t.id !== id))
-
   const startsOn = (d: Date) => trackers.filter((t) => t.startDate === toDateKey(d))
 
   return (
@@ -92,9 +90,6 @@ export default function StreaksPage({ trackers, setTrackers }: Props) {
                       <span>
                         <button className="link" onClick={() => reset(t.id)}>
                           Reset
-                        </button>
-                        <button className="link" onClick={() => remove(t.id)}>
-                          Delete
                         </button>
                       </span>
                     </div>

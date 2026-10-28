@@ -1,3 +1,5 @@
+import { plaidGateway } from './plaidGateway.js'
+
 export type Provider = {
   id: string
   name: string
@@ -5,6 +7,8 @@ export type Provider = {
   category: 'calendar' | 'finance' | 'fitness' | 'screen-time'
   /** True once the connection flow and data sync for this provider are built. */
   implemented: boolean
+  /** Optional extra check, such as API keys being present on the server. */
+  isConfigured?: () => boolean
   /** Shown in the UI: what to expect or what's needed. */
   note?: string
 }
@@ -27,8 +31,9 @@ export const providers: Provider[] = [
     name: 'Plaid (bank accounts)',
     description: 'Import transactions from your personal and business accounts.',
     category: 'finance',
-    implemented: false,
-    note: 'Official API. Needs a Plaid developer account (client ID and secret).',
+    implemented: true,
+    isConfigured: () => plaidGateway().isConfigured(),
+    note: 'Sign in to your bank through Plaid. Transfers between your own accounts are skipped.',
   },
   {
     id: 'myfitnesspal',

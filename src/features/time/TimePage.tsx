@@ -120,15 +120,6 @@ export default function TimePage() {
                   </span>
                   <span className="row">
                     <strong>{formatDuration(entrySeconds(e, now))}</strong>
-                    {e.end && (
-                      <button
-                        className="link"
-                        aria-label="Delete entry"
-                        onClick={() => setEntries((p) => p.filter((x) => x.id !== e.id))}
-                      >
-                        ✕
-                      </button>
-                    )}
                   </span>
                 </li>
               ))}

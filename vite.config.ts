@@ -7,7 +7,8 @@ export default defineConfig({
   server: {
     // Forward /api calls to the Node backend (server/) so the browser sees one origin.
     proxy: {
-      '/api': 'http://localhost:4000',
+      // API_PROXY_TARGET is only for running a second API next to the main one (for example in testing).
+      '/api': process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:4000',
     },
   },
 })

@@ -1,6 +1,8 @@
 import { createApp } from './app.js'
 import { config } from './config.js'
 import { connectDb, disconnectDb } from './db.js'
+import { plaidGateway } from './integrations/plaidGateway.js'
+import { syncAllIndexes } from './models.js'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -27,9 +29,12 @@ async function connectWithRetry() {
 async function main() {
   await connectWithRetry()
   console.log('Connected to MongoDB')
+  await syncAllIndexes()
 
-  const server = createApp().listen(config.port, () => {
-    console.log(`API listening on http://localhost:${config.port}`)
+  const server = createApp().listen(config.port, config.host, () => {
+    console.log(`API listening on http://${config.host}:${config.port}`)
+    // Which Plaid environment is active (never the keys themselves), so a wrong .env is easy to spot.
+    console.log(`Plaid: ${config.plaid.env} (${plaidGateway().isConfigured() ? 'keys found' : 'NOT set up'})`)
   })
 
   const shutdown = () => {

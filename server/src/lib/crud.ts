@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { isValidObjectId, type Model } from 'mongoose'
 import type { z } from 'zod'
+import { currentUserId } from '../auth/middleware.js'
 import { dateString } from '../validation.js'
 import { HttpError } from './errors.js'
 
@@ -19,7 +20,11 @@ export const requireId = (id: string) => {
   return id
 }
 
-/** Standard list / get / create / update / delete routes for a model. */
+/**
+ * Standard list / get / create / update / delete routes for a model.
+ * Every query is limited to the signed-in user's own documents, so one user can never
+ * read or change another's (a document that belongs to someone else is simply "not found").
+ */
 export function crudRouter(model: Model<any>, { schema, filters = [], range, sort = { createdAt: 1 } }: Options) {
   const router = Router()
   const updateSchema = schema.partial()
@@ -34,7 +39,7 @@ export function crudRouter(model: Model<any>, { schema, filters = [], range, sor
   }
 
   router.get('/', async (req, res) => {
-    const query: Record<string, unknown> = {}
+    const query: Record<string, unknown> = { userId: currentUserId(req) }
     // Only plain strings are accepted, which also blocks operator injection like ?x[$ne]=1.
     for (const key of filters) {
       const value = req.query[key]
@@ -51,27 +56,28 @@ export function crudRouter(model: Model<any>, { schema, filters = [], range, sor
   })
 
   router.get('/:id', async (req, res) => {
-    const doc = await model.findById(requireId(req.params.id))
+    const doc = await model.findOne({ _id: requireId(req.params.id), userId: currentUserId(req) })
     if (!doc) throw new HttpError(404, 'Not found')
     res.json(doc)
   })
 
   router.post('/', async (req, res) => {
-    const doc = await model.create(schema.parse(req.body))
+    const doc = await model.create({ ...schema.parse(req.body), userId: currentUserId(req) })
     res.status(201).json(doc)
   })
 
   router.patch('/:id', async (req, res) => {
-    const doc = await model.findByIdAndUpdate(requireId(req.params.id), updateSchema.parse(req.body), {
-      returnDocument: 'after',
-      runValidators: true,
-    })
+    const doc = await model.findOneAndUpdate(
+      { _id: requireId(req.params.id), userId: currentUserId(req) },
+      updateSchema.parse(req.body),
+      { returnDocument: 'after', runValidators: true },
+    )
     if (!doc) throw new HttpError(404, 'Not found')
     res.json(doc)
   })
 
   router.delete('/:id', async (req, res) => {
-    const doc = await model.findByIdAndDelete(requireId(req.params.id))
+    const doc = await model.findOneAndDelete({ _id: requireId(req.params.id), userId: currentUserId(req) })
     if (!doc) throw new HttpError(404, 'Not found')
     res.status(204).end()
   })

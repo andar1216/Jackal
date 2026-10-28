@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
+import type { User } from '../types'
 
 export type Theme = 'system' | 'light' | 'dark'
 
 type Props = {
   theme: Theme
   onThemeChange: (theme: Theme) => void
-  displayName: string
-  onDisplayNameChange: (name: string) => void
+  user: User
+  onNameChange: (name: string) => Promise<void>
+  onSignOut: () => Promise<void>
 }
 
 const THEMES: { id: Theme; label: string }[] = [
@@ -24,8 +26,11 @@ const initials = (name: string) =>
     .join('')
     .toUpperCase() || '?'
 
-export default function TopBar({ theme, onThemeChange, displayName, onDisplayNameChange }: Props) {
+export default function TopBar({ theme, onThemeChange, user, onNameChange, onSignOut }: Props) {
   const [open, setOpen] = useState<'settings' | 'profile' | null>(null)
+  // The name box is edited freely and saved when you leave it (or press Enter).
+  const [draftName, setDraftName] = useState(user.name)
+  const [nameError, setNameError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   // Close the open menu on outside click or Escape.
@@ -44,7 +49,22 @@ export default function TopBar({ theme, onThemeChange, displayName, onDisplayNam
   }, [open])
 
   const toggle = (menu: 'settings' | 'profile') => setOpen((cur) => (cur === menu ? null : menu))
-  const name = displayName.trim() || 'Guest'
+  const name = user.name
+
+  const saveName = async () => {
+    const next = draftName.trim()
+    if (next === user.name) return setNameError(null)
+    if (!next) {
+      setDraftName(user.name)
+      return setNameError(null)
+    }
+    try {
+      await onNameChange(next)
+      setNameError(null)
+    } catch (err) {
+      setNameError(err instanceof Error ? err.message : "Couldn't save the name.")
+    }
+  }
 
   return (
     <header className="topbar">
@@ -79,7 +99,14 @@ export default function TopBar({ theme, onThemeChange, displayName, onDisplayNam
               </div>
               <label className="field">
                 <span className="stat-label">Display name</span>
-                <input value={displayName} onChange={(e) => onDisplayNameChange(e.target.value)} placeholder="Guest" />
+                <input
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.target.value)}
+                  onBlur={saveName}
+                  onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                  maxLength={80}
+                />
+                {nameError && <span className="muted">{nameError}</span>}
               </label>
             </div>
           )}
@@ -102,13 +129,13 @@ export default function TopBar({ theme, onThemeChange, displayName, onDisplayNam
                 <span className="avatar">{initials(name)}</span>
                 <div>
                   <strong>{name}</strong>
-                  <div className="stat-label">Local profile</div>
+                  <div className="stat-label">{user.email}</div>
                 </div>
               </div>
               <button role="menuitem" disabled title="Coming soon">
                 Manage account
               </button>
-              <button role="menuitem" disabled title="Coming soon">
+              <button role="menuitem" onClick={onSignOut}>
                 Sign out
               </button>
             </div>

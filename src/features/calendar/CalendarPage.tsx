@@ -80,13 +80,6 @@ export default function CalendarPage({ trackers, events, setEvents }: Props) {
               {dayEvents.map((e) => (
                 <li key={e.id}>
                   <span>{e.title}</span>
-                  <button
-                    className="link"
-                    aria-label="Delete event"
-                    onClick={() => setEvents((p) => p.filter((x) => x.id !== e.id))}
-                  >
-                    ✕
-                  </button>
                 </li>
               ))}
               {dayTrackers.map((t) => (

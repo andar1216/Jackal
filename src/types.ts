@@ -35,6 +35,8 @@ export type Transaction = {
   category: string
   date: string // YYYY-MM-DD
   note?: string
+  source?: 'manual' | 'plaid' // imported bank transactions are 'plaid'
+  accountName?: string
 }
 
 export type Meal = {
@@ -65,4 +67,10 @@ export type CalendarEvent = {
   id: string
   title: string
   date: string // YYYY-MM-DD
+}
+
+export type User = {
+  id: string
+  email: string
+  name: string
 }

@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { subDays } from 'date-fns'
-import { formatDay, formatMoney, toDateKey, todayKey, uid } from '../../lib/dates'
+import { useEffect, useState } from 'react'
+import { addMonths, endOfMonth, format, isSameMonth, startOfMonth } from 'date-fns'
+import { plaidApi, TRANSACTIONS_CHANGED, transactionsApi } from '../../lib/api'
+import { formatDay, formatMoney, toDateKey, todayKey } from '../../lib/dates'
 import type { Transaction } from '../../types'
 
 const BUDGETS: Record<string, number> = {
@@ -12,22 +13,49 @@ const BUDGETS: Record<string, number> = {
 }
 const CATEGORIES = Object.keys(BUDGETS)
 
-const daysAgo = (n: number) => toDateKey(subDays(new Date(), n))
-
-const SEED: Transaction[] = [
-  { id: '1', type: 'income', amountCents: 320000, category: 'Other', date: daysAgo(3), note: 'Paycheck' },
-  { id: '2', type: 'expense', amountCents: 120000, category: 'Rent', date: daysAgo(2), note: 'Monthly rent' },
-  { id: '3', type: 'expense', amountCents: 8450, category: 'Food', date: daysAgo(1), note: 'Groceries' },
-  { id: '4', type: 'expense', amountCents: 3200, category: 'Transport', date: daysAgo(1), note: 'Gas' },
-  { id: '5', type: 'expense', amountCents: 5500, category: 'Fun', date: todayKey(), note: 'Movie night' },
-]
+const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.')
 
 export default function FinancePage() {
-  const [transactions, setTransactions] = useState<Transaction[]>(SEED)
+  // The page shows one month at a time, so the budgets mean something.
+  const [month, setMonth] = useState(() => startOfMonth(new Date()))
+  const from = toDateKey(month)
+  const to = toDateKey(endOfMonth(month))
+
+  const [data, setData] = useState<{ key: string; items: Transaction[] } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [reload, setReload] = useState(0)
+  const [syncing, setSyncing] = useState(false)
+
   const [type, setType] = useState<Transaction['type']>('expense')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState(CATEGORIES[0])
   const [note, setNote] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    transactionsApi
+      .list(from, to)
+      .then((items) => {
+        if (cancelled) return
+        setData({ key: from, items })
+        setError(null)
+      })
+      .catch((err) => !cancelled && setError(errorText(err)))
+    return () => {
+      cancelled = true
+    }
+  }, [from, to, reload])
+
+  // Refresh after a bank is connected, synced or disconnected from the Connect dialog.
+  useEffect(() => {
+    const refresh = () => setReload((n) => n + 1)
+    window.addEventListener(TRANSACTIONS_CHANGED, refresh)
+    return () => window.removeEventListener(TRANSACTIONS_CHANGED, refresh)
+  }, [])
+
+  const loaded = data?.key === from
+  const transactions = loaded ? data.items : []
+  const isCurrentMonth = isSameMonth(month, new Date())
 
   const income = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amountCents, 0)
   const spent = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amountCents, 0)
@@ -38,26 +66,67 @@ export default function FinancePage() {
       .filter((t) => t.type === 'expense' && t.category === cat)
       .reduce((s, t) => s + t.amountCents, 0)
 
-  const add = (e: React.FormEvent) => {
+  const add = async (e: React.FormEvent) => {
     e.preventDefault()
     const cents = Math.round(parseFloat(amount) * 100)
     if (!Number.isFinite(cents) || cents <= 0) return
-    setTransactions((prev) => [
-      { id: uid(), type, amountCents: cents, category, date: todayKey(), note: note.trim() || undefined },
-      ...prev,
-    ])
-    setAmount('')
-    setNote('')
+    try {
+      const created = await transactionsApi.create({
+        type,
+        amountCents: cents,
+        category,
+        date: isCurrentMonth ? todayKey() : from,
+        note: note.trim() || undefined,
+      })
+      setData((d) => (d ? { ...d, items: [...d.items, created] } : d))
+      setAmount('')
+      setNote('')
+      setError(null)
+    } catch (err) {
+      setError(errorText(err))
+    }
   }
 
+  const syncBanks = async () => {
+    setSyncing(true)
+    try {
+      await plaidApi.sync()
+      setError(null)
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setSyncing(false)
+    }
+  }
   const sorted = [...transactions].sort((a, b) => b.date.localeCompare(a.date))
 
   return (
     <>
-      <header className="page-header">
-        <h1>Finances</h1>
-        <p>Income, spending, and budgets.</p>
+      <header className="page-header row between">
+        <div>
+          <h1>Finances</h1>
+          <p>Income, spending, and budgets.</p>
+        </div>
+        <div className="row">
+          <button aria-label="Previous month" onClick={() => setMonth((m) => addMonths(m, -1))}>
+            ‹
+          </button>
+          <strong>{format(month, 'MMMM yyyy')}</strong>
+          <button aria-label="Next month" disabled={isCurrentMonth} onClick={() => setMonth((m) => addMonths(m, 1))}>
+            ›
+          </button>
+          <button onClick={syncBanks} disabled={syncing} title="Fetch the latest transactions from your connected banks">
+            {syncing ? 'Syncing...' : 'Sync banks'}
+          </button>
+        </div>
       </header>
+
+      {error && (
+        <div className="banner error" role="alert">
+          <span>{error}</span>
+          <button onClick={() => setReload((n) => n + 1)}>Retry</button>
+        </div>
+      )}
 
       <div className="stack">
         <div className="grid cols-3">
@@ -126,6 +195,8 @@ export default function FinancePage() {
               </button>
             </form>
 
+            {!loaded && !error && <p className="empty">Loading...</p>}
+            {loaded && sorted.length === 0 && <p className="empty">Nothing this month yet.</p>}
             <ul className="list">
               {sorted.map((t) => (
                 <li key={t.id}>
@@ -134,6 +205,7 @@ export default function FinancePage() {
                     <br />
                     <span className="stat-label">
                       {t.category} · {formatDay(t.date)}
+                      {t.source === 'plaid' && ` · ${t.accountName ?? 'Bank'}`}
                     </span>
                   </span>
                   <span className="row">
@@ -141,13 +213,6 @@ export default function FinancePage() {
                       {t.type === 'income' ? '+' : '-'}
                       {formatMoney(t.amountCents)}
                     </strong>
-                    <button
-                      className="link"
-                      aria-label="Delete transaction"
-                      onClick={() => setTransactions((p) => p.filter((x) => x.id !== t.id))}
-                    >
-                      ✕
-                    </button>
                   </span>
                 </li>
               ))}

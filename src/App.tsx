@@ -7,8 +7,10 @@ import FinancePage from './features/finance/FinancePage'
 import FitnessPage from './features/fitness/FitnessPage'
 import StreaksPage from './features/streaks/StreaksPage'
 import TimePage from './features/time/TimePage'
+import AuthPage from './auth/AuthPage'
+import { useAuth } from './auth/context'
 import { toDateKey, todayKey } from './lib/dates'
-import type { CalendarEvent, Tracker } from './types'
+import type { CalendarEvent, Tracker, User } from './types'
 
 const PAGES = [
   { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
@@ -29,18 +31,46 @@ const SEED_TRACKERS: Tracker[] = [
 const SEED_EVENTS: CalendarEvent[] = [{ id: 'e1', title: 'Dentist', date: todayKey() }]
 
 export default function App() {
-  const [page, setPage] = useState<PageId>('dashboard')
+  const { status, user, retry } = useAuth()
   const [theme, setTheme] = useState<Theme>('system')
-  const [displayName, setDisplayName] = useState('Guest')
-  // Trackers and events are shared so the calendar can show them.
-  const [trackers, setTrackers] = useState<Tracker[]>(SEED_TRACKERS)
-  const [events, setEvents] = useState<CalendarEvent[]>(SEED_EVENTS)
-
   useEffect(() => {
     const root = document.documentElement
     if (theme === 'system') root.removeAttribute('data-theme')
     else root.setAttribute('data-theme', theme)
   }, [theme])
+
+  if (status === 'loading' || status === 'error') {
+    return (
+      <div className="auth-status">
+        <div className="brand">Jackal</div>
+        {status === 'error' ? (
+          <>
+            <p className="muted">Can't reach the server. Is the backend running? Trying again...</p>
+            <div>
+              <button onClick={retry}>Retry now</button>
+            </div>
+          </>
+        ) : (
+          <p className="muted">Loading...</p>
+        )}
+      </div>
+    )
+  }
+
+  if (!user) return <AuthPage />
+
+  // Keyed by user so signing out and in as someone else never shows the previous person's screens.
+  return <Shell key={user.id} user={user} theme={theme} onThemeChange={setTheme} />
+}
+
+type ShellProps = { user: User; theme: Theme; onThemeChange: (theme: Theme) => void }
+
+function Shell({ user, theme, onThemeChange }: ShellProps) {
+  const { updateName, signOut } = useAuth()
+  const [page, setPage] = useState<PageId>('dashboard')
+  // Trackers and events are shared so the calendar can show them.
+  const [trackers, setTrackers] = useState<Tracker[]>(SEED_TRACKERS)
+  const [events, setEvents] = useState<CalendarEvent[]>(SEED_EVENTS)
 
   // Every page stays mounted (just hidden) so switching tabs doesn't lose
   // in-memory state, such as a running timer or the dashboard layout.
@@ -66,9 +96,10 @@ export default function App() {
       <div className="main-col">
         <TopBar
           theme={theme}
-          onThemeChange={setTheme}
-          displayName={displayName}
-          onDisplayNameChange={setDisplayName}
+          onThemeChange={onThemeChange}
+          user={user}
+          onNameChange={updateName}
+          onSignOut={signOut}
         />
         <main className="content">
           <div {...show('dashboard')}>

@@ -13,32 +13,34 @@ const logs = (daysBack: number, pattern: (daysAgo: number) => boolean) =>
     .map(dayKey)
     .sort()
 
-/** Insert the default sample skills, but only if there are none yet. Returns how many were added. */
-export async function seedSkills() {
-  if ((await Skill.countDocuments()) > 0) return 0
+/** Add the default sample skills for a user, but only if they have none yet. Returns how many were added. */
+export async function seedSkills(userId: unknown) {
+  if ((await Skill.countDocuments({ userId })) > 0) return 0
 
-  await Skill.create([
-    {
-      name: 'Exercise',
-      color: '#4f46e5',
-      startDate: dayKey(100),
-      logs: logs(100, (i) => i !== 0 && i % 8 !== 7),
-      avgWeeks: 12,
-    },
-    {
-      name: 'Calories',
-      color: '#db2777',
-      startDate: dayKey(60),
-      logs: logs(60, (i) => i % 2 === 0 || i % 5 === 0),
-      avgWeeks: 8,
-    },
-    {
-      name: 'Finances',
-      color: '#0891b2',
-      startDate: dayKey(30),
-      logs: logs(30, (i) => i % 3 !== 0),
-      avgWeeks: 4,
-    },
-  ])
+  await Skill.create(
+    [
+      {
+        name: 'Exercise',
+        color: '#4f46e5',
+        startDate: dayKey(100),
+        logs: logs(100, (i) => i !== 0 && i % 8 !== 7),
+        avgWeeks: 12,
+      },
+      {
+        name: 'Calories',
+        color: '#db2777',
+        startDate: dayKey(60),
+        logs: logs(60, (i) => i % 2 === 0 || i % 5 === 0),
+        avgWeeks: 8,
+      },
+      {
+        name: 'Finances',
+        color: '#0891b2',
+        startDate: dayKey(30),
+        logs: logs(30, (i) => i % 3 !== 0),
+        avgWeeks: 4,
+      },
+    ].map((skill) => ({ ...skill, userId })),
+  )
   return 3
 }
