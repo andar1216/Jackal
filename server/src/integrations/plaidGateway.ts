@@ -16,13 +16,15 @@ export type PlaidTx = {
   detailedCategory?: string
 }
 
+export type PlaidAccount = { accountId: string; name: string; mask?: string; type?: string; subtype?: string }
+
 export type SyncPage = {
   added: PlaidTx[]
   modified: PlaidTx[]
   removed: string[]
   nextCursor: string
   hasMore: boolean
-  accounts: { accountId: string; name: string; mask?: string }[]
+  accounts: PlaidAccount[]
   /** Plaid is still doing its first pull for a freshly linked bank. */
   notReady?: boolean
 }
@@ -40,6 +42,8 @@ export type PlaidGateway = {
   createLinkToken(userId: string): Promise<string>
   exchangePublicToken(publicToken: string): Promise<{ accessToken: string; itemId: string }>
   getInstitutionName(accessToken: string): Promise<string | undefined>
+  /** Every account the person shared. A transactions sync only mentions some of them. */
+  getAccounts(accessToken: string): Promise<PlaidAccount[]>
   syncTransactions(accessToken: string, cursor?: string): Promise<SyncPage>
   removeItem(accessToken: string): Promise<void>
 }
@@ -111,6 +115,17 @@ const realGateway: PlaidGateway = {
     }
   },
 
+  async getAccounts(accessToken) {
+    const res = await call(() => api().accountsGet({ access_token: accessToken }))
+    return res.data.accounts.map((a) => ({
+      accountId: a.account_id,
+      name: a.name,
+      mask: a.mask ?? undefined,
+      type: a.type,
+      subtype: a.subtype ?? undefined,
+    }))
+  },
+
   async syncTransactions(accessToken, cursor) {
     try {
       const res = await api().transactionsSync({
@@ -135,7 +150,13 @@ const realGateway: PlaidGateway = {
         removed: res.data.removed.map((r) => r.transaction_id).filter((id): id is string => Boolean(id)),
         nextCursor: res.data.next_cursor,
         hasMore: res.data.has_more,
-        accounts: res.data.accounts.map((a) => ({ accountId: a.account_id, name: a.name, mask: a.mask ?? undefined })),
+        accounts: res.data.accounts.map((a) => ({
+          accountId: a.account_id,
+          name: a.name,
+          mask: a.mask ?? undefined,
+          type: a.type,
+          subtype: a.subtype ?? undefined,
+        })),
       }
     } catch (err) {
       const e = toPlaidError(err)

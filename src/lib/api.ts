@@ -1,4 +1,4 @@
-import type { Integration, Skill, Transaction, User } from '../types'
+import type { BankAccount, Integration, Skill, Transaction, User } from '../types'
 
 // Dev: Vite proxies /api to the backend. For a separate API host, set VITE_API_URL.
 const BASE = import.meta.env.VITE_API_URL ?? '/api'
@@ -95,7 +95,14 @@ export const transactionsApi = {
   remove: (id: string) => request<void>('DELETE', `/transactions/${id}`),
 }
 
-export type PlaidSyncResult = { added: number; modified: number; removed: number; notReady: boolean }
+export type PlaidSyncResult = {
+  added: number
+  modified: number
+  removed: number
+  notReady: boolean
+  /** Banks that couldn't be synced this time. The others still were. */
+  errors?: { institution: string; message: string }[]
+}
 
 export const plaidApi = {
   linkToken: () => request<{ linkToken: string }>('POST', '/integrations/plaid/link-token'),
@@ -108,6 +115,7 @@ export const plaidApi = {
     notifyTransactionsChanged()
     return res
   },
+  accounts: () => request<BankAccount[]>('GET', '/integrations/plaid/accounts'),
   sync: async () => {
     const res = await request<PlaidSyncResult>('POST', '/integrations/plaid/sync')
     notifyTransactionsChanged()

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { addMonths, endOfMonth, format, isSameMonth, startOfMonth } from 'date-fns'
 import { plaidApi, TRANSACTIONS_CHANGED, transactionsApi } from '../../lib/api'
 import { formatDay, formatMoney, toDateKey, todayKey } from '../../lib/dates'
-import type { Transaction } from '../../types'
+import type { BankAccount, Transaction } from '../../types'
 
 const BUDGETS: Record<string, number> = {
   Food: 40000,
@@ -12,6 +12,33 @@ const BUDGETS: Record<string, number> = {
   Other: 10000,
 }
 const CATEGORIES = Object.keys(BUDGETS)
+
+const BY_HAND = 'Added by hand'
+const accountOf = (t: Transaction) => t.accountName ?? BY_HAND
+
+/** What a transaction does to spending: a refund on a credit card counts as negative spending. */
+const spend = (t: Transaction) => (t.type !== 'expense' ? 0 : t.isRefund ? -t.amountCents : t.amountCents)
+
+type AccountRow = { name: string; isCredit: boolean; spent: number; income: number; count: number }
+
+/** One row per account. Accounts we know about are listed even when they had nothing this month. */
+function groupByAccount(items: Transaction[], known: BankAccount[]) {
+  const groups = new Map<string, AccountRow>()
+  const row = (name: string) => {
+    const g = groups.get(name) ?? { name, isCredit: false, spent: 0, income: 0, count: 0 }
+    groups.set(name, g)
+    return g
+  }
+  for (const a of known) row(a.label).isCredit = a.type === 'credit'
+  for (const t of items) {
+    const g = row(accountOf(t))
+    if (t.type === 'income') g.income += t.amountCents
+    g.spent += spend(t)
+    g.count++
+  }
+  // Busiest first, quiet accounts at the end.
+  return [...groups.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+}
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.')
 
@@ -25,6 +52,7 @@ export default function FinancePage() {
   const [error, setError] = useState<string | null>(null)
   const [reload, setReload] = useState(0)
   const [syncing, setSyncing] = useState(false)
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
 
   const [type, setType] = useState<Transaction['type']>('expense')
   const [amount, setAmount] = useState('')
@@ -46,6 +74,18 @@ export default function FinancePage() {
     }
   }, [from, to, reload])
 
+  // Every account we know about, so one with no activity this month still shows up.
+  useEffect(() => {
+    let cancelled = false
+    plaidApi
+      .accounts()
+      .then((list) => !cancelled && setBankAccounts(list))
+      .catch(() => {}) // not essential, so a failure here is ignored
+    return () => {
+      cancelled = true
+    }
+  }, [reload])
+
   // Refresh after a bank is connected, synced or disconnected from the Connect dialog.
   useEffect(() => {
     const refresh = () => setReload((n) => n + 1)
@@ -57,14 +97,18 @@ export default function FinancePage() {
   const transactions = loaded ? data.items : []
   const isCurrentMonth = isSameMonth(month, new Date())
 
-  const income = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amountCents, 0)
-  const spent = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amountCents, 0)
+  // Group the month's transactions by the account they came from. Clicking an account filters everything below.
+  const [account, setAccount] = useState<string | null>(null)
+  const byAccount = groupByAccount(transactions, bankAccounts)
+  const activeAccount = byAccount.some((a) => a.name === account) ? account : null
+  const shown = activeAccount ? transactions.filter((t) => accountOf(t) === activeAccount) : transactions
+
+  const income = shown.filter((t) => t.type === 'income').reduce((s, t) => s + t.amountCents, 0)
+  const spent = shown.reduce((s, t) => s + spend(t), 0)
   const net = income - spent
 
   const spentBy = (cat: string) =>
-    transactions
-      .filter((t) => t.type === 'expense' && t.category === cat)
-      .reduce((s, t) => s + t.amountCents, 0)
+    Math.max(0, shown.filter((t) => t.category === cat).reduce((s, t) => s + spend(t), 0))
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -90,15 +134,16 @@ export default function FinancePage() {
   const syncBanks = async () => {
     setSyncing(true)
     try {
-      await plaidApi.sync()
-      setError(null)
+      const result = await plaidApi.sync()
+      // Say which bank had a problem, since the others still synced.
+      setError(result.errors?.length ? result.errors.map((e) => `${e.institution}: ${e.message}`).join(' ') : null)
     } catch (err) {
       setError(errorText(err))
     } finally {
       setSyncing(false)
     }
   }
-  const sorted = [...transactions].sort((a, b) => b.date.localeCompare(a.date))
+  const sorted = [...shown].sort((a, b) => b.date.localeCompare(a.date))
 
   return (
     <>
@@ -143,6 +188,57 @@ export default function FinancePage() {
             <div className={`stat-value ${net >= 0 ? 'good' : 'bad'}`}>{formatMoney(net)}</div>
           </div>
         </div>
+
+        {byAccount.length > 0 && (
+          <section className="card">
+            <div className="row between">
+              <h2>By account</h2>
+              {activeAccount && (
+                <button className="link" onClick={() => setAccount(null)}>
+                  Show all accounts
+                </button>
+              )}
+            </div>
+            <ul className="list">
+              {byAccount.map((a) => {
+                const selected = a.name === activeAccount
+                return (
+                  <li key={a.name} className={`skill-row ${selected ? 'selected' : ''}`}>
+                    <button
+                      className="skill-name"
+                      aria-pressed={selected}
+                      title="Show only this account"
+                      onClick={() => setAccount(selected ? null : a.name)}
+                    >
+                      <span>
+                        {a.name}
+                        {a.isCredit && <span className="pill"> Credit card</span>}
+                        <span className="stat-label">
+                          {' '}
+                          · {a.count === 0 ? 'no activity this month' : `${a.count} ${a.count === 1 ? 'transaction' : 'transactions'}`}
+                        </span>
+                      </span>
+                    </button>
+                    <span className="row">
+                      {a.income > 0 && <strong className="good">+{formatMoney(a.income)}</strong>}
+                      {a.count === 0 ? (
+                        <span className="muted">{formatMoney(0)}</span>
+                      ) : a.spent < 0 ? (
+                        <strong className="good">+{formatMoney(-a.spent)}</strong>
+                      ) : (
+                        a.spent > 0 && <strong className="bad">-{formatMoney(a.spent)}</strong>
+                      )}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+            <p className="stat-label" style={{ marginBottom: 0 }}>
+              Missing an account? Open Connect, choose Add a bank, and tick every account in Plaid's list (or use
+              Sync banks if a bank is still loading).
+            </p>
+          </section>
+        )}
 
         <div className="grid cols-2">
           <section className="card">
@@ -205,12 +301,13 @@ export default function FinancePage() {
                     <br />
                     <span className="stat-label">
                       {t.category} · {formatDay(t.date)}
+                      {t.isRefund && ' · refund'}
                       {t.source === 'plaid' && ` · ${t.accountName ?? 'Bank'}`}
                     </span>
                   </span>
                   <span className="row">
-                    <strong className={t.type === 'income' ? 'good' : 'bad'}>
-                      {t.type === 'income' ? '+' : '-'}
+                    <strong className={t.type === 'income' || t.isRefund ? 'good' : 'bad'}>
+                      {t.type === 'income' || t.isRefund ? '+' : '-'}
                       {formatMoney(t.amountCents)}
                     </strong>
                   </span>

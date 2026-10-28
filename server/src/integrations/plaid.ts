@@ -8,6 +8,9 @@ import { PlaidError, plaidGateway, type PlaidTx } from './plaidGateway.js'
 
 const MAX_BANKS_PER_USER = 5
 
+/** Bump when the way we import changes. Banks imported with an older version are fetched again once. */
+const SYNC_VERSION = 2
+
 /* ---------- Turning Plaid transactions into Jackal transactions ---------- */
 
 // Jackal's Finances screen budgets by these categories. Anything else becomes "Other".
@@ -28,19 +31,40 @@ const isInternalMove = (t: PlaidTx) =>
   t.primaryCategory === 'TRANSFER_OUT' ||
   t.detailedCategory === 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT'
 
-export function toTransactionFields(t: PlaidTx, accountNames: Map<string, string>) {
+type AccountInfo = { name?: string | null; mask?: string | null; type?: string | null }
+
+/** How an account is shown, for example "Chase · Checking ••1234". Also what transactions are grouped by. */
+export const accountLabel = (institution: string, a: AccountInfo) =>
+  `${institution} · ${a.name ?? 'Account'}${a.mask ? ` ••${a.mask}` : ''}`
+
+export type KnownAccount = { label: string; isCredit: boolean }
+
+export function toTransactionFields(t: PlaidTx, accounts: Map<string, KnownAccount>) {
   const cents = Math.round(Math.abs(t.amount) * 100)
   if (cents === 0 || isInternalMove(t)) return null
-  const isIncome = t.amount < 0 // Plaid: positive = money out
-  return {
-    type: isIncome ? ('income' as const) : ('expense' as const),
+
+  const account = accounts.get(t.accountId)
+  const moneyIn = t.amount < 0 // Plaid: positive = money out
+  const category = CATEGORY_MAP[t.primaryCategory ?? ''] ?? 'Other'
+  const common = {
     amountCents: cents,
-    category: isIncome ? 'Other' : (CATEGORY_MAP[t.primaryCategory ?? ''] ?? 'Other'),
     date: t.date,
     note: (t.merchantName || t.name).slice(0, 500),
-    accountName: accountNames.get(t.accountId),
+    accountName: account?.label,
     accountId: t.accountId,
   }
+
+  // A credit card is only for spending. Money coming back onto it is a refund, which lowers
+  // what you spent. It is never income.
+  if (account?.isCredit) {
+    // A payment toward the card that Plaid didn't label as one would count twice, so leave it out.
+    if (moneyIn && /payment|autopay/i.test(t.name)) return null
+    return { ...common, type: 'expense' as const, category, isRefund: moneyIn }
+  }
+
+  return moneyIn
+    ? { ...common, type: 'income' as const, category: 'Other', isRefund: false }
+    : { ...common, type: 'expense' as const, category, isRefund: false }
 }
 
 /* ---------- Syncing ---------- */
@@ -54,9 +78,13 @@ type ItemDoc = {
   accessToken: string // encrypted
   cursor?: string | null
   lastSyncedAt?: Date | null
-  accounts: { accountId?: string | null; name?: string | null; mask?: string | null }[]
+  syncVersion?: number | null
+  accounts: { accountId?: string | null; name?: string | null; mask?: string | null; type?: string | null }[]
   save(): Promise<unknown>
 }
+
+const isStale = (item: ItemDoc) => (item.syncVersion ?? 0) < SYNC_VERSION
+
 /** Pull everything new for one bank and store it. Safe to run any time, as repeats never duplicate. */
 export async function syncItem(item: ItemDoc, options: { fromScratch?: boolean } = {}): Promise<SyncResult> {
   const gateway = plaidGateway()
@@ -64,9 +92,15 @@ export async function syncItem(item: ItemDoc, options: { fromScratch?: boolean }
   const result: SyncResult = { added: 0, modified: 0, removed: 0, notReady: false }
 
   // Starting from nothing fetches the whole history again. That is safe, since saving is by bank id.
-  const startCursor = options.fromScratch ? undefined : (item.cursor ?? undefined)
+  const fromScratch = options.fromScratch || isStale(item)
+  const startCursor = fromScratch ? undefined : (item.cursor ?? undefined)
   let cursor = startCursor
   let restarts = 0
+
+  // A transactions sync only mentions accounts that have changes, so ask for the full list separately.
+  // This is how an account with no recent activity still gets listed.
+  const accountList = await gateway.getAccounts(accessToken).catch(() => [])
+  if (accountList.length > 0) item.accounts = accountList
 
   for (;;) {
     let page
@@ -88,16 +122,15 @@ export async function syncItem(item: ItemDoc, options: { fromScratch?: boolean }
       break
     }
 
-    if (page.accounts.length > 0) item.accounts = page.accounts
-    // Shown on the Finances screen, for example "Chase · Checking ••1234".
-    const names = new Map(
-      item.accounts.map((a) => [a.accountId ?? '', ` · ${a.name ?? 'Account'}${a.mask ?  ••${a.mask}` : ''}`]),
+    if (item.accounts.length === 0 && page.accounts.length > 0) item.accounts = page.accounts
+    const known = new Map<string, KnownAccount>(
+      item.accounts.map((a) => [a.accountId ?? '', { label: accountLabel(item.institutionName, a), isCredit: a.type === 'credit' }]),
     )
 
     const writes = []
     const dropIds = [...page.removed]
     for (const t of [...page.added, ...page.modified]) {
-      const fields = toTransactionFields(t, names)
+      const fields = toTransactionFields(t, known)
       if (!fields) {
         dropIds.push(t.id) // became a transfer, or was one all along
         continue
@@ -126,6 +159,7 @@ export async function syncItem(item: ItemDoc, options: { fromScratch?: boolean }
     if (!page.hasMore) break
   }
 
+  if (!result.notReady) item.syncVersion = SYNC_VERSION
   item.lastSyncedAt = new Date()
   await item.save()
   return result
@@ -138,19 +172,21 @@ const exchangeSchema = z.strictObject({
   institutionName: z.string().trim().max(120).optional(),
 })
 
-/** Show Plaid's problems as clear API errors instead of a generic 500. */
+/** Plaid's problems as clear API errors instead of a generic 500. */
+function toHttpError(err: unknown) {
+  if (!(err instanceof PlaidError)) return err
+  console.error(`Plaid error ${err.code}`)
+  if (err.code === 'ITEM_LOGIN_REQUIRED') {
+    return new HttpError(409, 'Your bank needs you to sign in again. Disconnect Plaid and connect it again.')
+  }
+  return new HttpError(502, `Plaid: ${err.message}`)
+}
+
 async function guard<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn()
   } catch (err) {
-    if (err instanceof PlaidError) {
-      console.error(`Plaid error ${err.code}`)
-      if (err.code === 'ITEM_LOGIN_REQUIRED') {
-        throw new HttpError(409, 'Your bank needs you to sign in again. Remove it and connect it again.')
-      }
-      throw new HttpError(502, `Plaid: ${err.message}`)
-    }
-    throw err
+    throw toHttpError(err)
   }
 }
 
@@ -200,25 +236,47 @@ plaidRouter.post('/exchange', async (req, res) => {
   res.status(201).json({ institution: item.institutionName, sync: synced })
 })
 
+// One bank failing must not stop the others from syncing, so problems are listed per bank.
 plaidRouter.post('/sync', async (req, res) => {
   requireConfigured()
   const items = await PlaidItem.find({ userId: currentUserId(req) }).select('+accessToken')
   if (items.length === 0) throw new HttpError(409, 'No bank is connected yet.')
 
-  // Imports made before accounts were tracked per transaction get fetched again once, to fill that in.
-  const fromScratch = Boolean(
-    await Transaction.exists({ userId: currentUserId(req), source: 'plaid', accountId: { $exists: false } }),
-  )
-
-  const total: SyncResult = { added: 0, modified: 0, removed: 0, notReady: false }
+  const total: SyncResult & { errors: { institution: string; message: string }[] } = {
+    added: 0,
+    modified: 0,
+    removed: 0,
+    notReady: false,
+    errors: [],
+  }
   for (const item of items) {
-    const r = await guard(() => syncItem(item as unknown as ItemDoc, { fromScratch }))
-    total.added += r.added
-    total.modified += r.modified
-    total.removed += r.removed
-    total.notReady ||= r.notReady
+    try {
+      const r = await syncItem(item as unknown as ItemDoc)
+      total.added += r.added
+      total.modified += r.modified
+      total.removed += r.removed
+      total.notReady ||= r.notReady
+    } catch (err) {
+      const e = toHttpError(err)
+      if (!(e instanceof HttpError)) throw e
+      total.errors.push({ institution: item.institutionName, message: e.message })
+    }
   }
   res.json(total)
+})
+
+// Every account Jackal knows about, so the Finances screen can list them even with no activity this month.
+plaidRouter.get('/accounts', async (req, res) => {
+  const items = await PlaidItem.find({ userId: currentUserId(req) }).sort({ createdAt: 1 })
+  res.json(
+    items.flatMap((item) =>
+      item.accounts.map((a: AccountInfo) => ({
+        label: accountLabel(item.institutionName, a),
+        institution: item.institutionName,
+        type: a.type ?? undefined,
+      })),
+    ),
+  )
 })
 
 /** Disconnect every bank: revoke access at Plaid, then remove our records and what was imported. */

@@ -92,6 +92,8 @@ const transactionSchema = ownedSchema({
   externalId: String,
   accountName: String, // for bank imports: bank, account and last digits
   accountId: String,
+  // A credit given back on a credit card (return, refund). It lowers spending instead of counting as income.
+  isRefund: { type: Boolean, default: false },
 })
 transactionSchema.index(
   { userId: 1, source: 1, externalId: 1 },
@@ -158,7 +160,13 @@ export const PlaidItem = mongoose.model(
     accessToken: { type: String, required: true, select: false }, // encrypted, see lib/secrets.ts
     cursor: String, // where the next transactions sync continues from
     lastSyncedAt: Date,
-    accounts: { type: [{ _id: false, accountId: String, name: String, mask: String }], default: [] },
+    accounts: {
+      // `type` has to be spelled out, because Mongoose reads a bare `type` key as "the type of this whole object".
+      type: [{ _id: false, accountId: String, name: String, mask: String, type: { type: String }, subtype: String }],
+      default: [],
+    },
+    // Bumped when how we import changes, so older imports get fetched again once.
+    syncVersion: Number,
   }),
 )
 

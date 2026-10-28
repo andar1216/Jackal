@@ -52,6 +52,12 @@ const plaid = {
   cursorsSeen: [] as (string | undefined)[],
   removedTokens: [] as string[],
   failExchange: false,
+  failTokens: [] as string[],
+  accounts: [
+    { accountId: 'acc1', name: 'Checking', mask: '0000', type: 'depository' },
+    { accountId: 'acc2', name: 'Business Card', mask: '1111', type: 'credit' },
+    { accountId: 'acc3', name: 'Business Checking', mask: '3333', type: 'depository' },
+  ] as { accountId: string; name: string; mask?: string; type?: string }[],
 }
 const fakePlaid: PlaidGateway = {
   isConfigured: () => plaid.configured,
@@ -61,7 +67,10 @@ const fakePlaid: PlaidGateway = {
     return { accessToken: `access-sandbox-${publicToken}`, itemId: `item-${publicToken}` }
   },
   getInstitutionName: async () => 'Test Bank',
-  syncTransactions: async (_token, cursor) => {
+  // A transactions page only mentions some accounts, but this lists them all.
+  getAccounts: async () => plaid.accounts,
+  syncTransactions: async (token, cursor) => {
+    if (plaid.failTokens.includes(token)) throw new PlaidError('INTERNAL_SERVER_ERROR', 'Bank is down')
     plaid.cursorsSeen.push(cursor)
     return plaid.pages.shift() ?? { added: [], modified: [], removed: [], nextCursor: cursor ?? 'c0', hasMore: false, accounts: [] }
   },
@@ -362,7 +371,10 @@ describe('plaid', () => {
     removed: [],
     nextCursor: 'c1',
     hasMore: false,
-    accounts: [{ accountId: 'acc1', name: 'Checking', mask: '0000' }],
+    accounts: [
+      { accountId: 'acc1', name: 'Checking', mask: '0000', type: 'depository' },
+      { accountId: 'acc2', name: 'Business Card', mask: '1111', type: 'credit' },
+    ],
     ...p,
   })
   const plaidTxns = async (client = call) =>
@@ -419,12 +431,13 @@ describe('plaid', () => {
     const by = (note: string) => list.find((t: { note: string }) => t.note === note)
     assert.deepEqual(
       [by('Chipotle').type, by('Chipotle').amountCents, by('Chipotle').category, by('Chipotle').accountName],
-      ['expense', 633, 'Food', 'Checking'],
+      ['expense', 633, 'Food', 'Test Bank · Checking ••0000'],
     )
     assert.deepEqual([by('Paycheck').type, by('Paycheck').amountCents], ['income', 50000])
     assert.equal(by('Merchant t3').category, 'Rent')
     assert.equal(by('Merchant t4').category, 'Fun')
     assert.equal(by('Chipotle').externalId, 't1')
+    assert.equal(by('Chipotle').accountId, 'acc1')
   })
 
   it('never sends the access token to the browser', async () => {
@@ -461,10 +474,79 @@ describe('plaid', () => {
     assert.ok(!list.some((t: { externalId: string }) => t.externalId === 't3'), 'now classed as a transfer')
   })
 
+  it('refetches imports made by an older version of the importer, once', async () => {
+    const { PlaidItem, Transaction } = await import('../src/models.js')
+    await PlaidItem.collection.updateMany({}, { $unset: { syncVersion: 1 } })
+    await Transaction.collection.updateMany({ source: 'plaid' }, { $unset: { accountId: 1, accountName: 1 } })
+    plaid.cursorsSeen = []
+    plaid.pages = [
+      page({
+        added: [tx('t1', 7.5, { primaryCategory: 'FOOD_AND_DRINK', merchantName: 'Chipotle' }), tx('t2', -500, { name: 'Paycheck' }), tx('t5', 4)],
+        nextCursor: 'c9',
+      }),
+    ]
+    assert.equal((await call('POST', '/integrations/plaid/sync')).status, 200)
+    assert.deepEqual(plaid.cursorsSeen, [undefined], 'started from the beginning')
+    const rows = await plaidTxns()
+    assert.ok(rows.every((t: { accountId?: string }) => t.accountId === 'acc1'))
+    assert.equal(rows.find((t: { externalId: string }) => t.externalId === 't1').accountName, 'Test Bank · Checking ••0000')
+
+    plaid.cursorsSeen = []
+    await call('POST', '/integrations/plaid/sync')
+    assert.deepEqual(plaid.cursorsSeen, ['c9'], 'later syncs continue from the saved cursor')
+  })
+  it('treats money back onto a credit card as a refund, never as income', async () => {
+    plaid.pages = [
+      page({
+        added: [
+          tx('c1', 40, { accountId: 'acc2', primaryCategory: 'FOOD_AND_DRINK', merchantName: 'Diner' }),
+          tx('c2', -12.5, { accountId: 'acc2', name: 'Return: Shirt', primaryCategory: 'GENERAL_MERCHANDISE' }),
+          tx('c3', -300, { accountId: 'acc2', name: 'ONLINE PAYMENT - THANK YOU' }),
+          tx('c4', -80, { accountId: 'acc1', name: 'Deposit' }),
+        ],
+        nextCursor: 'c10',
+      }),
+    ]
+    assert.equal((await call('POST', '/integrations/plaid/sync')).status, 200)
+    const rows = await plaidTxns()
+    const by = (id: string) => rows.find((t: { externalId: string }) => t.externalId === id)
+    assert.deepEqual([by('c1').type, by('c1').isRefund], ['expense', false])
+    assert.deepEqual([by('c2').type, by('c2').isRefund, by('c2').amountCents], ['expense', true, 1250])
+    assert.equal(by('c3'), undefined, 'a card payment is not counted')
+    assert.deepEqual([by('c4').type, by('c4').isRefund], ['income', false], 'a deposit into checking is still income')
+    assert.ok(
+      !rows.some((t: { accountName: string; type: string }) => t.accountName?.includes('Business Card') && t.type === 'income'),
+      'no income on the credit card',
+    )
+  })
+
+  it('lists every account, and keeps syncing the other banks when one fails', async () => {
+    plaid.pages = []
+    const second = await call('POST', '/integrations/plaid/exchange', { publicToken: 'two' })
+    assert.equal(second.status, 201)
+
+    const accounts = (await call('GET', '/integrations/plaid/accounts')).body
+    assert.ok(accounts.some((a: { label: string; type: string }) => a.label === 'Test Bank · Business Card ••1111' && a.type === 'credit'))
+    assert.ok(accounts.some((a: { label: string }) => a.label === 'Test Bank · Checking ••0000'))
+    assert.ok(
+      accounts.some((a: { label: string }) => a.label === 'Test Bank · Business Checking ••3333'),
+      'an account with no transactions is listed too',
+    )
+
+    plaid.failTokens = ['access-sandbox-abc']
+    plaid.pages = [page({ added: [tx('d1', 9)], nextCursor: 'c11' })]
+    const r = await call('POST', '/integrations/plaid/sync')
+    plaid.failTokens = []
+    assert.equal(r.status, 200)
+    assert.equal(r.body.errors.length, 1)
+    assert.match(r.body.errors[0].message, /Bank is down/)
+    assert.equal(r.body.added, 1, 'the working bank still synced')
+  })
   it('keeps one account’s banks and transactions out of another', async () => {
     const other = makeClient()
     await other('POST', '/auth/register', { email: 'plaid-other@example.com', name: 'Other', password: PASSWORD })
     assert.equal((await plaidTxns(other)).length, 0)
+    assert.deepEqual((await other('GET', '/integrations/plaid/accounts')).body, [])
     assert.equal((await other('POST', '/integrations/plaid/sync')).status, 409, 'no bank connected for this user')
     const row = (await other('GET', '/integrations')).body.find((i: { id: string }) => i.id === 'plaid')
     assert.equal(row.status, 'not_connected')
@@ -484,7 +566,7 @@ describe('plaid', () => {
     assert.equal(manual.status, 201)
 
     assert.equal((await call('DELETE', '/integrations/plaid/connection')).status, 204)
-    assert.deepEqual(plaid.removedTokens, ['access-sandbox-abc'])
+    assert.ok(plaid.removedTokens.includes('access-sandbox-abc'))
     assert.equal((await plaidTxns()).length, 0)
     assert.ok((await call('GET', '/transactions')).body.some((t: { id: string }) => t.id === manual.body.id))
     const row = (await call('GET', '/integrations')).body.find((i: { id: string }) => i.id === 'plaid')

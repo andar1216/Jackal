@@ -37,6 +37,14 @@ export type Transaction = {
   note?: string
   source?: 'manual' | 'plaid' // imported bank transactions are 'plaid'
   accountName?: string
+  isRefund?: boolean // money back onto a credit card: lowers spending, is not income
+}
+
+/** A bank or card account that came in through Plaid. */
+export type BankAccount = {
+  label: string
+  institution: string
+  type?: string // 'credit' for credit cards
 }
 
 export type Meal = {

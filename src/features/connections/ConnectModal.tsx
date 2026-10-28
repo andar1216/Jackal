@@ -96,6 +96,8 @@ export default function ConnectModal({ onClose }: { onClose: () => void }) {
   const syncPlaid = () =>
     run('plaid', async () => {
       const r = await plaidApi.sync()
+      // The other banks still synced, so say which one didn't.
+      if (r.errors?.length) setError(r.errors.map((e) => `${e.institution}: ${e.message}`).join(' '))
       setNotice(
         r.added + r.modified + r.removed > 0
           ? `Synced: ${r.added} new, ${r.modified} updated, ${r.removed} removed.`
