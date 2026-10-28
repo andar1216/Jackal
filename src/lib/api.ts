@@ -1,4 +1,4 @@
-import type { Skill } from '../types'
+import type { Integration, Skill } from '../types'
 
 // Dev: Vite proxies /api to the backend. For a separate API host, set VITE_API_URL.
 const BASE = import.meta.env.VITE_API_URL ?? '/api'
@@ -54,4 +54,10 @@ export const skillsApi = {
     request<Skill>('PATCH', `/skills/${id}`, changes),
   remove: (id: string) => request<void>('DELETE', `/skills/${id}`),
   toggleDay: (id: string, dateKey: string) => request<Skill>('POST', `/skills/${id}/logs/${dateKey}/toggle`),
+}
+
+export const integrationsApi = {
+  list: () => request<Integration[]>('GET', '/integrations'),
+  connect: (id: string) => request<void>('POST', `/integrations/${id}/connect`),
+  disconnect: (id: string) => request<void>('DELETE', `/integrations/${id}/connection`),
 }

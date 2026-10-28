@@ -87,6 +87,17 @@ export const TimeEntry = mongoose.model(
   }),
 )
 
+/** One document per connected outside service (see integrations/registry.ts). */
+export const Connection = mongoose.model(
+  'Connection',
+  makeSchema({
+    provider: { type: String, required: true, unique: true },
+    connectedAt: { type: Date, default: Date.now },
+    accountLabel: String, // for example the Google account email
+    // Tokens and other secrets will be added here, encrypted, when the first integration is built.
+  }),
+)
+
 export const CalendarEvent = mongoose.model(
   'CalendarEvent',
   makeSchema({

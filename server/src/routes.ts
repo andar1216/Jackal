@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { integrations } from './integrations/routes.js'
 import { crudRouter, requireId } from './lib/crud.js'
 import { HttpError } from './lib/errors.js'
 import { CalendarEvent, Meal, Skill, TimeEntry, Tracker, Transaction, Workout } from './models.js'
@@ -14,6 +15,8 @@ import {
 } from './validation.js'
 
 export const api = Router()
+
+api.use('/integrations', integrations)
 
 /* ---------- Skills (dashboard) ---------- */
 

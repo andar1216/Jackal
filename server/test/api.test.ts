@@ -163,6 +163,32 @@ describe('meals and time entries', () => {
   })
 })
 
+describe('integrations', () => {
+  it('lists every planned integration as not connected and not yet available', async () => {
+    const { status, body } = await call('GET', '/integrations')
+    assert.equal(status, 200)
+    assert.deepEqual(
+      body.map((i: { id: string }) => i.id),
+      ['google-calendar', 'plaid', 'myfitnesspal', 'crunch', 'samsung-screen-time', 'windows-screen-time'],
+    )
+    for (const item of body) {
+      assert.equal(item.status, 'not_connected')
+      assert.equal(item.available, false)
+    }
+  })
+
+  it('answers 501 when connecting something that is not built yet, and 404 for unknown ids', async () => {
+    const r = await call('POST', '/integrations/google-calendar/connect')
+    assert.equal(r.status, 501)
+    assert.match(r.body.error, /Google Calendar/)
+    assert.equal((await call('POST', '/integrations/nope/connect')).status, 404)
+  })
+
+  it('disconnecting is harmless when nothing is connected', async () => {
+    assert.equal((await call('DELETE', '/integrations/plaid/connection')).status, 204)
+  })
+})
+
 describe('general', () => {
   it('returns JSON 404s and 400 for malformed JSON', async () => {
     assert.equal((await call('GET', '/nope')).status, 404)

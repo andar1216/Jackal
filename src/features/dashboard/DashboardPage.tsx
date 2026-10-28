@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { skillsApi } from '../../lib/api'
+import ConnectModal from '../connections/ConnectModal'
 import { todayKey } from '../../lib/dates'
 import { createWriteQueue } from '../../lib/writeQueue'
 import type { Skill } from '../../types'
@@ -60,6 +61,8 @@ export default function DashboardPage() {
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [layout, setLayout] = useState<LayoutItem[]>(DEFAULT_LAYOUT)
+  const [connectOpen, setConnectOpen] = useState(false)
+  const closeConnect = useCallback(() => setConnectOpen(false), [])
 
   const [dragId, setDragId] = useState<WidgetId | null>(null)
   const [overId, setOverId] = useState<WidgetId | null>(null)
@@ -192,6 +195,9 @@ export default function DashboardPage() {
           <p>Drag a widget's header to rearrange. Click a skill to show it in the other widgets.</p>
         </div>
         <div className="row">
+          <button className="primary" onClick={() => setConnectOpen(true)}>
+            Connect
+          </button>
           {hidden.length > 0 && (
             <select
               value=""
@@ -209,6 +215,8 @@ export default function DashboardPage() {
           <button onClick={() => setLayout(DEFAULT_LAYOUT)}>Reset layout</button>
         </div>
       </header>
+
+      {connectOpen && <ConnectModal onClose={closeConnect} />}
 
       {message && (
         <div className="banner error" role="alert">

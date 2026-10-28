@@ -15,6 +15,19 @@ export type Skill = {
   avgWeeks: number // number of weeks used for the weekly average
 }
 
+export type Integration = {
+  id: string
+  name: string
+  description: string
+  category: 'calendar' | 'finance' | 'fitness' | 'screen-time'
+  note?: string
+  /** False until the connection flow for this service is built. */
+  available: boolean
+  status: 'connected' | 'not_connected'
+  connectedAt?: string
+  accountLabel?: string
+}
+
 export type Transaction = {
   id: string
   type: 'income' | 'expense'

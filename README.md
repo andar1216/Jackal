@@ -12,7 +12,7 @@ The app has a **top bar** with a **Settings** menu (theme: system/light/dark, di
 
 | Screen | What it does today (UI) | Planned |
 | --- | --- | --- |
-| **Dashboard** (default tab) | Drag-and-drop widgets for **Skills** you're working on. Widgets: Skills list (mark today, add, delete), Calendar (click days to log them), Streak (current and best), Days on / off, and Weekly average (average days per week over a configurable number of weeks, set per skill, with a per-week bar chart). Click a skill to show it in the other widgets. Widgets can be reordered by dragging the header (or arrow keys on the handle), resized between half and full width, hidden, and restored. | Saved layout, more widget types, per-skill goals |
+| **Dashboard** (default tab) | Drag-and-drop widgets for **Skills** you're working on. Widgets: Skills list (mark today, add, delete), Calendar (click days to log them), Streak (current and best), Days on / off, and Weekly average (average days per week over a configurable number of weeks, set per skill, with a per-week bar chart). Click a skill to show it in the other widgets. A **Connect** button above the widgets opens the list of outside services to link (see Integrations below). Widgets can be reordered by dragging the header (or arrow keys on the handle), resized between half and full width, hidden, and restored. | Saved layout, more widget types, per-skill goals |
 | **Streaks** | Add a tracker, pick its start date on a React calendar, see days kept, progress to the next milestone (7, 30, 60, 100, 180, 365...), reset, delete. Start dates are marked on the calendar. | Longest-streak history, notes, icons |
 | **Finances** | Add income and expenses, per-category budget bars, income/spent/net totals, delete transactions. | Date picker per entry, monthly filtering, charts, recurring items |
 | **Fitness** | Daily calorie goal, log meals (kcal, protein, carbs, fat) and workouts, remaining calories (goal - eaten + burned), macro totals. | Per-day history, body-weight trend, editable goal |
@@ -131,6 +131,7 @@ Jackal/
 │       │   ├── DashboardPage.tsx     # Widget layout, drag and drop, skill state
 │       │   ├── widgets.tsx           # Skills, Calendar, Streak, Days on/off, Average widgets
 │       │   └── skillStats.ts         # Streak, days on/off and weekly average calculations
+│       ├── connections/ConnectModal.tsx  # The Connect dialog
 │       ├── streaks/StreaksPage.tsx
 │       ├── finance/FinancePage.tsx
 │       ├── fitness/FitnessPage.tsx
@@ -145,6 +146,7 @@ Jackal/
 │   │   ├── models.ts                 # Mongoose models
 │   │   ├── validation.ts             # Zod request schemas
 │   │   ├── routes.ts                 # Resource routes
+│   │   ├── integrations/             # registry.ts (the list of services) and routes.ts
 │   │   ├── seed.ts                   # Default skills (used by the seed and dev:memory scripts)
 │   │   └── lib/
 │   │       ├── crud.ts               # Reusable list/get/create/update/delete router
@@ -186,12 +188,28 @@ Every resource below supports `GET /`, `GET /:id`, `POST /`, `PATCH /:id` (send 
 
 Other endpoints:
 
+- `GET /integrations` lists the planned integrations with their connection state; `POST /integrations/:id/connect` starts connecting (returns `501` until that integration is built); `DELETE /integrations/:id/connection` disconnects.
 - `GET /health` returns `{ "status": "ok", "db": true }`.
 - `POST /skills/:id/logs/:date/toggle` turns a day on or off for a skill (the dashboard calendar click). Logging a day before the start date moves the start date back.
 
 Meals and workouts default `date` to today when it isn't sent. A running timer is a time entry with no `end`; stop it with `PATCH /time-entries/:id` and an `end`.
 
 **Not built yet:** authentication and per-user data. Right now there is a single shared dataset, so don't expose the API publicly. The profile menu in the UI is a placeholder for this.
+
+---
+
+## Integrations
+
+The Dashboard's **Connect** button lists the outside services we want to pull data from (the `Todo` file). They are built one at a time. Each is defined in `server/src/integrations/registry.ts` with `implemented: false` until its connection flow works, and the UI shows it as "Coming soon" until then.
+
+| Service | Kind | Status |
+| --- | --- | --- |
+| Google Calendar | Official API (OAuth) | Not started |
+| Plaid (bank accounts) | Official API (Plaid Link) | Not started |
+| MyFitnessPal | Likely partner-only API | Not started, may not be possible |
+| Crunch Fitness | Unofficial, can break | Not started |
+| Samsung S23 screen time | No public API, needs a companion app | Not started |
+| Windows screen time | Needs a local background agent | Not started |
 
 ---
 
