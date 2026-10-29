@@ -37,6 +37,12 @@ export const transactionSchema = z.strictObject({
   note: z.string().max(500).optional(),
 })
 
+export const manualAccountSchema = z.strictObject({
+  name,
+  kind: z.enum(['bank', 'credit']),
+  mask: z.string().trim().regex(/^\d{2,6}$/, 'Use the last 2 to 6 digits').optional(),
+})
+
 export const mealSchema = z.strictObject({
   name,
   calories: nonNegInt,

@@ -171,7 +171,17 @@ export const PlaidItem = mongoose.model(
 )
 
 /** Every model that belongs to a user. */
-export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem]
+/** A bank or card the person lists by hand (for example one Plaid can't reach yet). It shows up under Finances > By account. */
+export const ManualAccount = mongoose.model(
+  'ManualAccount',
+  ownedSchema({
+    name: { type: String, required: true, trim: true },
+    kind: { type: String, enum: ['bank', 'credit'], required: true },
+    mask: { type: String, trim: true }, // last digits, like "7946"
+  }),
+)
+
+export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount]
 
 /**
  * Data created before accounts existed has no owner. The first account to be created inherits it.

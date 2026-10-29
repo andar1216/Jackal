@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { subDays } from 'date-fns'
 import TopBar, { type Theme } from './components/TopBar'
 import CalendarPage from './features/calendar/CalendarPage'
+import PlaidOAuthReturn from './features/connections/PlaidOAuthReturn'
+import { PLAID_OAUTH_PATH } from './features/connections/plaidImport'
 import DashboardPage from './features/dashboard/DashboardPage'
 import FinancePage from './features/finance/FinancePage'
 import FitnessPage from './features/fitness/FitnessPage'
@@ -58,6 +60,9 @@ export default function App() {
   }
 
   if (!user) return <AuthPage />
+
+  // A bank like Citi sends the person back here after they approve access on the bank's own site.
+  if (window.location.pathname === PLAID_OAUTH_PATH) return <PlaidOAuthReturn />
 
   // Keyed by user so signing out and in as someone else never shows the previous person's screens.
   return <Shell key={user.id} user={user} theme={theme} onThemeChange={setTheme} />

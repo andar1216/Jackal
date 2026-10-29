@@ -40,6 +40,14 @@ export type Transaction = {
   isRefund?: boolean // money back onto a credit card: lowers spending, is not income
 }
 
+/** An account the person listed by hand. */
+export type ManualAccount = {
+  id: string
+  name: string
+  kind: 'bank' | 'credit'
+  mask?: string
+}
+
 /** A bank or card account that came in through Plaid. */
 export type BankAccount = {
   label: string

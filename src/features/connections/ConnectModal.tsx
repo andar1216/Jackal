@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { integrationsApi, plaidApi } from '../../lib/api'
 import type { Integration } from '../../types'
 import PlaidLauncher from './PlaidLauncher'
+import { clearLinkToken, importNewBank, saveLinkToken } from './plaidImport'
 
 const CATEGORY_LABELS: Record<Integration['category'], string> = {
   calendar: 'Calendar',
@@ -10,9 +11,10 @@ const CATEGORY_LABELS: Record<Integration['category'], string> = {
   'screen-time': 'Screen time',
 }
 
-const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.')
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+// Disconnecting is hidden for now (a Plaid link can't be reused once removed). Set to true to bring it back.
+const SHOW_DISCONNECT = false
 
+const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.')
 export default function ConnectModal({ onClose }: { onClose: () => void }) {
   const [items, setItems] = useState<Integration[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -66,30 +68,20 @@ export default function ConnectModal({ onClose }: { onClose: () => void }) {
   const startPlaid = () =>
     run('plaid', async () => {
       const { linkToken } = await plaidApi.linkToken()
+      // Banks that sign in on their own site (Citi, Chase...) send the person back to our
+      // /plaid-oauth page, which needs this token to pick up where Link left off.
+      saveLinkToken(linkToken)
       setLinkToken(linkToken)
     })
 
   // Step 2: the person finished in Plaid. Our server trades the token and imports the history.
   const finishPlaid = (publicToken: string, institutionName?: string) => {
     setLinkToken(null)
+    clearLinkToken()
     return run('plaid', async () => {
       setNotice('Connected. Importing your transactions...')
-      const { institution, sync } = await plaidApi.exchange(publicToken, institutionName)
-      if ('error' in sync) throw new Error(`${institution} is connected, but the import failed: ${sync.error}`)
-
-      // A brand-new link often has nothing ready for a few seconds. Check a few more times.
-      let added = sync.added
-      for (let attempt = 0; attempt < 8 && added === 0 && alive.current; attempt++) {
-        await wait(3000)
-        added += (await plaidApi.sync()).added
-      }
-      if (alive.current) {
-        setNotice(
-          added > 0
-            ? `Imported ${added} transactions from ${institution}. See them on the Finances screen.`
-            : `${institution} is connected. Your bank hasn't sent any transactions yet, so try Sync now in a minute.`,
-        )
-      }
+      const message = await importNewBank(publicToken, institutionName, () => alive.current)
+      if (alive.current) setNotice(message)
     })
   }
 
@@ -119,7 +111,25 @@ export default function ConnectModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      {linkToken && <PlaidLauncher token={linkToken} onSuccess={finishPlaid} onExit={(msg) => { setLinkToken(null); setBusyId(null); if (msg) setError(msg) }} />}
+      {linkToken && (
+        <PlaidLauncher
+          key={linkToken}
+          token={linkToken}
+          onSuccess={finishPlaid}
+          onExit={(msg, status) => {
+            setBusyId(null)
+            if (status === 'requires_oauth') {
+              // Link is sending the person to their bank's own site. Keep Link and the saved token alive
+              // so the return page can pick up where this left off.
+              setNotice("Your bank wants you to sign in on its own site. If nothing opened, allow pop-ups for this address and try Add a bank again.")
+              return
+            }
+            setLinkToken(null)
+            clearLinkToken()
+            if (msg) setError(msg)
+          }}
+        />
+      )}
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="connect-title">
         <div className="row between">
           <div>
@@ -180,9 +190,11 @@ export default function ConnectModal({ onClose }: { onClose: () => void }) {
                       </>
                     )}
                     {connected ? (
-                      <button disabled={busy} onClick={() => disconnect(item)}>
-                        Disconnect
-                      </button>
+                      SHOW_DISCONNECT && (
+                        <button disabled={busy} onClick={() => disconnect(item)}>
+                          Disconnect
+                        </button>
+                      )
                     ) : (
                       <button
                         className="primary"

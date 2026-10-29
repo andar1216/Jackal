@@ -234,7 +234,11 @@ How it works:
 
 Testing with fake banks: in Sandbox, Plaid Link accepts the username `user_good` and password `pass_good` (use `1234` if asked for a code). A fresh link can take several seconds before transactions show up; the Connect dialog keeps checking for about 25 seconds.
 
-Going to real banks: Plaid's Trial plan uses `PLAID_ENV=production` with your Production secret and allows 10 linked banks in total (removing one does not free a slot). Banks that sign in through their own site or app (OAuth) need an **https** `PLAID_REDIRECT_URI` registered in the Plaid dashboard, so run those once Jackal is served over HTTPS.
+Going to real banks: Plaid's Trial plan uses `PLAID_ENV=production` with your Production secret and allows 10 linked banks in total (removing one does not free a slot). Banks that sign in through their own site or app (OAuth), like Citi, need an **https** `PLAID_REDIRECT_URI` ending in `/plaid-oauth`, registered under Developers > API > Allowed redirect URIs in the Plaid dashboard (Link otherwise exits with `REQUIRES_OAUTH`). Some of those banks also need Plaid's OAuth registration approved for your account (Dashboard > Settings > OAuth institutions / production access). To use it locally:
+
+1. Start an https tunnel to the dev server: `ngrok http 5173` (it prints an `https://...` address).
+2. In `.env` set `PLAID_REDIRECT_URI=https://<that address>/plaid-oauth` and `CLIENT_ORIGIN=https://<that address>`, add the same redirect URI in the Plaid dashboard, and restart `npm run n`.
+3. Open Jackal at the tunnel address (not localhost), sign in (the cookie is per address, same account and data), then Connect > Add a bank. After you approve on the bank's site it returns to `/plaid-oauth`, which finishes the link and imports the transactions.
 
 ---
 

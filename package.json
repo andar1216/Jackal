@@ -10,8 +10,11 @@
     "preview": "vite preview",
     "server:install": "npm --prefix server install",
     "server": "npm --prefix server run dev",
-    "n": "concurrently --names web,api --prefix-colors cyan,green --kill-others-on-fail \"npm run dev\" \"npm run server\"",
-    "server:test": "npm --prefix server test"
+    "nwwdwd": "concurrently --names web,api --prefix-colors cyan,green --kill-others-on-fail \"npm run dev\" \"npm run server\"",
+    "server:test": "npm --prefix server test",
+    "ngrok": "ngrok http --domain=sattire.ngrok.dev 5173",
+    "p": "node scripts/p.mjs",
+    "p:mongo-stop": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$svc = Get-Service -Name MongoDB -ErrorAction SilentlyContinue; if ($svc -and $svc.Status -eq 'Running') { Write-Host '[p:mongo-stop] Stopping local MongoDB service so the SSH tunnel can bind 27017...'; try { Stop-Service -Name MongoDB -Force -ErrorAction Stop; Start-Sleep -Seconds 2; Write-Host '[p:mongo-stop] Stopped.' } catch { Write-Warning ('[p:mongo-stop] Could not stop MongoDB service (run PowerShell as admin or set the service to Manual). ' + $_.Exception.Message) } } else { Write-Host '[p:mongo-stop] Local MongoDB service not running. OK.' }\""
   },
   "dependencies": {
     "date-fns": "^4.4.0",

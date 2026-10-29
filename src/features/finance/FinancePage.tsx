@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { addMonths, endOfMonth, format, isSameMonth, startOfMonth } from 'date-fns'
-import { plaidApi, TRANSACTIONS_CHANGED, transactionsApi } from '../../lib/api'
+import { accountsApi, plaidApi, TRANSACTIONS_CHANGED, transactionsApi } from '../../lib/api'
 import { formatDay, formatMoney, toDateKey, todayKey } from '../../lib/dates'
-import type { BankAccount, Transaction } from '../../types'
+import type { BankAccount, ManualAccount, Transaction } from '../../types'
 
 const BUDGETS: Record<string, number> = {
   Food: 40000,
@@ -19,17 +19,27 @@ const accountOf = (t: Transaction) => t.accountName ?? BY_HAND
 /** What a transaction does to spending: a refund on a credit card counts as negative spending. */
 const spend = (t: Transaction) => (t.type !== 'expense' ? 0 : t.isRefund ? -t.amountCents : t.amountCents)
 
-type AccountRow = { name: string; isCredit: boolean; spent: number; income: number; count: number }
+type AccountKind = 'bank' | 'credit' | 'hand'
+type KindFilter = 'all' | 'bank' | 'credit'
+
+const KIND_FILTERS: { id: KindFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'bank', label: 'Bank accounts' },
+  { id: 'credit', label: 'Credit cards' },
+]
+const KIND_LABELS: Record<AccountKind, string | null> = { bank: 'Bank account', credit: 'Credit card', hand: null }
+
+type AccountRow = { name: string; kind: AccountKind; spent: number; income: number; count: number }
 
 /** One row per account. Accounts we know about are listed even when they had nothing this month. */
 function groupByAccount(items: Transaction[], known: BankAccount[]) {
   const groups = new Map<string, AccountRow>()
   const row = (name: string) => {
-    const g = groups.get(name) ?? { name, isCredit: false, spent: 0, income: 0, count: 0 }
+    const g = groups.get(name) ?? { name, kind: name === BY_HAND ? ('hand' as const) : ('bank' as const), spent: 0, income: 0, count: 0 }
     groups.set(name, g)
     return g
   }
-  for (const a of known) row(a.label).isCredit = a.type === 'credit'
+  for (const a of known) row(a.label).kind = a.type === 'credit' ? 'credit' : 'bank'
   for (const t of items) {
     const g = row(accountOf(t))
     if (t.type === 'income') g.income += t.amountCents
@@ -53,6 +63,11 @@ export default function FinancePage() {
   const [reload, setReload] = useState(0)
   const [syncing, setSyncing] = useState(false)
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
+  const [manualAccounts, setManualAccounts] = useState<ManualAccount[]>([])
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newKind, setNewKind] = useState<ManualAccount['kind']>('credit')
+  const [newMask, setNewMask] = useState('')
 
   const [type, setType] = useState<Transaction['type']>('expense')
   const [amount, setAmount] = useState('')
@@ -81,6 +96,10 @@ export default function FinancePage() {
       .accounts()
       .then((list) => !cancelled && setBankAccounts(list))
       .catch(() => {}) // not essential, so a failure here is ignored
+    accountsApi
+      .list()
+      .then((list) => !cancelled && setManualAccounts(list))
+      .catch(() => {})
     return () => {
       cancelled = true
     }
@@ -99,9 +118,22 @@ export default function FinancePage() {
 
   // Group the month's transactions by the account they came from. Clicking an account filters everything below.
   const [account, setAccount] = useState<string | null>(null)
-  const byAccount = groupByAccount(transactions, bankAccounts)
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
+  // Accounts typed in by hand sit alongside the ones from Plaid.
+  const handAccounts: BankAccount[] = manualAccounts.map((a) => ({
+    label: a.mask ? `${a.name} ••${a.mask}` : a.name,
+    institution: a.name,
+    type: a.kind === 'credit' ? 'credit' : 'depository',
+  }))
+  const allAccounts = groupByAccount(transactions, [...bankAccounts, ...handAccounts])
+  const kindByName = new Map(allAccounts.map((a) => [a.name, a.kind]))
+  // "Bank accounts" and "Credit cards" narrow both the account list and everything below it.
+  const byAccount = kindFilter === 'all' ? allAccounts : allAccounts.filter((a) => a.kind === kindFilter)
   const activeAccount = byAccount.some((a) => a.name === account) ? account : null
-  const shown = activeAccount ? transactions.filter((t) => accountOf(t) === activeAccount) : transactions
+  const shown = transactions.filter(
+    (t) =>
+      (kindFilter === 'all' || kindByName.get(accountOf(t)) === kindFilter) && (!activeAccount || accountOf(t) === activeAccount),
+  )
 
   const income = shown.filter((t) => t.type === 'income').reduce((s, t) => s + t.amountCents, 0)
   const spent = shown.reduce((s, t) => s + spend(t), 0)
@@ -125,6 +157,22 @@ export default function FinancePage() {
       setData((d) => (d ? { ...d, items: [...d.items, created] } : d))
       setAmount('')
       setNote('')
+      setError(null)
+    } catch (err) {
+      setError(errorText(err))
+    }
+  }
+
+  const addAccount = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const name = newName.trim()
+    if (!name) return
+    try {
+      const created = await accountsApi.create({ name, kind: newKind, mask: newMask.trim() || undefined })
+      setManualAccounts((list) => [...list, created])
+      setNewName('')
+      setNewMask('')
+      setAdding(false)
       setError(null)
     } catch (err) {
       setError(errorText(err))
@@ -189,15 +237,29 @@ export default function FinancePage() {
           </div>
         </div>
 
-        {byAccount.length > 0 && (
+        {(allAccounts.length > 0 || adding || transactions.length === 0) && (
           <section className="card">
             <div className="row between">
               <h2>By account</h2>
-              {activeAccount && (
-                <button className="link" onClick={() => setAccount(null)}>
-                  Show all accounts
-                </button>
-              )}
+              <div className="row">
+                {activeAccount && (
+                  <button className="link" onClick={() => setAccount(null)}>
+                    Show all accounts
+                  </button>
+                )}
+                <div className="segmented" role="group" aria-label="Account type">
+                  {KIND_FILTERS.map((k) => (
+                    <button
+                      key={k.id}
+                      className={kindFilter === k.id ? 'active' : ''}
+                      aria-pressed={kindFilter === k.id}
+                      onClick={() => setKindFilter(k.id)}
+                    >
+                      {k.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
             <ul className="list">
               {byAccount.map((a) => {
@@ -212,7 +274,11 @@ export default function FinancePage() {
                     >
                       <span>
                         {a.name}
-                        {a.isCredit && <span className="pill"> Credit card</span>}
+                        {KIND_LABELS[a.kind] && (
+                          <span className="pill" style={{ marginLeft: 8 }}>
+                            {KIND_LABELS[a.kind]}
+                          </span>
+                        )}
                         <span className="stat-label">
                           {' '}
                           · {a.count === 0 ? 'no activity this month' : `${a.count} ${a.count === 1 ? 'transaction' : 'transactions'}`}
@@ -233,10 +299,30 @@ export default function FinancePage() {
                 )
               })}
             </ul>
-            <p className="stat-label" style={{ marginBottom: 0 }}>
-              Missing an account? Open Connect, choose Add a bank, and tick every account in Plaid's list (or use
-              Sync banks if a bank is still loading).
-            </p>
+            {adding ? (
+              <form className="form" onSubmit={addAccount} style={{ marginTop: 12 }}>
+                <input placeholder="Name, like Citi Pay Credit" value={newName} onChange={(e) => setNewName(e.target.value)} aria-label="Account name" autoFocus />
+                <select value={newKind} onChange={(e) => setNewKind(e.target.value as ManualAccount['kind'])} aria-label="Account type">
+                  <option value="credit">Credit card</option>
+                  <option value="bank">Bank account</option>
+                </select>
+                <input placeholder="Last digits (optional)" inputMode="numeric" value={newMask} onChange={(e) => setNewMask(e.target.value)} aria-label="Last digits" />
+                <button className="primary" type="submit">
+                  Add account
+                </button>
+                <button type="button" onClick={() => setAdding(false)}>
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <p className="stat-label" style={{ marginBottom: 0 }}>
+                Missing an account? Open Connect, choose Add a bank, and tick every account in Plaid's list (or use
+                Sync banks if a bank is still loading). Can't link one yet?{' '}
+                <button className="link" onClick={() => setAdding(true)}>
+                  Add it by hand
+                </button>
+              </p>
+            )}
           </section>
         )}
 

@@ -4,10 +4,11 @@ import { currentUserId, requireAuth } from './auth/middleware.js'
 import { integrations } from './integrations/routes.js'
 import { crudRouter, requireId } from './lib/crud.js'
 import { HttpError } from './lib/errors.js'
-import { CalendarEvent, Meal, Skill, TimeEntry, Tracker, Transaction, Workout } from './models.js'
+import { CalendarEvent, ManualAccount, Meal, Skill, TimeEntry, Tracker, Transaction, Workout } from './models.js'
 import {
   dateString,
   eventSchema,
+  manualAccountSchema,
   mealSchema,
   skillSchema,
   timeEntrySchema,
@@ -61,6 +62,8 @@ api.use(
     sort: { date: -1, createdAt: -1 },
   }),
 )
+
+api.use('/accounts', crudRouter(ManualAccount, { schema: manualAccountSchema, sort: { createdAt: 1 } }))
 
 api.use(
   '/meals',

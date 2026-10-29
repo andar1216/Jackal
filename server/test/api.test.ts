@@ -193,6 +193,20 @@ describe('transactions', () => {
   })
 })
 
+describe('hand-added accounts', () => {
+  it('lists a card added by hand, validates it, and keeps it private', async () => {
+    const created = await call('POST', '/accounts', { name: 'Citi Pay Credit', kind: 'credit', mask: '7946' })
+    assert.equal(created.status, 201)
+    assert.equal(created.body.kind, 'credit')
+
+    assert.equal((await call('POST', '/accounts', { name: 'X', kind: 'savings' })).status, 400)
+    assert.equal((await call('POST', '/accounts', { name: 'X', kind: 'bank', mask: 'abcd' })).status, 400)
+
+    assert.equal((await call('GET', '/accounts')).body.length, 1)
+    assert.equal((await makeClient()('GET', '/accounts')).status, 401)
+  })
+})
+
 describe('meals and time entries', () => {
   it('defaults a meal to today with zeroed macros', async () => {
     const { status, body } = await call('POST', '/meals', { name: 'Oatmeal', calories: 380 })

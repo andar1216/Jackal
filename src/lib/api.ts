@@ -1,4 +1,4 @@
-import type { BankAccount, Integration, Skill, Transaction, User } from '../types'
+import type { BankAccount, Integration, ManualAccount, Skill, Transaction, User } from '../types'
 
 // Dev: Vite proxies /api to the backend. For a separate API host, set VITE_API_URL.
 const BASE = import.meta.env.VITE_API_URL ?? '/api'
@@ -93,6 +93,11 @@ export const transactionsApi = {
   list: (from: string, to: string) => request<Transaction[]>('GET', `/transactions?from=${from}&to=${to}`),
   create: (t: NewTransaction) => request<Transaction>('POST', '/transactions', t),
   remove: (id: string) => request<void>('DELETE', `/transactions/${id}`),
+}
+
+export const accountsApi = {
+  list: () => request<ManualAccount[]>('GET', '/accounts'),
+  create: (a: Pick<ManualAccount, 'name' | 'kind' | 'mask'>) => request<ManualAccount>('POST', '/accounts', a),
 }
 
 export type PlaidSyncResult = {
