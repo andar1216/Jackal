@@ -4,6 +4,7 @@ import ConnectorsButton from '../connections/ConnectorsButton'
 import type { Integration, Meal } from '../../types'
 import { CALORIE_GOAL } from './constants'
 import Board, { Panel } from '../../components/Board'
+import PanelFilter from '../../components/PanelFilter'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
 
@@ -48,6 +49,7 @@ export default function DietPage({ meals, setMeals }: Props) {
           <p>Today's meals, calories, and macros.</p>
         </div>
         <div className="row">
+          <PanelFilter page="diet" />
           <ConnectorsButton filter={isDietConnector} title="Diet connectors" />
           <SettingsMenu items={[layout.item]} />
         </div>

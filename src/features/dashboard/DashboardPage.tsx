@@ -1,5 +1,6 @@
 import Board, { Panel } from '../../components/Board'
 import { usePublishedPanels } from '../../components/panelStore'
+import PanelFilter from '../../components/PanelFilter'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
 import ConnectorsButton from '../connections/ConnectorsButton'
@@ -20,6 +21,7 @@ export default function DashboardPage({ pageLabels }: { pageLabels: Record<strin
           <p>Pin widgets from your other pages here. They are the same widgets, so they stay up to date.</p>
         </div>
         <div className="row">
+          <PanelFilter page="dashboard" />
           <ConnectorsButton title="Connectors" />
           <SettingsMenu
             items={[{ label: layout.editing ? 'Done customizing' : 'Add or arrange widgets', onSelect: layout.item.onSelect }]}

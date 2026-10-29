@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
+import { useDismiss } from './useDismiss'
 
 export type MenuItem = { label: string; onSelect: () => void; danger?: boolean }
 
@@ -6,23 +7,7 @@ export type MenuItem = { label: string; onSelect: () => void; danger?: boolean }
 export default function MenuButton({ label, items, icon }: { label: string; items: MenuItem[]; icon?: ReactNode }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLSpanElement>(null)
-
-  // Close on a click anywhere else, or on Escape.
-  useEffect(() => {
-    if (!open) return
-    const onClick = (e: MouseEvent) => {
-      if (!box.current?.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onClick)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onClick)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
+  useDismiss(open, box, () => setOpen(false))
 
   return (
     <span className="menu" ref={box}>

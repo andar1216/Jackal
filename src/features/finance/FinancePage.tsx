@@ -8,6 +8,7 @@ import NetWorthCard from './NetWorthCard'
 import SubscriptionsCard from './SubscriptionsCard'
 import ViewsBar, { type AccountChoice } from './ViewsBar'
 import Board, { Panel } from '../../components/Board'
+import PanelFilter from '../../components/PanelFilter'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
 
@@ -305,6 +306,7 @@ export default function FinancePage() {
           <button onClick={syncBanks} disabled={syncing} title="Fetch the latest transactions from your connected banks">
             {syncing ? 'Syncing...' : 'Sync banks'}
           </button>
+          <PanelFilter page="finance" />
           <ConnectorsButton filter={isFinanceConnector} title="Finance connectors" />
           <SettingsMenu items={[layout.item]} />
         </div>

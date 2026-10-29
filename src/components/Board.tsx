@@ -1,6 +1,6 @@
 import { Children, isValidElement, useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import type { PanelSize, PanelState } from '../types'
-import { publishPanels, unpublishPage } from './panelStore'
+import { publishPanels, registerBoard, unpublishPage, unregisterBoard } from './panelStore'
 import { useBoardLayout } from './useBoardLayout'
 
 type PanelProps = {
@@ -72,7 +72,13 @@ export default function Board({
       panels.map((p) => ({ page, id: p.props.id, title: p.props.title, size: p.props.size ?? 'full', node: p.props.children })),
     )
   })
-  useEffect(() => () => unpublishPage(page), [page])
+  useEffect(
+    () => () => {
+      unpublishPage(page)
+      unregisterBoard(page)
+    },
+    [page],
+  )
 
   const { layout, set, reset, state } = useBoardLayout(page, defaults)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -81,6 +87,14 @@ export default function Board({
   const present = layout.filter((l) => byId.has(l.id))
   const shown = present.filter((l) => !l.hidden)
   const away = present.filter((l) => l.hidden)
+
+  // Lets the page's filter icon choose which panels are on show.
+  useEffect(() => {
+    registerBoard(page, {
+      panels: present.map((l) => ({ id: l.id, title: byId.get(l.id)?.title ?? l.id, hidden: l.hidden })),
+      setShown: (ids) => set(layout.map((l) => (byId.has(l.id) ? { ...l, hidden: !ids.includes(l.id) } : l))),
+    })
+  })
 
   const change = (id: string, patch: Partial<PanelState>) => set(layout.map((l) => (l.id === id ? { ...l, ...patch } : l)))
 

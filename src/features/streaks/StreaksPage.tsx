@@ -1,10 +1,15 @@
 import { useState } from 'react'
 import Calendar from 'react-calendar'
 import { daysSince, formatDay, todayKey, toDateKey, uid } from '../../lib/dates'
-import type { Tracker } from '../../types'
+import type { Integration, Tracker } from '../../types'
 import Board, { Panel } from '../../components/Board'
+import ConnectorsButton from '../connections/ConnectorsButton'
+import PanelFilter from '../../components/PanelFilter'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
+
+// Streaks can be fed by activity data, so offer the fitness and screen-time connectors.
+const isStreakConnector = (i: Integration) => i.category === 'fitness' || i.category === 'screen-time'
 
 const COLORS = ['#4f46e5', '#db2777', '#0891b2', '#16a34a', '#d97706', '#9333ea']
 const MILESTONES = [7, 30, 60, 100, 180, 365, 730, 1000]
@@ -46,7 +51,11 @@ export default function StreaksPage({ trackers, setTrackers }: Props) {
           <h1>Streaks</h1>
           <p>Track how many days you've kept something going.</p>
         </div>
-        <SettingsMenu items={[layout.item]} />
+        <div className="row">
+          <PanelFilter page="streaks" />
+          <ConnectorsButton filter={isStreakConnector} title="Streak connectors" />
+          <SettingsMenu items={[layout.item]} />
+        </div>
       </header>
 
       <Board page="streaks" editing={layout.editing} onEditingChange={layout.setEditing}>

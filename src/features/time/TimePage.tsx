@@ -4,6 +4,7 @@ import { formatDuration, uid } from '../../lib/dates'
 import ConnectorsButton from '../connections/ConnectorsButton'
 import type { Integration, TimeEntry } from '../../types'
 import Board, { Panel } from '../../components/Board'
+import PanelFilter from '../../components/PanelFilter'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
 
@@ -59,6 +60,7 @@ export default function TimePage() {
           <p>Start a timer and see where your day goes.</p>
         </div>
         <div className="row">
+          <PanelFilter page="time" />
           <ConnectorsButton filter={isScreenTimeConnector} title="Screen time connectors" />
           <SettingsMenu items={[layout.item]} />
         </div>

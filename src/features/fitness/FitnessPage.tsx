@@ -4,6 +4,7 @@ import type { Integration, Meal, Workout } from '../../types'
 import ConnectorsButton from '../connections/ConnectorsButton'
 import { CALORIE_GOAL } from '../diet/constants'
 import Board, { Panel } from '../../components/Board'
+import PanelFilter from '../../components/PanelFilter'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
 
@@ -46,6 +47,7 @@ export default function FitnessPage({ meals }: { meals: Meal[] }) {
           <p>Today's workouts and calories burned. Meals are on the Diet page.</p>
         </div>
         <div className="row">
+          <PanelFilter page="fitness" />
           <ConnectorsButton filter={isFitnessConnector} title="Fitness connectors" />
           <SettingsMenu items={[layout.item]} />
         </div>

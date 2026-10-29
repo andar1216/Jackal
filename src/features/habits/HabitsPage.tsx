@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { skillsApi } from '../../lib/api'
 import { createWriteQueue } from '../../lib/writeQueue'
 import Board, { Panel } from '../../components/Board'
+import FilterMenu from '../../components/FilterMenu'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
-import type { PanelSize, Skill } from '../../types'
+import ConnectorsButton from '../connections/ConnectorsButton'
+import type { Integration, PanelSize, Skill } from '../../types'
 import { hasEnoughForAverage } from './habitStats'
 import {
   AverageWidget,
@@ -14,6 +16,9 @@ import {
   StreakWidget,
   type WidgetCtx,
 } from './widgets'
+
+// Habits can be fed by activity data, so offer the fitness and screen-time connectors.
+const isHabitConnector = (i: Integration) => i.category === 'fitness' || i.category === 'screen-time'
 
 /* ---------- Widget registry ---------- */
 
@@ -59,6 +64,16 @@ const WIDGET_SIZES: Record<WidgetId, PanelSize> = {
 /* ---------- Habits data ---------- */
 
 const HIDE_STREAKS_KEY = 'jackal.habits.hideStreaks'
+const CALENDAR_HIDDEN_KEY = 'jackal.habits.calendarHidden'
+
+const loadIds = (key: string): string[] => {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(key) ?? '[]')
+    return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
+  } catch {
+    return []
+  }
+}
 
 const COLORS = ['#4f46e5', '#db2777', '#0891b2', '#16a34a', '#d97706', '#9333ea']
 
@@ -84,6 +99,15 @@ export default function HabitsPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The habits left off the calendar. Remembering who is hidden (not who is shown) means a new habit shows up by default.
+  // Remembered in this browser, like the streak choice below.
+  const [calendarHidden, setCalendarHidden] = useState<string[]>(() => loadIds(CALENDAR_HIDDEN_KEY))
+  const chooseCalendarHabits = (shownIds: string[]) => {
+    const hidden = active.filter((s) => !shownIds.includes(s.id)).map((s) => s.id)
+    setCalendarHidden(hidden)
+    if (hidden.length === 0) localStorage.removeItem(CALENDAR_HIDDEN_KEY)
+    else localStorage.setItem(CALENDAR_HIDDEN_KEY, JSON.stringify(hidden))
+  }
   // Remembered in this browser, so streaks stay hidden next time too.
   const [hideAllStreaks, setHideAllStreaks] = useState(() => localStorage.getItem(HIDE_STREAKS_KEY) === '1')
   const toggleHideAllStreaks = () => {
@@ -172,6 +196,7 @@ export default function HabitsPage() {
     status,
     select: setSelectedId,
     hideAllStreaks,
+    calendarHabits: active.filter((s) => !calendarHidden.includes(s.id)),
     nextColor: COLORS[skills.length % COLORS.length],
     addHabit: (fields) =>
       writes.enqueue(async () => {
@@ -213,12 +238,22 @@ export default function HabitsPage() {
           <h1>Habits</h1>
           <p>Click a habit to show it in the other widgets. Use the gear to hide streaks or rearrange the widgets.</p>
         </div>
-        <SettingsMenu
-          items={[
-            { label: hideAllStreaks ? 'Show streaks' : 'Hide all streaks', onSelect: toggleHideAllStreaks },
-            layout.item,
-          ]}
-        />
+        <div className="row">
+          <FilterMenu
+            label="Filter the calendar"
+            heading="Show on the calendar"
+            options={active.map((s) => ({ id: s.id, label: s.name, color: s.color }))}
+            selected={active.filter((s) => !calendarHidden.includes(s.id)).map((s) => s.id)}
+            onChange={chooseCalendarHabits}
+          />
+          <ConnectorsButton filter={isHabitConnector} title="Habit connectors" />
+          <SettingsMenu
+            items={[
+              { label: hideAllStreaks ? 'Show streaks' : 'Hide all streaks', onSelect: toggleHideAllStreaks },
+              layout.item,
+            ]}
+          />
+        </div>
       </header>
 
       {message && (

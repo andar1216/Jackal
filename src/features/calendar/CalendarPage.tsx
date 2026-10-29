@@ -5,6 +5,7 @@ import { formatDay, toDateKey, uid } from '../../lib/dates'
 import ConnectorsButton from '../connections/ConnectorsButton'
 import type { CalendarEvent, Integration, Tracker } from '../../types'
 import Board, { Panel } from '../../components/Board'
+import PanelFilter from '../../components/PanelFilter'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
 
@@ -42,6 +43,7 @@ export default function CalendarPage({ trackers, events, setEvents }: Props) {
           <p>Events and tracker start dates in one place.</p>
         </div>
         <div className="row">
+          <PanelFilter page="calendar" />
           <ConnectorsButton filter={isCalendarConnector} title="Calendar connectors" />
           <SettingsMenu items={[layout.item]} />
         </div>

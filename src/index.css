@@ -770,6 +770,44 @@ button:disabled {
   color: var(--bad);
 }
 
+/* Filter icon with a dropdown of checkboxes */
+.filter-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.filter-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7rem;
+  line-height: 16px;
+  text-align: center;
+}
+
+.filter-list {
+  min-width: 220px;
+  padding: 8px;
+}
+
+.filter-head {
+  margin-bottom: 6px;
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+  cursor: pointer;
+}
+
 .habit-edit {
   flex-wrap: wrap;
 }

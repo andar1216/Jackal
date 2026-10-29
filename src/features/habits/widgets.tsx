@@ -42,6 +42,8 @@ export type WidgetCtx = {
   status: 'loading' | 'ready' | 'error'
   /** Streaks are hidden for every habit. */
   hideAllStreaks: boolean
+  /** The habits the calendar draws (the filter at the top of the page picks them). */
+  calendarHabits: Skill[]
   /** The colour the next new habit starts with. */
   nextColor: string
   select: (id: string) => void
@@ -290,27 +292,26 @@ export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
 /* ---------------- Calendar ---------------- */
 
 export function CalendarWidget({ ctx }: { ctx: WidgetCtx }) {
-  // Habits that share a day are stacked as bands of colour, oldest habit at the bottom.
-  const [layered, setLayered] = useState(true)
   const skill = ctx.selected
   if (!skill) return <NoHabit ctx={ctx} />
 
-  const oldestFirst = [...ctx.skills].sort((a, b) => a.startDate.localeCompare(b.startDate)) // stable: ties keep list order
-  const shown = layered ? oldestFirst : [skill]
+  // The habits the filter lets through. Those that share a day are stacked as bands of colour, oldest habit at the bottom.
+  const shown = [...ctx.calendarHabits].sort((a, b) => a.startDate.localeCompare(b.startDate)) // stable: ties keep list order
   const today = startOfDay(new Date())
 
   const doneOn = (date: Date) => shown.filter((h) => h.logs.includes(toDateKey(date)))
 
   const tileClass = ({ date, view }: { date: Date; view: string }) => {
     if (view !== 'month') return null
-    const done = doneOn(date)
-    if (done.length > 0) return layered ? 'day-layered' : 'day-on'
+    if (doneOn(date).length > 0) return 'day-layered'
+    // Missed days are tinted for the selected habit, when it is one of the habits being shown.
+    if (!shown.some((h) => h.id === skill.id)) return null
     if (!isBefore(date, today) || isBefore(date, parseISO(skill.startDate))) return null
     return 'day-off'
   }
 
   const tileContent = ({ date, view }: { date: Date; view: string }) => {
-    if (!layered || view !== 'month') return null
+    if (view !== 'month') return null
     const done = doneOn(date)
     if (done.length === 0) return null
     return (
@@ -333,26 +334,27 @@ export function CalendarWidget({ ctx }: { ctx: WidgetCtx }) {
         // Month names only; year/decade views aren't useful for logging.
         minDetail="month"
       />
-      <label className="row" style={{ marginTop: 8 }}>
-        <input type="checkbox" checked={layered} onChange={(e) => setLayered(e.target.checked)} />
-        <span>Layer all habits (days they share stack up, oldest habit at the bottom)</span>
-      </label>
-      {layered && ctx.skills.length > 1 && (
-        <div className="row" style={{ gap: 12 }}>
-          {oldestFirst.map((h) => (
-            <span key={h.id} className="stat-label">
-              <span className="swatch" style={{ background: h.color, display: 'inline-block' }} /> {h.name}
-            </span>
-          ))}
-        </div>
+      {shown.length === 0 ? (
+        <p className="stat-label" style={{ marginBottom: 0 }}>
+          No habits are shown. Use the filter at the top of the page to choose some.
+        </p>
+      ) : (
+        shown.length > 1 && (
+          <div className="row" style={{ gap: 12 }}>
+            {shown.map((h) => (
+              <span key={h.id} className="stat-label">
+                <span className="swatch" style={{ background: h.color, display: 'inline-block' }} /> {h.name}
+              </span>
+            ))}
+          </div>
+        )
       )}
-      <p className="stat-label" style={{ marginBottom: 0 }}>
-        Click a day to mark it on or off{layered ? ` for ${skill.name}` : ''}.
-      </p>
+      {/* <p className="stat-label" style={{ marginBottom: 0 }}>
+        Click a day to mark it on or off for {skill.name}.
+      </p> */}
     </div>
   )
 }
-
 /* ---------------- Streak ---------------- */
 
 export function StreakWidget({ ctx }: { ctx: WidgetCtx }) {

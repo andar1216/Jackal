@@ -32,3 +32,34 @@ const subscribe = (listener: () => void) => {
 }
 
 export const usePublishedPanels = () => useSyncExternalStore(subscribe, () => snapshot)
+/** What a page's filter icon needs from its Board: the panels and whether each is on show, and a way to choose. */
+export type BoardControl = {
+  panels: { id: string; title: string; hidden: boolean }[]
+  setShown: (ids: string[]) => void
+}
+
+const boards = new Map<string, BoardControl>()
+let boardsSnapshot: ReadonlyMap<string, BoardControl> = boards
+const boardListeners = new Set<() => void>()
+
+export function registerBoard(page: string, control: BoardControl) {
+  boards.set(page, control)
+  boardsSnapshot = new Map(boards) // a new object, so subscribers notice the change
+  boardListeners.forEach((l) => l())
+}
+
+export function unregisterBoard(page: string) {
+  if (boards.delete(page)) {
+    boardsSnapshot = new Map(boards)
+    boardListeners.forEach((l) => l())
+  }
+}
+
+const subscribeBoards = (listener: () => void) => {
+  boardListeners.add(listener)
+  return () => {
+    boardListeners.delete(listener)
+  }
+}
+
+export const useBoardControl = (page: string) => useSyncExternalStore(subscribeBoards, () => boardsSnapshot).get(page)
