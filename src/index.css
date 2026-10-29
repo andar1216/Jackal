@@ -163,6 +163,16 @@ button.link {
   align-items: center;
 }
 
+/* Dragging a menu item to a new spot. */
+.nav-item.dragging {
+  opacity: 0.4;
+}
+
+.nav-item.drop-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
 .nav-icon {
   display: inline-flex;
   align-items: center;

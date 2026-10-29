@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Activity, CircleGauge, Landmark, Soup } from 'lucide-react'
 import { subDays } from 'date-fns'
 import { CgPerformance } from 'react-icons/cg'
+import { useBoardLayout } from './components/useBoardLayout'
 import TopBar, { type Theme } from './components/TopBar'
 import CalendarPage from './features/calendar/CalendarPage'
 import PlaidOAuthReturn from './features/connections/PlaidOAuthReturn'
@@ -95,6 +96,29 @@ function Shell({ user, theme, onThemeChange }: ShellProps) {
   // Meals are logged on Diet and also counted on Fitness (calories left after exercise).
   const [meals, setMeals] = useState<Meal[]>(SEED_MEALS)
 
+  // The menu's order is the person's own, kept on their account like a page layout.
+  const navPages = PAGES.filter((p) => !p.hidden)
+  const { layout: navLayout, set: setNavLayout } = useBoardLayout(
+    'sidebar',
+    navPages.map((p) => ({ id: p.id, size: 'full', hidden: false })),
+  )
+  const orderedNav = navLayout.flatMap((l) => navPages.find((p) => p.id === l.id) ?? [])
+  const [dragNav, setDragNav] = useState<string | null>(null)
+  const [overNav, setOverNav] = useState<string | null>(null)
+  const endNavDrag = () => {
+    setDragNav(null)
+    setOverNav(null)
+  }
+  const moveNav = (from: string, to: string) => {
+    const i = navLayout.findIndex((l) => l.id === from)
+    const j = navLayout.findIndex((l) => l.id === to)
+    if (i < 0 || j < 0 || i === j) return
+    const next = [...navLayout]
+    const [item] = next.splice(i, 1)
+    next.splice(j, 0, item)
+    setNavLayout(next)
+  }
+
   // Every page stays mounted (just hidden) so switching tabs doesn't lose
   // in-memory state, such as a running timer or a half-typed form.
   const show = (id: PageId) => ({ hidden: page !== id })
@@ -103,12 +127,38 @@ function Shell({ user, theme, onThemeChange }: ShellProps) {
     <div className="app">
       <nav className="sidebar">
         <div className="brand">Jackal</div>
-        {PAGES.filter((p) => !p.hidden).map((p) => (
+        {orderedNav.map((p) => (
           <button
             key={p.id}
-            className={`nav-item ${page === p.id ? 'active' : ''}`}
+            className={`nav-item ${page === p.id ? 'active' : ''} ${dragNav === p.id ? 'dragging' : ''} ${overNav === p.id && dragNav !== p.id ? 'drop-target' : ''}`}
             onClick={() => setPage(p.id as PageId)}
             aria-current={page === p.id ? 'page' : undefined}
+            title="Drag to reorder (or press Alt + Up / Down)"
+            draggable
+            onDragStart={(e) => {
+              setDragNav(p.id)
+              e.dataTransfer.effectAllowed = 'move'
+              e.dataTransfer.setData('text/plain', p.id)
+            }}
+            onDragEnd={endNavDrag}
+            onDragOver={(e) => {
+              if (!dragNav) return
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'move'
+              if (overNav !== p.id) setOverNav(p.id)
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              if (dragNav) moveNav(dragNav, p.id)
+              endNavDrag()
+            }}
+            onKeyDown={(e) => {
+              if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
+              e.preventDefault()
+              const at = orderedNav.findIndex((n) => n.id === p.id)
+              const neighbor = orderedNav[at + (e.key === 'ArrowUp' ? -1 : 1)]
+              if (neighbor) moveNav(p.id, neighbor.id)
+            }}
           >
             <span aria-hidden className="nav-icon">
               {p.icon}
@@ -128,7 +178,7 @@ function Shell({ user, theme, onThemeChange }: ShellProps) {
         />
         <main className="content">
           <div {...show('dashboard')}>
-            <DashboardPage />
+            <DashboardPage pageLabels={Object.fromEntries(PAGES.map((p) => [p.id, p.label]))} />
           </div>
           <div {...show('habits')}>
             <HabitsPage />

@@ -3,10 +3,26 @@ import Calendar from 'react-calendar'
 import { differenceInCalendarDays, isAfter, isBefore, parseISO, startOfDay } from 'date-fns'
 import { formatDay, todayKey, toDateKey } from '../../lib/dates'
 import MenuButton from '../../components/MenuButton'
-import type { Skill } from '../../types'
+import type { HabitKind, Skill } from '../../types'
 import { bestStreak, currentStreak, daysOnOff, weeklyStats } from './habitStats'
 
-export type HabitFields = { name: string; color: string; startDate: string; endDate: string | null; autoMark: boolean }
+export type HabitFields = {
+  name: string
+  color: string
+  startDate: string
+  endDate: string | null
+  autoMark: boolean
+  kind: HabitKind
+}
+
+const KIND_LABELS: Record<HabitKind, string> = { performing: 'Performing', eliminating: 'Eliminating' }
+
+const KindSelect = ({ value, onChange }: { value: HabitKind; onChange: (kind: HabitKind) => void }) => (
+  <select value={value} onChange={(e) => onChange(e.target.value as HabitKind)} aria-label="Habit type" title="Performing: something you do. Eliminating: something you are getting rid of.">
+    <option value="performing">{KIND_LABELS.performing}</option>
+    <option value="eliminating">{KIND_LABELS.eliminating}</option>
+  </select>
+)
 
 export type HabitChanges = Partial<HabitFields> & { hideStreak?: boolean }
 
@@ -54,6 +70,7 @@ const NoHabit = ({ ctx }: { ctx: WidgetCtx }) => (
 /** Change a habit's name, start date, colour, and whether it marks itself every day. */
 function HabitEditor({ habit, ctx, onDone }: { habit: Skill; ctx: WidgetCtx; onDone: () => void }) {
   const [name, setName] = useState(habit.name)
+  const [kind, setKind] = useState<HabitKind>(habit.kind ?? 'performing')
   const [startDate, setStartDate] = useState(habit.startDate)
   const [endDate, setEndDate] = useState(habit.endDate ?? '') // '' = no goal date
   const [color, setColor] = useState(habit.color)
@@ -64,6 +81,7 @@ function HabitEditor({ habit, ctx, onDone }: { habit: Skill; ctx: WidgetCtx; onD
     if (!name.trim() || !startDate) return
     const changes: Partial<HabitFields> = {}
     if (name.trim() !== habit.name) changes.name = name.trim()
+    if (kind !== (habit.kind ?? 'performing')) changes.kind = kind
     if (startDate !== habit.startDate) changes.startDate = startDate
     if (endDate !== (habit.endDate ?? '')) changes.endDate = endDate || null
     if (color !== habit.color) changes.color = color
@@ -75,6 +93,7 @@ function HabitEditor({ habit, ctx, onDone }: { habit: Skill; ctx: WidgetCtx; onD
   return (
     <form className="form habit-edit" onSubmit={save} style={{ marginBottom: 0, width: '100%' }}>
       <input value={name} onChange={(e) => setName(e.target.value)} aria-label="Habit name" autoFocus />
+      <KindSelect value={kind} onChange={setKind} />
       <label className="row" title="The day this habit starts counting from">
         <span className="stat-label">Starts</span>
         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} aria-label="Start date" required />
@@ -103,6 +122,7 @@ function HabitEditor({ habit, ctx, onDone }: { habit: Skill; ctx: WidgetCtx; onD
 
 export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
   const [name, setName] = useState('')
+  const [kind, setKind] = useState<HabitKind>('performing')
   const [startDate, setStartDate] = useState(todayKey())
   const [endDate, setEndDate] = useState('')
   const [pickedColor, setPickedColor] = useState<string | null>(null)
@@ -118,8 +138,9 @@ export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !startDate) return
-    ctx.addHabit({ name: name.trim(), color: pickedColor ?? ctx.nextColor, startDate, endDate: endDate || null, autoMark })
+    ctx.addHabit({ name: name.trim(), color: pickedColor ?? ctx.nextColor, startDate, endDate: endDate || null, autoMark, kind })
     setName('')
+    setKind('performing')
     setStartDate(todayKey())
     setEndDate('')
     setPickedColor(null)
@@ -135,6 +156,7 @@ export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
           onChange={(e) => setName(e.target.value)}
           aria-label="Habit name"
         />
+        <KindSelect value={kind} onChange={setKind} />
         <label className="row" title="The day this habit starts counting from">
           <span className="stat-label">Starts</span>
           <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} aria-label="Start date" required />
@@ -184,8 +206,13 @@ export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
                       <span className="swatch" style={{ background: s.color }} />
                       <span>
                         {s.name}
+                        <span className="pill" style={{ marginLeft: 8 }}>
+                          {KIND_LABELS[s.kind ?? 'performing']}
+                        </span>
                         {streakShown(ctx, s) && <span className="stat-label"> · since {formatDay(s.startDate)}</span>}
-                        {goalText(s, today) && <span className="stat-label"> · {goalText(s, today)}</span>}
+                        {streakShown(ctx, s) && goalText(s, today) && (
+                          <span className="stat-label"> · {goalText(s, today)}</span>
+                        )}
                         {s.autoMark && (
                           <span className="pill" style={{ marginLeft: 8 }} title="Marked every day automatically">
                             auto
@@ -325,6 +352,7 @@ export function CalendarWidget({ ctx }: { ctx: WidgetCtx }) {
     </div>
   )
 }
+
 /* ---------------- Streak ---------------- */
 
 export function StreakWidget({ ctx }: { ctx: WidgetCtx }) {
@@ -390,8 +418,9 @@ export function DaysOnOffWidget({ ctx }: { ctx: WidgetCtx }) {
           <div className="stat-label">Days off</div>
         </div>
       </div>
-      <div className="bar" aria-label={`${pct}% of days on`}>
-        <span style={{ width: `${pct}%`, background: skill.color }} />
+      {/* Green for the days on, red for the days off. */}
+      <div className="bar" aria-label={`${pct}% of days on`} style={{ background: total === 0 ? undefined : 'var(--bad)' }}>
+        <span style={{ width: `${pct}%`, background: 'var(--good)' }} />
       </div>
       <p className="stat-label" style={{ margin: 0 }}>
         {pct}% of days since {formatDay(skill.startDate)}

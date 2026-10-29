@@ -141,10 +141,10 @@ describe('skills', () => {
     assert.equal((await call('PATCH', `/skills/${id}`, { archived: false })).body.archived, false)
   })
 
-  it('labels a habit as performing or giving up', async () => {
+  it('labels a habit as performing or eliminating', async () => {
     assert.equal((await call('GET', `/skills/${id}`)).body.kind, 'performing')
-    const quit = await call('POST', '/skills', { name: 'No soda', startDate: '2026-10-01', kind: 'giving-up' })
-    assert.equal(quit.body.kind, 'giving-up')
+    const quit = await call('POST', '/skills', { name: 'No soda', startDate: '2026-10-01', kind: 'eliminating' })
+    assert.equal(quit.body.kind, 'eliminating')
     assert.equal((await call('PATCH', `/skills/${quit.body.id}`, { kind: 'performing' })).body.kind, 'performing')
     assert.equal((await call('PATCH', `/skills/${quit.body.id}`, { kind: 'other' })).status, 400)
     await call('DELETE', `/skills/${quit.body.id}`)

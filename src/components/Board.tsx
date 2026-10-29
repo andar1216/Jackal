@@ -1,5 +1,6 @@
-import { Children, isValidElement, useState, type ReactElement, type ReactNode } from 'react'
+import { Children, isValidElement, useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import type { PanelSize, PanelState } from '../types'
+import { publishPanels, unpublishPage } from './panelStore'
 import { useBoardLayout } from './useBoardLayout'
 
 type PanelProps = {
@@ -8,6 +9,8 @@ type PanelProps = {
   title: string
   /** How wide it starts out. */
   size?: PanelSize
+  /** Starts out put away (until the person adds it), instead of on show. */
+  defaultHidden?: boolean
   children: ReactNode
 }
 
@@ -38,18 +41,38 @@ export default function Board({
   page,
   editing,
   onEditingChange,
+  publish = true,
+  emptyText = 'Every panel is put away. Open the settings gear and choose Customize layout to bring them back.',
   children,
 }: {
   page: string
   editing: boolean
   onEditingChange: (editing: boolean) => void
+  /** Offer these panels to the Dashboard. Off for the Dashboard's own board. */
+  publish?: boolean
+  /** Shown when no panel is on show. */
+  emptyText?: string
   children: ReactNode
 }) {
   const panels = Children.toArray(children).filter(
     (c): c is ReactElement<PanelProps> => isValidElement(c) && c.type === Panel,
   )
   const byId = new Map(panels.map((p) => [p.props.id, p.props]))
-  const defaults: PanelState[] = panels.map((p) => ({ id: p.props.id, size: p.props.size ?? 'full', hidden: false }))
+  const defaults: PanelState[] = panels.map((p) => ({
+    id: p.props.id,
+    size: p.props.size ?? 'full',
+    hidden: p.props.defaultHidden ?? false,
+  }))
+
+  // Offer every panel to the Dashboard, as it is drawn right now (so it stays live), and take them back on leaving.
+  useEffect(() => {
+    if (!publish) return
+    publishPanels(
+      page,
+      panels.map((p) => ({ page, id: p.props.id, title: p.props.title, size: p.props.size ?? 'full', node: p.props.children })),
+    )
+  })
+  useEffect(() => () => unpublishPage(page), [page])
 
   const { layout, set, reset, state } = useBoardLayout(page, defaults)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -116,7 +139,7 @@ export default function Board({
       </div>
       )}
 
-      {shown.length === 0 && <p className="empty">Every panel is put away. Open the settings gear and choose Customize layout to bring them back.</p>}
+      {shown.length === 0 && <p className="empty">{emptyText}</p>}
 
       <div className={`board ${editing ? 'editing' : ''}`}>
         {shown.map((item) => {

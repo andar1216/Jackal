@@ -3,6 +3,12 @@ import { toDateKey } from '../../lib/dates'
 import type { Skill } from '../../types'
 
 /** Consecutive days ending today (or yesterday, if today isn't logged yet). */
+const MIN_DAYS_FOR_AVERAGE = 21 // three weeks
+
+/** The weekly average only means something once a habit has been going for three weeks. */
+export const hasEnoughForAverage = (skill: Skill): boolean =>
+  differenceInCalendarDays(new Date(), parseISO(skill.startDate)) >= MIN_DAYS_FOR_AVERAGE
+
 export function currentStreak(skill: Skill): number {
   const logs = new Set(skill.logs)
   let day = new Date()

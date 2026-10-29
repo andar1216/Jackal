@@ -6,8 +6,8 @@ export type Tracker = {
   notes?: string
 }
 
-/** A habit is either something you do (performing) or something you are quitting (giving up). */
-export type HabitKind = 'performing' | 'giving-up'
+/** A habit is either something you do (performing) or something you are getting rid of (eliminating). */
+export type HabitKind = 'performing' | 'eliminating'
 
 export type Skill = {
   id: string

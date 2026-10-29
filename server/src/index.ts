@@ -2,7 +2,7 @@ import { createApp } from './app.js'
 import { config } from './config.js'
 import { connectDb, disconnectDb } from './db.js'
 import { plaidGateway } from './integrations/plaidGateway.js'
-import { syncAllIndexes } from './models.js'
+import { renameOldHabitKinds, syncAllIndexes } from './models.js'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -56,6 +56,7 @@ async function main() {
   await connectWithRetry()
   console.log('Connected to MongoDB')
   await syncAllIndexes()
+  await renameOldHabitKinds()
 
   const server = createApp().listen(config.port, config.host, () => {
     console.log(`API listening on http://${config.host}:${config.port}`)

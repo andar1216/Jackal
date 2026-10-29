@@ -24,7 +24,7 @@ export const skillSchema = z.strictObject({
   archived: z.boolean().optional(),
   autoMark: z.boolean().optional(),
   hideStreak: z.boolean().optional(),
-  kind: z.enum(['performing', 'giving-up']).optional(),
+  kind: z.enum(['performing', 'eliminating']).optional(),
 })
 
 export const trackerSchema = z.strictObject({
@@ -43,7 +43,7 @@ export const transactionSchema = z.strictObject({
   archived: z.boolean().optional(),
   autoMark: z.boolean().optional(),
   hideStreak: z.boolean().optional(),
-  kind: z.enum(['performing', 'giving-up']).optional(),
+  kind: z.enum(['performing', 'eliminating']).optional(),
 })
 
 export const subscriptionMarkBody = z.strictObject({

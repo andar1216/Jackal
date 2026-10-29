@@ -70,7 +70,7 @@ export const Skill = mongoose.model(
     avgWeeks: { type: Number, default: 12, min: 1, max: 52 },
     archived: { type: Boolean, default: false }, // put away: left out of the habits list and widgets until restored
     endDate: { type: String, match: /^\d{4}-\d{2}-\d{2}$/ }, // optional goal date: the day the habit is meant to run until
-    kind: { type: String, enum: ['performing', 'giving-up'], default: 'performing' }, // doing something, or giving something up
+    kind: { type: String, enum: ['performing', 'eliminating'], default: 'performing' }, // doing something, or getting rid of something
     hideStreak: { type: Boolean, default: false }, // keep this habit's streak out of sight
     autoMark: { type: Boolean, default: false }, // every day counts as done unless unmarked
     autoThrough: { type: String, match: /^\d{4}-\d{2}-\d{2}$/ }, // the last day autoMark has filled in
@@ -251,4 +251,7 @@ export async function adoptOrphanedData(userId: unknown) {
 }
 
 /** Create missing indexes and drop stale ones (for example the old one-per-provider rule). */
+/** Habits labelled before "Giving up" was renamed "Eliminating" are moved over. */
+export const renameOldHabitKinds = () => Skill.updateMany({ kind: 'giving-up' }, { $set: { kind: 'eliminating' } })
+
 export const syncAllIndexes = () => Promise.all(mongoose.modelNames().map((name) => mongoose.model(name).syncIndexes()))

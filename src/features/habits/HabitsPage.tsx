@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { skillsApi } from '../../lib/api'
 import { createWriteQueue } from '../../lib/writeQueue'
 import Board, { Panel } from '../../components/Board'
+import SettingsMenu from '../../components/SettingsMenu'
+import { useLayoutEditing } from '../../components/useLayoutEditing'
 import type { PanelSize, Skill } from '../../types'
+import { hasEnoughForAverage } from './habitStats'
 import {
   AverageWidget,
   CalendarWidget,
@@ -16,12 +19,32 @@ import {
 
 type WidgetId = 'habits' | 'calendar' | 'streak' | 'daysOnOff' | 'average'
 
-const WIDGETS: Record<WidgetId, { title: string; perHabit: boolean; render: (ctx: WidgetCtx) => React.ReactNode }> = {
+type Widget = {
+  title: string
+  perHabit: boolean
+  /** A widget that says no is left off the page (and comes back by itself when it says yes). */
+  visible?: (ctx: WidgetCtx) => boolean
+  render: (ctx: WidgetCtx) => React.ReactNode
+}
+
+const WIDGETS: Record<WidgetId, Widget> = {
   habits: { title: 'Habits', perHabit: false, render: (ctx) => <HabitsWidget ctx={ctx} /> },
   calendar: { title: 'Calendar', perHabit: true, render: (ctx) => <CalendarWidget ctx={ctx} /> },
-  streak: { title: 'Streak', perHabit: true, render: (ctx) => <StreakWidget ctx={ctx} /> },
+  // Nothing to show once every streak is hidden.
+  streak: {
+    title: 'Streak',
+    perHabit: true,
+    visible: (ctx) => ctx.skills.length === 0 || (!ctx.hideAllStreaks && ctx.skills.some((h) => !h.hideStreak)),
+    render: (ctx) => <StreakWidget ctx={ctx} />,
+  },
   daysOnOff: { title: 'Days on / off', perHabit: true, render: (ctx) => <DaysOnOffWidget ctx={ctx} /> },
-  average: { title: 'Weekly average', perHabit: true, render: (ctx) => <AverageWidget ctx={ctx} /> },
+  // A weekly average needs at least three weeks of a habit to mean anything.
+  average: {
+    title: 'Weekly average',
+    perHabit: true,
+    visible: (ctx) => !!ctx.selected && hasEnoughForAverage(ctx.selected),
+    render: (ctx) => <AverageWidget ctx={ctx} />,
+  },
 }
 
 // Which widgets start where. The person's own arrangement is kept by the Board.
@@ -55,6 +78,7 @@ const withDayToggled = (skill: Skill, key: string): Skill => {
 /* ---------- Page ---------- */
 
 export default function HabitsPage() {
+  const layout = useLayoutEditing()
   const [skills, setSkills] = useState<Skill[]>([])
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [message, setMessage] = useState<string | null>(null)
@@ -187,11 +211,14 @@ export default function HabitsPage() {
       <header className="page-header row between">
         <div>
           <h1>Habits</h1>
-          <p>Click a habit to show it in the other widgets. Customize layout to rearrange the widgets.</p>
+          <p>Click a habit to show it in the other widgets. Use the gear to hide streaks or rearrange the widgets.</p>
         </div>
-        <button onClick={toggleHideAllStreaks} aria-pressed={hideAllStreaks} title="Hide or show the streak of every habit. Use a habit's ⋯ menu to hide just one.">
-          {hideAllStreaks ? 'Show streaks' : 'Hide all streaks'}
-        </button>
+        <SettingsMenu
+          items={[
+            { label: hideAllStreaks ? 'Show streaks' : 'Hide all streaks', onSelect: toggleHideAllStreaks },
+            layout.item,
+          ]}
+        />
       </header>
 
       {message && (
@@ -216,9 +243,10 @@ export default function HabitsPage() {
         </div>
       )}
 
-      <Board page="habits">
+      <Board page="habits" editing={layout.editing} onEditingChange={layout.setEditing}>
         {(Object.keys(WIDGETS) as WidgetId[]).map((id) => {
           const widget = WIDGETS[id]
+          if (widget.visible && !widget.visible(ctx)) return null
           return (
             <Panel key={id} id={id} title={widget.title} size={WIDGET_SIZES[id]}>
               <article className="card widget">
