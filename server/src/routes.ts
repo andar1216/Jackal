@@ -4,8 +4,8 @@ import { currentUserId, requireAuth } from './auth/middleware.js'
 import { integrations } from './integrations/routes.js'
 import { crudRouter, requireId } from './lib/crud.js'
 import { HttpError } from './lib/errors.js'
-import { detectRecurring, type Charge } from './lib/recurring.js'
-import { AccountView, CalendarEvent, ManualAccount, Meal, Skill, TimeEntry, Tracker, Transaction, Workout } from './models.js'
+import { detectRecurring, markId, merchantKey, type Charge, type Mark } from './lib/recurring.js'
+import { AccountView, CalendarEvent, ManualAccount, Meal, Skill, SubscriptionMark, TimeEntry, Tracker, Transaction, Workout } from './models.js'
 import {
   accountViewSchema,
   dateString,
@@ -14,6 +14,7 @@ import {
   mealSchema,
   skillSchema,
   timeEntrySchema,
+  subscriptionMarkBody,
   trackerSchema,
   transactionSchema,
   workoutSchema,
@@ -79,7 +80,22 @@ api.get('/subscriptions', async (req, res) => {
     .select('note amountCents date accountName')
     .lean()
   const plain: Charge[] = charges.map((c) => ({ note: c.note, amountCents: c.amountCents, date: c.date, accountName: c.accountName }))
-  res.json(detectRecurring(plain, todayStr))
+
+  const saved = await SubscriptionMark.find({ userId: currentUserId(req) }).lean()
+  const marks = new Map<string, Mark>(saved.map((m) => [markId(m.account, m.key), m.status as Mark]))
+  const names = new Map<string, string>(saved.map((m) => [markId(m.account, m.key), m.name]))
+  res.json(detectRecurring(plain, todayStr, marks, names))
+})
+
+// Say a charge is a subscription, say it is not, or take back what was said ("clear").
+api.put('/subscriptions/marks', async (req, res) => {
+  const { account, name, status } = subscriptionMarkBody.parse(req.body)
+  const key = merchantKey(name)
+  if (!key) throw new HttpError(400, 'That charge has no merchant name to match on.')
+  const owner = { userId: currentUserId(req), account, key }
+  if (status === 'clear') await SubscriptionMark.deleteOne(owner)
+  else await SubscriptionMark.updateOne(owner, { $set: { name, status } }, { upsert: true })
+  res.status(204).end()
 })
 
 api.use('/views', crudRouter(AccountView, { schema: accountViewSchema, sort: { createdAt: 1 } }))

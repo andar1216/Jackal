@@ -203,7 +203,17 @@ export const AccountView = mongoose.model(
   }),
 )
 
-export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView]
+/** The person's say on a repeating charge: "subscription" forces it into Subscriptions, "not" hides it. Matched by account and merchant. */
+const subscriptionMarkSchema = ownedSchema({
+  account: { type: String, required: true },
+  key: { type: String, required: true }, // the merchant, simplified (see lib/recurring.ts)
+  name: { type: String, required: true }, // as it was shown, so a hidden one can be listed by name
+  status: { type: String, enum: ['subscription', 'not'], required: true },
+})
+subscriptionMarkSchema.index({ userId: 1, account: 1, key: 1 }, { unique: true })
+export const SubscriptionMark = mongoose.model('SubscriptionMark', subscriptionMarkSchema)
+
+export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark]
 
 /**
  * Data created before accounts existed has no owner. The first account to be created inherits it.

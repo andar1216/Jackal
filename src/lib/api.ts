@@ -1,4 +1,4 @@
-import type { AccountView, BankAccount, Integration, ManualAccount, Skill, Subscription, Transaction, User } from '../types'
+import type { AccountView, BankAccount, Integration, ManualAccount, Skill, SubscriptionData, Transaction, User } from '../types'
 
 // Dev: Vite proxies /api to the backend. For a separate API host, set VITE_API_URL.
 const BASE = import.meta.env.VITE_API_URL ?? '/api'
@@ -97,7 +97,10 @@ export const transactionsApi = {
 }
 
 export const subscriptionsApi = {
-  list: () => request<Subscription[]>('GET', '/subscriptions'),
+  list: () => request<SubscriptionData>('GET', '/subscriptions'),
+  /** 'subscription' = it is one, 'not' = hide it, 'clear' = take back what you said. */
+  mark: (account: string, name: string, status: 'subscription' | 'not' | 'clear') =>
+    request<void>('PUT', '/subscriptions/marks', { account, name, status }),
 }
 
 export const viewsApi = {

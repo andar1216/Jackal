@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { currentUserId } from '../auth/middleware.js'
 import { HttpError } from '../lib/errors.js'
+import { balanceCents } from '../lib/balances.js'
 import { decryptSecret, encryptSecret } from '../lib/secrets.js'
 import { PlaidItem, Transaction } from '../models.js'
 import { PlaidError, plaidGateway, type PlaidTx } from './plaidGateway.js'
@@ -115,7 +116,7 @@ export async function syncItem(item: ItemDoc, options: { fromScratch?: boolean }
       mask: a.mask,
       type: a.type,
       subtype: a.subtype,
-      balanceCents: typeof a.balance === 'number' ? Math.round(a.balance * 100) : undefined,
+      balanceCents: balanceCents({ type: a.type, current: a.balance, available: a.available, limit: a.limit }),
     }))
   }
 

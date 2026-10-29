@@ -45,13 +45,26 @@ export type Transaction = {
 export type Subscription = {
   name: string
   account: string
-  amountCents: number
+  key: string
+  amountCents: number // the latest charge, or the average per month when the amount varies
   cadence: 'weekly' | 'every 2 weeks' | 'monthly' | 'quarterly' | 'yearly'
   monthlyCents: number
   lastDate: string
   nextDate: string
   count: number
+  varies: boolean // a different amount each time
+  marked: boolean // you marked it, rather than it being found automatically
   active: boolean
+}
+
+/** A merchant that could be marked as a subscription. */
+export type SubscriptionCandidate = { name: string; account: string; key: string; count: number; lastDate: string; lastAmountCents: number }
+
+export type SubscriptionData = {
+  items: Subscription[]
+  /** Ones you said are not subscriptions. */
+  ignored: { name: string; account: string; key: string }[]
+  candidates: SubscriptionCandidate[]
 }
 
 /** A named group of accounts, like Business or Personal. Accounts are listed by the name Finances shows for them. */

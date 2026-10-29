@@ -24,6 +24,9 @@ export type PlaidAccount = {
   subtype?: string
   /** Current balance in dollars. For a credit card or loan this is what is owed. Plaid may not have it yet. */
   balance?: number
+  /** Credit still available, and the limit, for cards. Some banks report these more reliably than the balance. */
+  available?: number
+  limit?: number
 }
 
 export type SyncPage = {
@@ -132,6 +135,8 @@ const realGateway: PlaidGateway = {
       type: a.type,
       subtype: a.subtype ?? undefined,
       balance: a.balances.current ?? undefined,
+      available: a.balances.available ?? undefined,
+      limit: a.balances.limit ?? undefined,
     }))
   },
 

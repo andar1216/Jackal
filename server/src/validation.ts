@@ -38,6 +38,12 @@ export const transactionSchema = z.strictObject({
   archived: z.boolean().optional(),
 })
 
+export const subscriptionMarkBody = z.strictObject({
+  account: z.string().trim().min(1).max(200),
+  name: z.string().trim().min(1).max(300),
+  status: z.enum(['subscription', 'not', 'clear']),
+})
+
 export const accountViewSchema = z.strictObject({
   name,
   accounts: z.array(z.string().trim().min(1).max(200)).max(200),

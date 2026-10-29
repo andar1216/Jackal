@@ -201,7 +201,7 @@ describe('transactions', () => {
     await call('DELETE', '/transactions/' + made.body.id) // so the other tests' counts stay the same
   })
 
-  it('lists subscriptions found in spending, and skips archived charges', async () => {
+  it('lists subscriptions, lets you mark or dismiss one, and skips archived charges', async () => {
     const month = (n: number) => {
       const d = new Date()
       d.setDate(1)
@@ -209,23 +209,46 @@ describe('transactions', () => {
       return d.toLocaleDateString('en-CA')
     }
     const ids: string[] = []
-    for (const n of [3, 2, 1]) {
-      const r = await call('POST', '/transactions', { type: 'expense', amountCents: 999, category: 'Fun', date: month(n), note: 'Streaming Plus' })
+    const add = async (note: string, amountCents: number, date: string) => {
+      const r = await call('POST', '/transactions', { type: 'expense', amountCents, category: 'Fun', date, note })
       ids.push(r.body.id)
+      return r.body.id as string
     }
-    const found = (await call('GET', '/subscriptions')).body
-    assert.equal(found.length, 1)
-    assert.equal(found[0].name, 'Streaming Plus')
-    assert.equal(found[0].cadence, 'monthly')
-    assert.equal(found[0].account, 'Added by hand')
+    const first = await add('Streaming Plus', 999, month(3))
+    await add('Streaming Plus', 999, month(2))
+    await add('Streaming Plus', 999, month(1))
+    // Different amounts, and not in months that follow each other: not found by itself.
+    await add('Print Shop', 2600, month(4))
+    await add('Print Shop', 9100, month(1))
 
-    await call('PATCH', '/transactions/' + ids[0], { archived: true })
-    assert.equal((await call('GET', '/subscriptions')).body.length, 0, 'two charges left is not enough')
+    const get = async () => (await call('GET', '/subscriptions')).body
+    let data = await get()
+    assert.deepEqual(data.items.map((i: { name: string }) => i.name), ['Streaming Plus'])
+    assert.equal(data.items[0].cadence, 'monthly')
+    assert.equal(data.items[0].account, 'Added by hand')
+    assert.deepEqual(data.candidates.map((c: { name: string }) => c.name), ['Print Shop'])
+
+    const mark = (name: string, status: string) => call('PUT', '/subscriptions/marks', { account: 'Added by hand', name, status })
+    assert.equal((await mark('Print Shop', 'subscription')).status, 204)
+    assert.equal((await mark('Streaming Plus', 'not')).status, 204)
+    data = await get()
+    assert.deepEqual(data.items.map((i: { name: string }) => i.name), ['Print Shop'])
+    assert.equal(data.items[0].marked, true)
+    assert.deepEqual(data.ignored.map((i: { name: string }) => i.name), ['Streaming Plus'])
+
+    assert.equal((await mark('Streaming Plus', 'clear')).status, 204)
+    assert.equal((await mark('Print Shop', 'clear')).status, 204)
+    assert.equal((await get()).ignored.length, 0)
+
+    assert.equal((await call('PUT', '/subscriptions/marks', { account: 'Added by hand', name: '!!!', status: 'subscription' })).status, 400)
+    assert.equal((await call('PUT', '/subscriptions/marks', { account: 'x', name: 'y', status: 'maybe' })).status, 400)
+
+    await call('PATCH', '/transactions/' + first, { archived: true })
+    assert.equal((await get()).items.length, 0, 'two months in a row is not enough')
 
     assert.equal((await makeClient()('GET', '/subscriptions')).status, 401)
     for (const id of ids) await call('DELETE', '/transactions/' + id)
   })
-
   it('ignores query operator injection', async () => {
     const r = await call('GET', '/transactions?type[$ne]=income')
     assert.equal(r.status, 200)

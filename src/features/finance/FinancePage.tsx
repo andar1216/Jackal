@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { addMonths, endOfMonth, format, isSameMonth, startOfMonth } from 'date-fns'
-import { accountsApi, plaidApi, TRANSACTIONS_CHANGED, transactionsApi, viewsApi } from '../../lib/api'
+import { accountsApi, plaidApi, subscriptionsApi, TRANSACTIONS_CHANGED, transactionsApi, viewsApi } from '../../lib/api'
 import { formatDay, formatMoney, toDateKey, todayKey } from '../../lib/dates'
 import type { AccountView, BankAccount, ManualAccount, Transaction } from '../../types'
 import NetWorthCard from './NetWorthCard'
@@ -80,6 +80,15 @@ export default function FinancePage() {
     else localStorage.removeItem(VIEW_KEY)
   }
   const [showArchived, setShowArchived] = useState(false)
+  // A short message at the bottom of the screen, with an Undo when the last action can be taken back.
+  const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null)
+  const toastTimer = useRef<number | undefined>(undefined)
+  const showToast = (message: string, undo?: () => void) => {
+    window.clearTimeout(toastTimer.current)
+    setToast({ message, undo })
+    toastTimer.current = window.setTimeout(() => setToast(null), 8000)
+  }
+  useEffect(() => () => window.clearTimeout(toastTimer.current), [])
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
   const [newKind, setNewKind] = useState<ManualAccount['kind']>('credit')
@@ -205,6 +214,31 @@ export default function FinancePage() {
       const updated = await transactionsApi.setArchived(t.id, archived)
       setData((d) => (d ? { ...d, items: d.items.map((x) => (x.id === updated.id ? updated : x)) } : d))
       setError(null)
+      if (archived) {
+        showToast(`Archived "${t.note ?? t.category}". It is hidden and not counted.`, () => void setArchived(t, false))
+      } else {
+        setToast(null)
+      }
+    } catch (err) {
+      setError(errorText(err))
+    }
+  }
+
+  const markSubscription = async (t: Transaction) => {
+    const name = t.note ?? t.category
+    try {
+      await subscriptionsApi.mark(accountOf(t), name, 'subscription')
+      setReload((n) => n + 1)
+      setError(null)
+      showToast(`"${name}" is now counted as a subscription.`, async () => {
+        try {
+          await subscriptionsApi.mark(accountOf(t), name, 'clear')
+          setReload((n) => n + 1)
+          setToast(null)
+        } catch (err) {
+          setError(errorText(err))
+        }
+      })
     } catch (err) {
       setError(errorText(err))
     }
@@ -272,6 +306,16 @@ export default function FinancePage() {
         <div className="banner error" role="alert">
           <span>{error}</span>
           <button onClick={() => setReload((n) => n + 1)}>Retry</button>
+        </div>
+      )}
+
+      {toast && (
+        <div className="toast" role="status">
+          <span>{toast.message}</span>
+          {toast.undo && <button onClick={toast.undo}>Undo</button>}
+          <button className="link" onClick={() => setToast(null)} aria-label="Dismiss">
+            ✕
+          </button>
         </div>
       )}
 
@@ -410,6 +454,7 @@ export default function FinancePage() {
           reload={reload}
           inView={inView}
           creditAccounts={new Set([...bankAccounts, ...handAccounts].filter((a) => a.type === 'credit').map((a) => a.label))}
+          onError={setError}
         />
 
         <div className="grid cols-2">
@@ -482,6 +527,11 @@ export default function FinancePage() {
                       {t.type === 'income' || t.isRefund ? '+' : '-'}
                       {formatMoney(t.amountCents)}
                     </strong>
+                    {t.type === 'expense' && !t.isRefund && (
+                      <button className="link" onClick={() => markSubscription(t)} title="Count charges like this one as a subscription">
+                        Subscription
+                      </button>
+                    )}
                     <button className="link" onClick={() => setArchived(t, true)} title="Hide this and leave it out of the totals. It is not deleted.">
                       Archive
                     </button>
