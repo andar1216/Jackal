@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { uid } from '../../lib/dates'
-import type { Meal } from '../../types'
+import ConnectorsButton from '../connections/ConnectorsButton'
+import type { Integration, Meal } from '../../types'
 import { CALORIE_GOAL } from './constants'
+
+const isDietConnector = (i: Integration) => i.id === 'myfitnesspal'
 
 const num = (v: string) => Math.max(0, parseInt(v, 10) || 0)
 
@@ -35,9 +38,12 @@ export default function DietPage({ meals, setMeals }: Props) {
 
   return (
     <>
-      <header className="page-header">
-        <h1>Diet</h1>
-        <p>Today's meals, calories, and macros.</p>
+      <header className="page-header row between">
+        <div>
+          <h1>Diet</h1>
+          <p>Today's meals, calories, and macros.</p>
+        </div>
+        <ConnectorsButton filter={isDietConnector} title="Diet connectors" />
       </header>
 
       <div className="stack">

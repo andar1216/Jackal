@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { addMonths, endOfMonth, format, isSameMonth, startOfMonth } from 'date-fns'
 import { accountsApi, plaidApi, subscriptionsApi, TRANSACTIONS_CHANGED, transactionsApi, viewsApi } from '../../lib/api'
 import { formatDay, formatMoney, toDateKey, todayKey } from '../../lib/dates'
-import type { AccountView, BankAccount, ManualAccount, Transaction } from '../../types'
+import type { AccountView, BankAccount, Integration, ManualAccount, Transaction } from '../../types'
+import ConnectorsButton from '../connections/ConnectorsButton'
 import NetWorthCard from './NetWorthCard'
 import SubscriptionsCard from './SubscriptionsCard'
 import ViewsBar, { type AccountChoice } from './ViewsBar'
@@ -16,6 +17,7 @@ const BUDGETS: Record<string, number> = {
 }
 const CATEGORIES = Object.keys(BUDGETS)
 
+const isFinanceConnector = (i: Integration) => i.category === 'finance'
 const VIEW_KEY = 'jackal.finance.view'
 const BY_HAND = 'Added by hand'
 /** The name an account added by hand goes by on this page. */
@@ -299,6 +301,7 @@ export default function FinancePage() {
           <button onClick={syncBanks} disabled={syncing} title="Fetch the latest transactions from your connected banks">
             {syncing ? 'Syncing...' : 'Sync banks'}
           </button>
+          <ConnectorsButton filter={isFinanceConnector} title="Finance connectors" />
         </div>
       </header>
 

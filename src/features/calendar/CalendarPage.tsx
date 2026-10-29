@@ -2,7 +2,10 @@ import { useState } from 'react'
 import Calendar from 'react-calendar'
 import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { formatDay, toDateKey, uid } from '../../lib/dates'
-import type { CalendarEvent, Tracker } from '../../types'
+import ConnectorsButton from '../connections/ConnectorsButton'
+import type { CalendarEvent, Integration, Tracker } from '../../types'
+
+const isCalendarConnector = (i: Integration) => i.category === 'calendar'
 
 type Props = {
   trackers: Tracker[]
@@ -29,9 +32,12 @@ export default function CalendarPage({ trackers, events, setEvents }: Props) {
 
   return (
     <>
-      <header className="page-header">
-        <h1>Calendar</h1>
-        <p>Events and tracker start dates in one place.</p>
+      <header className="page-header row between">
+        <div>
+          <h1>Calendar</h1>
+          <p>Events and tracker start dates in one place.</p>
+        </div>
+        <ConnectorsButton filter={isCalendarConnector} title="Calendar connectors" />
       </header>
 
       <div className="grid cols-2">

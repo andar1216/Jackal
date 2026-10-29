@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { uid } from '../../lib/dates'
-import type { Meal, Workout } from '../../types'
+import type { Integration, Meal, Workout } from '../../types'
+import ConnectorsButton from '../connections/ConnectorsButton'
 import { CALORIE_GOAL } from '../diet/constants'
+
+const isFitnessConnector = (i: Integration) => i.category === 'fitness'
 
 const SEED_WORKOUTS: Workout[] = [{ id: 'w1', type: 'Run', durationMin: 35, caloriesBurned: 340 }]
 
@@ -33,9 +36,12 @@ export default function FitnessPage({ meals }: { meals: Meal[] }) {
 
   return (
     <>
-      <header className="page-header">
-        <h1>Fitness</h1>
-        <p>Today's workouts and calories burned. Meals are on the Diet page.</p>
+      <header className="page-header row between">
+        <div>
+          <h1>Fitness</h1>
+          <p>Today's workouts and calories burned. Meals are on the Diet page.</p>
+        </div>
+        <ConnectorsButton filter={isFitnessConnector} title="Fitness connectors" />
       </header>
 
       <div className="stack">

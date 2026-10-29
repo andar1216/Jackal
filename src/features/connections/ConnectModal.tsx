@@ -15,7 +15,14 @@ const CATEGORY_LABELS: Record<Integration['category'], string> = {
 const SHOW_DISCONNECT = false
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.')
-export default function ConnectModal({ onClose }: { onClose: () => void }) {
+type Props = {
+  onClose: () => void
+  /** Which connectors to list. Everything, if left out. */
+  filter?: (item: Integration) => boolean
+  title?: string
+}
+
+export default function ConnectModal({ onClose, filter, title = 'Connectors' }: Props) {
   const [items, setItems] = useState<Integration[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -107,7 +114,8 @@ export default function ConnectModal({ onClose }: { onClose: () => void }) {
     return run(item.id, () => integrationsApi.disconnect(item.id))
   }
 
-  const connectedCount = items?.filter((i) => i.status === 'connected').length ?? 0
+  const shown = items ? items.filter((i) => (filter ? filter(i) : true)) : null
+  const connectedCount = shown?.filter((i) => i.status === 'connected').length ?? 0
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -133,9 +141,9 @@ export default function ConnectModal({ onClose }: { onClose: () => void }) {
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="connect-title">
         <div className="row between">
           <div>
-            <h2 id="connect-title">Connect your accounts</h2>
+            <h2 id="connect-title">{title}</h2>
             <p className="muted" style={{ margin: '4px 0 0' }}>
-              {items ? `${connectedCount} of ${items.length} connected.` : 'Bring in data from other services.'} We're
+              {shown ? `${connectedCount} of ${shown.length} connected.` : 'Bring in data from other services.'} We're
               adding them one at a time.
             </p>
           </div>
@@ -157,9 +165,11 @@ export default function ConnectModal({ onClose }: { onClose: () => void }) {
 
         {!items && !error && <p className="empty">Loading...</p>}
 
-        {items && (
+        {shown && shown.length === 0 && <p className="empty">Nothing to connect here yet.</p>}
+
+        {shown && (
           <ul className="list" style={{ marginTop: 8 }}>
-            {items.map((item) => {
+            {shown.map((item) => {
               const busy = busyId === item.id
               const connected = item.status === 'connected'
               return (

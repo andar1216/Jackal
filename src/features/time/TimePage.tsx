@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { format, isSameDay, parseISO } from 'date-fns'
 import { formatDuration, uid } from '../../lib/dates'
-import type { TimeEntry } from '../../types'
+import ConnectorsButton from '../connections/ConnectorsButton'
+import type { Integration, TimeEntry } from '../../types'
+
+const isScreenTimeConnector = (i: Integration) => i.category === 'screen-time'
 
 const CATEGORIES = ['Work', 'Study', 'Exercise', 'Personal']
 
@@ -46,9 +49,12 @@ export default function TimePage() {
 
   return (
     <>
-      <header className="page-header">
-        <h1>Time</h1>
-        <p>Start a timer and see where your day goes.</p>
+      <header className="page-header row between">
+        <div>
+          <h1>Time</h1>
+          <p>Start a timer and see where your day goes.</p>
+        </div>
+        <ConnectorsButton filter={isScreenTimeConnector} title="Screen time connectors" />
       </header>
 
       <div className="grid cols-2">
