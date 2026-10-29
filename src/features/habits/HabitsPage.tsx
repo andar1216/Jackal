@@ -59,6 +59,14 @@ export default function HabitsPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null)
+  const showToast = (text: string, undo?: () => void) => setToast({ message: text, undo })
+  // The message goes away by itself after a few seconds.
+  useEffect(() => {
+    if (!toast) return
+    const timer = window.setTimeout(() => setToast(null), 8000)
+    return () => window.clearTimeout(timer)
+  }, [toast])
 
   // Writes to the API run one at a time, in order. If one fails, show why and
   // re-sync with what the server actually has.
@@ -103,11 +111,31 @@ export default function HabitsPage() {
     setReloadKey((k) => k + 1)
   }
 
-  const selected = skills.find((s) => s.id === selectedId) ?? skills[0]
+  // Archived habits are put away: they stay out of the list and the other widgets until restored.
+  const active = skills.filter((s) => !s.archived)
+  const archived = skills.filter((s) => s.archived)
+  const selected = active.find((s) => s.id === selectedId) ?? active[0]
+
+  const setArchived = (habit: Skill, value: boolean) => {
+    setSkills((prev) => prev.map((s) => (s.id === habit.id ? { ...s, archived: value } : s)))
+    writes.enqueue(async () => {
+      await skillsApi.update(habit.id, { archived: value })
+    })
+    if (value) showToast(`Archived "${habit.name}". Restore or delete it from Show archived.`, () => setArchived(habit, false))
+    else setToast(null)
+  }
 
   const ctx: WidgetCtx = {
-    skills,
+    skills: active,
+    archived,
     selected,
+    setArchived,
+    removeHabit: (habit) => {
+      setSkills((prev) => prev.filter((s) => s.id !== habit.id))
+      writes.enqueue(async () => {
+        await skillsApi.remove(habit.id)
+      })
+    },
     status,
     select: setSelectedId,
     addHabit: (name) =>
@@ -157,6 +185,16 @@ export default function HabitsPage() {
               ✕
             </button>
           </span>
+        </div>
+      )}
+
+      {toast && (
+        <div className="toast" role="status">
+          <span>{toast.message}</span>
+          {toast.undo && <button onClick={toast.undo}>Undo</button>}
+          <button className="link" onClick={() => setToast(null)} aria-label="Dismiss">
+            ✕
+          </button>
         </div>
       )}
 

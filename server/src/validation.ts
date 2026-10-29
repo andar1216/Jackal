@@ -20,6 +20,7 @@ export const skillSchema = z.strictObject({
     .transform((days) => [...new Set(days)].sort())
     .optional(),
   avgWeeks: z.number().int().min(1).max(52).optional(),
+  archived: z.boolean().optional(),
 })
 
 export const trackerSchema = z.strictObject({

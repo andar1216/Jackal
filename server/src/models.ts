@@ -68,6 +68,7 @@ export const Skill = mongoose.model(
     startDate: day,
     logs: { type: [String], default: [] }, // YYYY-MM-DD days the skill was practiced
     avgWeeks: { type: Number, default: 12, min: 1, max: 52 },
+    archived: { type: Boolean, default: false }, // put away: left out of the habits list and widgets until restored
   }),
 )
 

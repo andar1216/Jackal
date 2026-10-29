@@ -132,6 +132,15 @@ describe('skills', () => {
     assert.deepEqual(body.logs, ['2026-09-28'])
   })
 
+  it('archives a skill, keeps its history, and restores it', async () => {
+    assert.equal((await call('GET', `/skills/${id}`)).body.archived, false)
+    const away = await call('PATCH', `/skills/${id}`, { archived: true })
+    assert.equal(away.body.archived, true)
+    assert.deepEqual(away.body.logs, ['2026-09-28'], 'its days are kept')
+    assert.equal((await call('PATCH', `/skills/${id}`, { archived: 'yes' })).status, 400)
+    assert.equal((await call('PATCH', `/skills/${id}`, { archived: false })).body.archived, false)
+  })
+
   it('dedupes and sorts logs on create', async () => {
     const { body } = await call('POST', '/skills', {
       name: 'Calories',

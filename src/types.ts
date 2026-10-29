@@ -13,6 +13,7 @@ export type Skill = {
   startDate: string // YYYY-MM-DD, first day of the skill
   logs: string[] // YYYY-MM-DD days the skill was practiced ("days on")
   avgWeeks: number // number of weeks used for the weekly average
+  archived?: boolean // put away: hidden from the habits list until restored (or deleted)
 }
 
 export type Integration = {

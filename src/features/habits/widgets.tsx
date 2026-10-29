@@ -6,11 +6,14 @@ import type { Skill } from '../../types'
 import { bestStreak, currentStreak, daysOnOff, weeklyStats } from './habitStats'
 
 export type WidgetCtx = {
-  skills: Skill[]
+  skills: Skill[] // habits in use
+  archived: Skill[]
   selected: Skill | undefined
   status: 'loading' | 'ready' | 'error'
   select: (id: string) => void
   addHabit: (name: string) => void
+  setArchived: (habit: Skill, archived: boolean) => void
+  removeHabit: (habit: Skill) => void
   toggleDay: (id: string, dateKey: string) => void
   setAvgWeeks: (id: string, weeks: number) => void
 }
@@ -29,7 +32,12 @@ const NoHabit = ({ ctx }: { ctx: WidgetCtx }) => (
 
 export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
   const [name, setName] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
   const today = todayKey()
+
+  const remove = (h: Skill) => {
+    if (window.confirm(`Delete "${h.name}" for good? Its whole history is lost and this can't be undone.`)) ctx.removeHabit(h)
+  }
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -90,11 +98,49 @@ export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
                   >
                     {done ? '✓ Done today' : 'Mark today'}
                   </button>
+                  <button
+                    className="link"
+                    onClick={() => ctx.setArchived(s, true)}
+                    title="Put this habit away. Its history is kept, and you can restore or delete it from the archive."
+                  >
+                    Archive
+                  </button>
                 </span>
               </li>
             )
           })}
         </ul>
+      )}
+
+      {ctx.archived.length > 0 && (
+        <>
+          <button className="link" onClick={() => setShowArchived((v) => !v)} aria-expanded={showArchived}>
+            {showArchived ? 'Hide' : 'Show'} archived ({ctx.archived.length})
+          </button>
+          {showArchived && (
+            <ul className="list">
+              {ctx.archived.map((h) => (
+                <li key={h.id}>
+                  <span>
+                    <span className="swatch" style={{ background: h.color }} /> {h.name}
+                    <span className="stat-label">
+                      {' '}
+                      · {h.logs.length} {h.logs.length === 1 ? 'day' : 'days'} logged
+                    </span>
+                  </span>
+                  <span className="row">
+                    <button className="link" onClick={() => ctx.setArchived(h, false)}>
+                      Restore
+                    </button>
+                    <button className="link" onClick={() => remove(h)} style={{ color: 'var(--bad)' }}>
+                      Delete
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </>
   )

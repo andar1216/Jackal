@@ -67,7 +67,7 @@ export type NewSkill = Pick<Skill, 'name' | 'color' | 'startDate'>
 export const skillsApi = {
   list: () => request<Skill[]>('GET', '/skills'),
   create: (skill: NewSkill) => request<Skill>('POST', '/skills', skill),
-  update: (id: string, changes: Partial<Pick<Skill, 'name' | 'color' | 'avgWeeks'>>) =>
+  update: (id: string, changes: Partial<Pick<Skill, 'name' | 'color' | 'avgWeeks' | 'archived'>>) =>
     request<Skill>('PATCH', `/skills/${id}`, changes),
   remove: (id: string) => request<void>('DELETE', `/skills/${id}`),
   toggleDay: (id: string, dateKey: string) => request<Skill>('POST', `/skills/${id}/logs/${dateKey}/toggle`),
