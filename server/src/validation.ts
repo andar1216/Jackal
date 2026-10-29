@@ -14,6 +14,7 @@ export const skillSchema = z.strictObject({
   name,
   color: color.optional(),
   startDate: dateString,
+  endDate: dateString.nullable().optional(), // goal end date; null takes it away
   // Logged ("on") days, kept unique and sorted.
   logs: z
     .array(dateString)
@@ -21,6 +22,9 @@ export const skillSchema = z.strictObject({
     .optional(),
   avgWeeks: z.number().int().min(1).max(52).optional(),
   archived: z.boolean().optional(),
+  autoMark: z.boolean().optional(),
+  hideStreak: z.boolean().optional(),
+  kind: z.enum(['performing', 'giving-up']).optional(),
 })
 
 export const trackerSchema = z.strictObject({
@@ -37,6 +41,9 @@ export const transactionSchema = z.strictObject({
   date: dateString,
   note: z.string().max(500).optional(),
   archived: z.boolean().optional(),
+  autoMark: z.boolean().optional(),
+  hideStreak: z.boolean().optional(),
+  kind: z.enum(['performing', 'giving-up']).optional(),
 })
 
 export const subscriptionMarkBody = z.strictObject({

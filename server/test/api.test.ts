@@ -141,6 +141,78 @@ describe('skills', () => {
     assert.equal((await call('PATCH', `/skills/${id}`, { archived: false })).body.archived, false)
   })
 
+  it('labels a habit as performing or giving up', async () => {
+    assert.equal((await call('GET', `/skills/${id}`)).body.kind, 'performing')
+    const quit = await call('POST', '/skills', { name: 'No soda', startDate: '2026-10-01', kind: 'giving-up' })
+    assert.equal(quit.body.kind, 'giving-up')
+    assert.equal((await call('PATCH', `/skills/${quit.body.id}`, { kind: 'performing' })).body.kind, 'performing')
+    assert.equal((await call('PATCH', `/skills/${quit.body.id}`, { kind: 'other' })).status, 400)
+    await call('DELETE', `/skills/${quit.body.id}`)
+  })
+
+  it('hides and shows one habit\'s streak', async () => {
+    assert.equal((await call('GET', `/skills/${id}`)).body.hideStreak, false)
+    assert.equal((await call('PATCH', `/skills/${id}`, { hideStreak: true })).body.hideStreak, true)
+    assert.equal((await call('PATCH', `/skills/${id}`, { hideStreak: 'no' })).status, 400)
+    assert.equal((await call('PATCH', `/skills/${id}`, { hideStreak: false })).body.hideStreak, false)
+  })
+
+  it('changes the start date and colour of a habit', async () => {
+    const r = await call('PATCH', `/skills/${id}`, { startDate: '2026-09-01', color: '#16a34a' })
+    assert.equal(r.body.startDate, '2026-09-01')
+    assert.equal(r.body.color, '#16a34a')
+    assert.equal((await call('PATCH', `/skills/${id}`, { color: 'green' })).status, 400)
+  })
+
+  it('keeps an optional goal end date, and lets it be taken away', async () => {
+    const made = await call('POST', '/skills', { name: 'Goal', startDate: '2026-10-01', endDate: '2026-12-31' })
+    assert.equal(made.status, 201)
+    assert.equal(made.body.endDate, '2026-12-31')
+    assert.equal((await call('PATCH', `/skills/${made.body.id}`, { endDate: '2027-01-31' })).body.endDate, '2027-01-31')
+    assert.equal((await call('PATCH', `/skills/${made.body.id}`, { endDate: '2026-09-30' })).status, 400, 'before the start date')
+    assert.equal((await call('PATCH', `/skills/${made.body.id}`, { startDate: '2027-02-01' })).status, 400, 'start moved past the end')
+    assert.equal((await call('POST', '/skills', { name: 'Bad', startDate: '2026-10-01', endDate: 'someday' })).status, 400)
+    assert.equal((await call('POST', '/skills', { name: 'Bad', startDate: '2026-10-05', endDate: '2026-10-01' })).status, 400)
+    const cleared = await call('PATCH', `/skills/${made.body.id}`, { endDate: null })
+    assert.equal(cleared.status, 200)
+    assert.equal(cleared.body.endDate, undefined)
+    await call('DELETE', `/skills/${made.body.id}`)
+  })
+
+  it('stops marking days by itself at the goal end date', async () => {
+    const made = await call('POST', '/skills?today=2026-10-10', { name: 'Short', startDate: '2026-10-08', endDate: '2026-10-09', autoMark: true })
+    assert.deepEqual(made.body.logs, ['2026-10-08', '2026-10-09'])
+    const later = (await call('GET', '/skills?today=2026-10-20')).body.find((s: { id: string }) => s.id === made.body.id)
+    assert.deepEqual(later.logs, ['2026-10-08', '2026-10-09'])
+    const extended = await call('PATCH', `/skills/${made.body.id}?today=2026-10-20`, { endDate: '2026-10-11' })
+    assert.deepEqual(extended.body.logs, ['2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11'])
+    await call('DELETE', `/skills/${made.body.id}`)
+  })
+
+  it('marks every day by itself when asked, and leaves unmarked days alone', async () => {
+    const today = '2026-10-10'
+    const made = await call('POST', `/skills?today=${today}`, { name: 'Auto', startDate: '2026-10-08', autoMark: true })
+    assert.equal(made.status, 201)
+    assert.equal(made.body.autoMark, true)
+    assert.deepEqual(made.body.logs, ['2026-10-08', '2026-10-09', '2026-10-10'])
+
+    await call('POST', `/skills/${made.body.id}/logs/2026-10-09/toggle`) // unmark one
+    const later = (await call('GET', '/skills?today=2026-10-12')).body.find((s: { id: string }) => s.id === made.body.id)
+    assert.deepEqual(later.logs, ['2026-10-08', '2026-10-10', '2026-10-11', '2026-10-12'])
+
+    // An earlier start date fills the days before the old one, up to what was already filled.
+    const earlier = await call('PATCH', `/skills/${made.body.id}?today=2026-10-12`, { startDate: '2026-10-06' })
+    assert.deepEqual(earlier.body.logs, ['2026-10-06', '2026-10-07', '2026-10-08', '2026-10-10', '2026-10-11', '2026-10-12'])
+
+    // Turning it off keeps the days but stops filling.
+    await call('PATCH', `/skills/${made.body.id}`, { autoMark: false })
+    const off = (await call('GET', '/skills?today=2026-10-20')).body.find((s: { id: string }) => s.id === made.body.id)
+    assert.equal(off.autoMark, false)
+    assert.equal(off.logs.length, 6)
+
+    await call('DELETE', `/skills/${made.body.id}`)
+  })
+
   it('dedupes and sorts logs on create', async () => {
     const { body } = await call('POST', '/skills', {
       name: 'Calories',

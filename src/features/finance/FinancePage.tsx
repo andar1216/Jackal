@@ -8,6 +8,8 @@ import NetWorthCard from './NetWorthCard'
 import SubscriptionsCard from './SubscriptionsCard'
 import ViewsBar, { type AccountChoice } from './ViewsBar'
 import Board, { Panel } from '../../components/Board'
+import SettingsMenu from '../../components/SettingsMenu'
+import { useLayoutEditing } from '../../components/useLayoutEditing'
 
 const BUDGETS: Record<string, number> = {
   Food: 40000,
@@ -62,6 +64,7 @@ function groupByAccount(items: Transaction[], known: BankAccount[]) {
 const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.')
 
 export default function FinancePage() {
+  const layout = useLayoutEditing()
   // The page shows one month at a time, so the budgets mean something.
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const from = toDateKey(month)
@@ -303,6 +306,7 @@ export default function FinancePage() {
             {syncing ? 'Syncing...' : 'Sync banks'}
           </button>
           <ConnectorsButton filter={isFinanceConnector} title="Finance connectors" />
+          <SettingsMenu items={[layout.item]} />
         </div>
       </header>
 
@@ -323,7 +327,7 @@ export default function FinancePage() {
         </div>
       )}
 
-      <Board page="finance">
+      <Board page="finance" editing={layout.editing} onEditingChange={layout.setEditing}>
         <Panel id="views" title="Saved views" size="full">
           <ViewsBar
             views={views}

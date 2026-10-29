@@ -4,6 +4,8 @@ import ConnectorsButton from '../connections/ConnectorsButton'
 import type { Integration, Meal } from '../../types'
 import { CALORIE_GOAL } from './constants'
 import Board, { Panel } from '../../components/Board'
+import SettingsMenu from '../../components/SettingsMenu'
+import { useLayoutEditing } from '../../components/useLayoutEditing'
 
 const isDietConnector = (i: Integration) => i.id === 'myfitnesspal'
 
@@ -12,6 +14,7 @@ const num = (v: string) => Math.max(0, parseInt(v, 10) || 0)
 type Props = { meals: Meal[]; setMeals: React.Dispatch<React.SetStateAction<Meal[]>> }
 
 export default function DietPage({ meals, setMeals }: Props) {
+  const layout = useLayoutEditing()
   const [meal, setMeal] = useState({ name: '', calories: '', protein: '', carbs: '', fat: '' })
 
   const eaten = meals.reduce((s, m) => s + m.calories, 0)
@@ -44,10 +47,13 @@ export default function DietPage({ meals, setMeals }: Props) {
           <h1>Diet</h1>
           <p>Today's meals, calories, and macros.</p>
         </div>
-        <ConnectorsButton filter={isDietConnector} title="Diet connectors" />
+        <div className="row">
+          <ConnectorsButton filter={isDietConnector} title="Diet connectors" />
+          <SettingsMenu items={[layout.item]} />
+        </div>
       </header>
 
-      <Board page="diet">
+      <Board page="diet" editing={layout.editing} onEditingChange={layout.setEditing}>
         <Panel id="eaten" title="Eaten" size="third">
           <div className="card">
             <div className="stat-label">Eaten (goal {CALORIE_GOAL})</div>

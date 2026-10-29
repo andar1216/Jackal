@@ -4,6 +4,8 @@ import { formatDuration, uid } from '../../lib/dates'
 import ConnectorsButton from '../connections/ConnectorsButton'
 import type { Integration, TimeEntry } from '../../types'
 import Board, { Panel } from '../../components/Board'
+import SettingsMenu from '../../components/SettingsMenu'
+import { useLayoutEditing } from '../../components/useLayoutEditing'
 
 const isScreenTimeConnector = (i: Integration) => i.category === 'screen-time'
 
@@ -13,6 +15,7 @@ const entrySeconds = (e: TimeEntry, now: number) =>
   ((e.end ? parseISO(e.end).getTime() : now) - parseISO(e.start).getTime()) / 1000
 
 export default function TimePage() {
+  const layout = useLayoutEditing()
   const [entries, setEntries] = useState<TimeEntry[]>([])
   const [label, setLabel] = useState('')
   const [category, setCategory] = useState(CATEGORIES[0])
@@ -55,10 +58,13 @@ export default function TimePage() {
           <h1>Time</h1>
           <p>Start a timer and see where your day goes.</p>
         </div>
-        <ConnectorsButton filter={isScreenTimeConnector} title="Screen time connectors" />
+        <div className="row">
+          <ConnectorsButton filter={isScreenTimeConnector} title="Screen time connectors" />
+          <SettingsMenu items={[layout.item]} />
+        </div>
       </header>
 
-      <Board page="time">
+      <Board page="time" editing={layout.editing} onEditingChange={layout.setEditing}>
         <Panel id="timer" title="Timer" size="half">
           <section className="card">
             <h2>Timer</h2>

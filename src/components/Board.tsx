@@ -31,10 +31,20 @@ const SAVE_TEXT = {
 }
 
 /**
- * Lays out its Panels in a grid. "Customize layout" lets the person drag panels around,
- * make them wider or narrower, and put some away. The arrangement is saved for the page.
+ * Lays out its Panels in a grid. While editing (switched on from the page's settings gear), the person
+ * can drag panels around, make them wider or narrower, and put some away. The arrangement is saved for the page.
  */
-export default function Board({ page, children }: { page: string; children: ReactNode }) {
+export default function Board({
+  page,
+  editing,
+  onEditingChange,
+  children,
+}: {
+  page: string
+  editing: boolean
+  onEditingChange: (editing: boolean) => void
+  children: ReactNode
+}) {
   const panels = Children.toArray(children).filter(
     (c): c is ReactElement<PanelProps> => isValidElement(c) && c.type === Panel,
   )
@@ -42,7 +52,6 @@ export default function Board({ page, children }: { page: string; children: Reac
   const defaults: PanelState[] = panels.map((p) => ({ id: p.props.id, size: p.props.size ?? 'full', hidden: false }))
 
   const { layout, set, reset, state } = useBoardLayout(page, defaults)
-  const [editing, setEditing] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
 
@@ -75,6 +84,7 @@ export default function Board({ page, children }: { page: string; children: Reac
 
   return (
     <>
+      {(editing || state !== 'idle') && (
       <div className="board-toolbar row">
         <span className="muted board-status" role="status">
           {state === 'error' ? SAVE_TEXT.error : editing && state === 'idle' ? 'Drag a panel by its handle, or focus it and use the arrow keys.' : SAVE_TEXT[state]}
@@ -98,12 +108,15 @@ export default function Board({ page, children }: { page: string; children: Reac
             Reset layout
           </button>
         )}
-        <button className={editing ? 'primary' : ''} aria-pressed={editing} onClick={() => setEditing((e) => !e)}>
-          {editing ? 'Done' : 'Customize layout'}
-        </button>
+        {editing && (
+          <button className="primary" onClick={() => onEditingChange(false)}>
+            Done
+          </button>
+        )}
       </div>
+      )}
 
-      {shown.length === 0 && <p className="empty">Every panel is put away. Choose Customize layout to bring them back.</p>}
+      {shown.length === 0 && <p className="empty">Every panel is put away. Open the settings gear and choose Customize layout to bring them back.</p>}
 
       <div className={`board ${editing ? 'editing' : ''}`}>
         {shown.map((item) => {

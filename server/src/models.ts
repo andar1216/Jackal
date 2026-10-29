@@ -69,6 +69,11 @@ export const Skill = mongoose.model(
     logs: { type: [String], default: [] }, // YYYY-MM-DD days the skill was practiced
     avgWeeks: { type: Number, default: 12, min: 1, max: 52 },
     archived: { type: Boolean, default: false }, // put away: left out of the habits list and widgets until restored
+    endDate: { type: String, match: /^\d{4}-\d{2}-\d{2}$/ }, // optional goal date: the day the habit is meant to run until
+    kind: { type: String, enum: ['performing', 'giving-up'], default: 'performing' }, // doing something, or giving something up
+    hideStreak: { type: Boolean, default: false }, // keep this habit's streak out of sight
+    autoMark: { type: Boolean, default: false }, // every day counts as done unless unmarked
+    autoThrough: { type: String, match: /^\d{4}-\d{2}-\d{2}$/ }, // the last day autoMark has filled in
   }),
 )
 

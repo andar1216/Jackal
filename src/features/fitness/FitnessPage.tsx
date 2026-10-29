@@ -4,6 +4,8 @@ import type { Integration, Meal, Workout } from '../../types'
 import ConnectorsButton from '../connections/ConnectorsButton'
 import { CALORIE_GOAL } from '../diet/constants'
 import Board, { Panel } from '../../components/Board'
+import SettingsMenu from '../../components/SettingsMenu'
+import { useLayoutEditing } from '../../components/useLayoutEditing'
 
 const isFitnessConnector = (i: Integration) => i.category === 'fitness'
 
@@ -13,6 +15,7 @@ const num = (v: string) => Math.max(0, parseInt(v, 10) || 0)
 
 /** Meals are logged on the Diet page. They are only read here, to work out calories left after exercise. */
 export default function FitnessPage({ meals }: { meals: Meal[] }) {
+  const layout = useLayoutEditing()
   const [workouts, setWorkouts] = useState<Workout[]>(SEED_WORKOUTS)
   const [workout, setWorkout] = useState({ type: '', durationMin: '', caloriesBurned: '' })
 
@@ -42,10 +45,13 @@ export default function FitnessPage({ meals }: { meals: Meal[] }) {
           <h1>Fitness</h1>
           <p>Today's workouts and calories burned. Meals are on the Diet page.</p>
         </div>
-        <ConnectorsButton filter={isFitnessConnector} title="Fitness connectors" />
+        <div className="row">
+          <ConnectorsButton filter={isFitnessConnector} title="Fitness connectors" />
+          <SettingsMenu items={[layout.item]} />
+        </div>
       </header>
 
-      <Board page="fitness">
+      <Board page="fitness" editing={layout.editing} onEditingChange={layout.setEditing}>
         <Panel id="eaten" title="Eaten" size="third">
           <div className="card">
             <div className="stat-label">Eaten (goal {CALORIE_GOAL})</div>

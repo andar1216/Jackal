@@ -720,6 +720,56 @@ button:disabled {
   flex: none;
 }
 
+/* "⋯" dropdown */
+.menu {
+  position: relative;
+  display: inline-block;
+}
+
+.menu-trigger {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.menu-list {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  min-width: 140px;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.15);
+}
+
+.menu-list button {
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+}
+
+.menu-list button:hover {
+  background: var(--accent-soft);
+}
+
+.menu-list button.bad {
+  color: var(--bad);
+}
+
+.habit-edit {
+  flex-wrap: wrap;
+}
+
+.habit-edit input[type='color'] {
+  width: 40px;
+  height: 32px;
+  padding: 2px;
+}
+
 .week-bars {
   display: flex;
   align-items: flex-end;
@@ -746,6 +796,33 @@ button:disabled {
   background: var(--skill);
   color: #fff;
   font-weight: 600;
+}
+
+/* Habits sharing a day: a band of colour each, stacked from the bottom up (oldest habit at the bottom). */
+.dash-cal .react-calendar button.react-calendar__tile.day-layered {
+  position: relative;
+  background: none;
+  color: #fff;
+  font-weight: 600;
+}
+
+.dash-cal .react-calendar button.react-calendar__tile.day-layered abbr {
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 0 3px rgb(0 0 0 / 0.55);
+}
+
+.layers {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column-reverse; /* the first band, the oldest habit, is at the bottom */
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.layer {
+  flex: 1;
 }
 
 .dash-cal .react-calendar button.react-calendar__tile.day-off {

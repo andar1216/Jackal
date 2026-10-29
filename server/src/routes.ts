@@ -1,7 +1,8 @@
-import { Router } from 'express'
+import { Router, type Request } from 'express'
 import { auth } from './auth/routes.js'
 import { currentUserId, requireAuth } from './auth/middleware.js'
 import { integrations } from './integrations/routes.js'
+import { addDays, catchUp, daysFrom, mergeDays } from './lib/autoMark.js'
 import { crudRouter, requireId } from './lib/crud.js'
 import { HttpError } from './lib/errors.js'
 import { detectRecurring, markId, merchantKey, type Charge, type Mark } from './lib/recurring.js'
@@ -32,7 +33,62 @@ api.use('/integrations', integrations)
 
 /* ---------- Skills (shown as Habits) ---------- */
 
-const skills = crudRouter(Skill, { schema: skillSchema, sort: { createdAt: 1 } })
+const skills = Router()
+
+// The person's own today (their clock, not the server's), so a habit isn't filled in a day early or late.
+const todayFor = (req: Request) => {
+  const asked = typeof req.query.today === 'string' ? dateString.safeParse(req.query.today) : null
+  return asked?.success ? asked.data : new Date().toLocaleDateString('en-CA')
+}
+
+// Habits that mark themselves get the days since they were last opened filled in.
+skills.get('/', async (req, _res, next) => {
+  const today = todayFor(req)
+  const auto = await Skill.find({ userId: currentUserId(req), autoMark: true })
+  for (const habit of auto) if (catchUp(habit, today)) await habit.save()
+  next()
+})
+
+const requireEndAfterStart = (doc: unknown) => {
+  const habit = doc as { startDate: string; endDate?: string | null }
+  if (habit.endDate && habit.endDate < habit.startDate) {
+    throw new HttpError(400, "The goal end date can't be before the start date.")
+  }
+}
+
+skills.post('/', async (req, res) => {
+  const { autoMark, endDate, ...fields } = skillSchema.parse(req.body)
+  const habit = new Skill({ ...fields, endDate: endDate ?? undefined, autoMark: !!autoMark, userId: currentUserId(req) })
+  requireEndAfterStart(habit)
+  if (autoMark) catchUp(habit, todayFor(req))
+  await habit.save()
+  res.status(201).json(habit)
+})
+
+skills.patch('/:id', async (req, res) => {
+  const { autoMark, endDate, ...fields } = skillSchema.partial().parse(req.body)
+  const habit = await Skill.findOne({ _id: requireId(req.params.id), userId: currentUserId(req) })
+  if (!habit) throw new HttpError(404, 'Not found')
+
+  const oldStart = habit.startDate
+  habit.set(fields)
+  if (endDate !== undefined) habit.endDate = endDate ?? undefined // null takes the goal date away
+  requireEndAfterStart(habit)
+  if (autoMark !== undefined && autoMark !== habit.autoMark) {
+    habit.autoMark = autoMark
+    habit.autoThrough = undefined // turning it on starts filling from the start date; turning it off stops
+  }
+  if (habit.autoMark) {
+    // A start date moved earlier fills the days between the new start and the old one.
+    if (habit.autoThrough && habit.startDate < oldStart) {
+      const through = habit.autoThrough < addDays(oldStart, -1) ? habit.autoThrough : addDays(oldStart, -1)
+      habit.logs = mergeDays(habit.logs, daysFrom(habit.startDate, through))
+    }
+    catchUp(habit, todayFor(req))
+  }
+  await habit.save()
+  res.json(habit)
+})
 
 // Toggle one day on or off for a skill, like clicking a day in the habits calendar.
 // Logging a day before the skill's start date moves the start date back to that day.
@@ -51,6 +107,9 @@ skills.post('/:id/logs/:date/toggle', async (req, res) => {
   await skill.save()
   res.json(skill)
 })
+
+// Everything else (get one, delete) is plain CRUD.
+skills.use(crudRouter(Skill, { schema: skillSchema, sort: { createdAt: 1 } }))
 
 api.use('/skills', skills)
 

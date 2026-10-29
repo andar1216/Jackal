@@ -5,6 +5,8 @@ import { formatDay, toDateKey, uid } from '../../lib/dates'
 import ConnectorsButton from '../connections/ConnectorsButton'
 import type { CalendarEvent, Integration, Tracker } from '../../types'
 import Board, { Panel } from '../../components/Board'
+import SettingsMenu from '../../components/SettingsMenu'
+import { useLayoutEditing } from '../../components/useLayoutEditing'
 
 const isCalendarConnector = (i: Integration) => i.category === 'calendar'
 
@@ -15,6 +17,7 @@ type Props = {
 }
 
 export default function CalendarPage({ trackers, events, setEvents }: Props) {
+  const layout = useLayoutEditing()
   const [selected, setSelected] = useState(new Date())
   const [title, setTitle] = useState('')
 
@@ -38,10 +41,13 @@ export default function CalendarPage({ trackers, events, setEvents }: Props) {
           <h1>Calendar</h1>
           <p>Events and tracker start dates in one place.</p>
         </div>
-        <ConnectorsButton filter={isCalendarConnector} title="Calendar connectors" />
+        <div className="row">
+          <ConnectorsButton filter={isCalendarConnector} title="Calendar connectors" />
+          <SettingsMenu items={[layout.item]} />
+        </div>
       </header>
 
-      <Board page="calendar">
+      <Board page="calendar" editing={layout.editing} onEditingChange={layout.setEditing}>
         <Panel id="calendar" title="Calendar" size="half">
           <section>
             <Calendar

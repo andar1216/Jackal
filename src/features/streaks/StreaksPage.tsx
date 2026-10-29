@@ -3,6 +3,8 @@ import Calendar from 'react-calendar'
 import { daysSince, formatDay, todayKey, toDateKey, uid } from '../../lib/dates'
 import type { Tracker } from '../../types'
 import Board, { Panel } from '../../components/Board'
+import SettingsMenu from '../../components/SettingsMenu'
+import { useLayoutEditing } from '../../components/useLayoutEditing'
 
 const COLORS = ['#4f46e5', '#db2777', '#0891b2', '#16a34a', '#d97706', '#9333ea']
 const MILESTONES = [7, 30, 60, 100, 180, 365, 730, 1000]
@@ -13,6 +15,7 @@ type Props = {
 }
 
 export default function StreaksPage({ trackers, setTrackers }: Props) {
+  const layout = useLayoutEditing()
   const [name, setName] = useState('')
   const [startDate, setStartDate] = useState(new Date())
 
@@ -38,12 +41,15 @@ export default function StreaksPage({ trackers, setTrackers }: Props) {
 
   return (
     <>
-      <header className="page-header">
-        <h1>Streaks</h1>
-        <p>Track how many days you've kept something going.</p>
+      <header className="page-header row between">
+        <div>
+          <h1>Streaks</h1>
+          <p>Track how many days you've kept something going.</p>
+        </div>
+        <SettingsMenu items={[layout.item]} />
       </header>
 
-      <Board page="streaks">
+      <Board page="streaks" editing={layout.editing} onEditingChange={layout.setEditing}>
         <Panel id="new" title="Start something new" size="half">
           <section className="card">
             <h2>Start something new</h2>

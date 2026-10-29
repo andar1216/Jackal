@@ -1,22 +1,43 @@
 import { useState } from 'react'
 import Calendar from 'react-calendar'
-import { isAfter, isBefore, parseISO, startOfDay } from 'date-fns'
+import { differenceInCalendarDays, isAfter, isBefore, parseISO, startOfDay } from 'date-fns'
 import { formatDay, todayKey, toDateKey } from '../../lib/dates'
+import MenuButton from '../../components/MenuButton'
 import type { Skill } from '../../types'
 import { bestStreak, currentStreak, daysOnOff, weeklyStats } from './habitStats'
+
+export type HabitFields = { name: string; color: string; startDate: string; endDate: string | null; autoMark: boolean }
+
+export type HabitChanges = Partial<HabitFields> & { hideStreak?: boolean }
+
+/** "goal Dec 31 · 12 days left", or that the goal date has passed. */
+function goalText(habit: Skill, today: string): string | null {
+  if (!habit.endDate) return null
+  const left = differenceInCalendarDays(parseISO(habit.endDate), parseISO(today))
+  if (left < 0) return `goal date passed (${formatDay(habit.endDate)})`
+  if (left === 0) return 'goal ends today'
+  return `goal ${formatDay(habit.endDate)} · ${left} ${left === 1 ? 'day' : 'days'} left`
+}
 
 export type WidgetCtx = {
   skills: Skill[] // habits in use
   archived: Skill[]
   selected: Skill | undefined
   status: 'loading' | 'ready' | 'error'
+  /** Streaks are hidden for every habit. */
+  hideAllStreaks: boolean
+  /** The colour the next new habit starts with. */
+  nextColor: string
   select: (id: string) => void
-  addHabit: (name: string) => void
+  addHabit: (fields: HabitFields) => void
+  updateHabit: (habit: Skill, changes: HabitChanges) => void
   setArchived: (habit: Skill, archived: boolean) => void
   removeHabit: (habit: Skill) => void
   toggleDay: (id: string, dateKey: string) => void
   setAvgWeeks: (id: string, weeks: number) => void
 }
+
+const streakShown = (ctx: WidgetCtx, habit: Skill) => !ctx.hideAllStreaks && !habit.hideStreak
 
 const NoHabit = ({ ctx }: { ctx: WidgetCtx }) => (
   <p className="empty">
@@ -30,8 +51,63 @@ const NoHabit = ({ ctx }: { ctx: WidgetCtx }) => (
 
 /* ---------------- Habits list ---------------- */
 
+/** Change a habit's name, start date, colour, and whether it marks itself every day. */
+function HabitEditor({ habit, ctx, onDone }: { habit: Skill; ctx: WidgetCtx; onDone: () => void }) {
+  const [name, setName] = useState(habit.name)
+  const [startDate, setStartDate] = useState(habit.startDate)
+  const [endDate, setEndDate] = useState(habit.endDate ?? '') // '' = no goal date
+  const [color, setColor] = useState(habit.color)
+  const [autoMark, setAutoMark] = useState(!!habit.autoMark)
+
+  const save = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim() || !startDate) return
+    const changes: Partial<HabitFields> = {}
+    if (name.trim() !== habit.name) changes.name = name.trim()
+    if (startDate !== habit.startDate) changes.startDate = startDate
+    if (endDate !== (habit.endDate ?? '')) changes.endDate = endDate || null
+    if (color !== habit.color) changes.color = color
+    if (autoMark !== !!habit.autoMark) changes.autoMark = autoMark
+    if (Object.keys(changes).length > 0) ctx.updateHabit(habit, changes)
+    onDone()
+  }
+
+  return (
+    <form className="form habit-edit" onSubmit={save} style={{ marginBottom: 0, width: '100%' }}>
+      <input value={name} onChange={(e) => setName(e.target.value)} aria-label="Habit name" autoFocus />
+      <label className="row" title="The day this habit starts counting from">
+        <span className="stat-label">Starts</span>
+        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} aria-label="Start date" required />
+      </label>
+      <label className="row" title="Optional: the day you want to reach by. Clear it to have no goal date.">
+        <span className="stat-label">Goal end</span>
+        <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} aria-label="Goal end date" />
+      </label>
+      <label className="row">
+        <span className="stat-label">Color</span>
+        <input type="color" value={color} onChange={(e) => setColor(e.target.value)} aria-label="Color" />
+      </label>
+      <label className="row" title="Count every day as done, from the start date on. Unmark a day to take it back.">
+        <input type="checkbox" checked={autoMark} onChange={(e) => setAutoMark(e.target.checked)} />
+        <span>Mark every day automatically</span>
+      </label>
+      <button className="primary" type="submit">
+        Save
+      </button>
+      <button type="button" onClick={onDone}>
+        Cancel
+      </button>
+    </form>
+  )
+}
+
 export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
   const [name, setName] = useState('')
+  const [startDate, setStartDate] = useState(todayKey())
+  const [endDate, setEndDate] = useState('')
+  const [pickedColor, setPickedColor] = useState<string | null>(null)
+  const [autoMark, setAutoMark] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const today = todayKey()
 
@@ -41,20 +117,40 @@ export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return
-    ctx.addHabit(name.trim())
+    if (!name.trim() || !startDate) return
+    ctx.addHabit({ name: name.trim(), color: pickedColor ?? ctx.nextColor, startDate, endDate: endDate || null, autoMark })
     setName('')
+    setStartDate(todayKey())
+    setEndDate('')
+    setPickedColor(null)
+    setAutoMark(false)
   }
 
   return (
     <>
-      <form className="form" onSubmit={submit}>
+      <form className="form habit-edit" onSubmit={submit}>
         <input
           placeholder="Add a habit you're working on"
           value={name}
           onChange={(e) => setName(e.target.value)}
           aria-label="Habit name"
         />
+        <label className="row" title="The day this habit starts counting from">
+          <span className="stat-label">Starts</span>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} aria-label="Start date" required />
+        </label>
+        <label className="row" title="Optional: the day you want to reach by">
+          <span className="stat-label">Goal end</span>
+          <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} aria-label="Goal end date" />
+        </label>
+        <label className="row">
+          <span className="stat-label">Color</span>
+          <input type="color" value={pickedColor ?? ctx.nextColor} onChange={(e) => setPickedColor(e.target.value)} aria-label="Color" />
+        </label>
+        <label className="row" title="Count every day as done, from the start date on. Unmark a day to take it back.">
+          <input type="checkbox" checked={autoMark} onChange={(e) => setAutoMark(e.target.checked)} />
+          <span>Mark every day</span>
+        </label>
         <button className="primary" type="submit">
           Add
         </button>
@@ -75,37 +171,55 @@ export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
             const isSelected = ctx.selected?.id === s.id
             return (
               <li key={s.id} className={`skill-row ${isSelected ? 'selected' : ''}`}>
-                <button
-                  className="skill-name"
-                  onClick={() => ctx.select(s.id)}
-                  aria-pressed={isSelected}
-                  title="Show this habit in the other widgets"
-                >
-                  <span className="swatch" style={{ background: s.color }} />
-                  <span>
-                    {s.name}
-                    <span className="stat-label"> · since {formatDay(s.startDate)}</span>
-                  </span>
-                </button>
-                <span className="row">
-                  <span className="muted" title="Current streak">
-                    🔥 {currentStreak(s)}
-                  </span>
-                  <button
-                    className={done ? 'primary' : ''}
-                    onClick={() => ctx.toggleDay(s.id, today)}
-                    aria-pressed={done}
-                  >
-                    {done ? '✓ Done today' : 'Mark today'}
-                  </button>
-                  <button
-                    className="link"
-                    onClick={() => ctx.setArchived(s, true)}
-                    title="Put this habit away. Its history is kept, and you can restore or delete it from the archive."
-                  >
-                    Archive
-                  </button>
-                </span>
+                {editingId === s.id ? (
+                  <HabitEditor habit={s} ctx={ctx} onDone={() => setEditingId(null)} />
+                ) : (
+                  <>
+                    <button
+                      className="skill-name"
+                      onClick={() => ctx.select(s.id)}
+                      aria-pressed={isSelected}
+                      title="Show this habit in the other widgets"
+                    >
+                      <span className="swatch" style={{ background: s.color }} />
+                      <span>
+                        {s.name}
+                        {streakShown(ctx, s) && <span className="stat-label"> · since {formatDay(s.startDate)}</span>}
+                        {goalText(s, today) && <span className="stat-label"> · {goalText(s, today)}</span>}
+                        {s.autoMark && (
+                          <span className="pill" style={{ marginLeft: 8 }} title="Marked every day automatically">
+                            auto
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                    <span className="row">
+                      {streakShown(ctx, s) && (
+                        <span className="muted" title="Current streak">
+                          🔥 {currentStreak(s)}
+                        </span>
+                      )}
+                      <button
+                        className={done ? 'primary' : ''}
+                        onClick={() => ctx.toggleDay(s.id, today)}
+                        aria-pressed={done}
+                      >
+                        {done ? '✓ Done today' : 'Mark today'}
+                      </button>
+                      <MenuButton
+                        label={`More for ${s.name}`}
+                        items={[
+                          { label: 'Edit', onSelect: () => setEditingId(s.id) },
+                          {
+                            label: s.hideStreak ? 'Show streak' : 'Hide streak',
+                            onSelect: () => ctx.updateHabit(s, { hideStreak: !s.hideStreak }),
+                          },
+                          { label: 'Archive', onSelect: () => ctx.setArchived(s, true) },
+                        ]}
+                      />
+                    </span>
+                  </>
+                )}
               </li>
             )
           })}
@@ -149,17 +263,36 @@ export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
 /* ---------------- Calendar ---------------- */
 
 export function CalendarWidget({ ctx }: { ctx: WidgetCtx }) {
+  // Habits that share a day are stacked as bands of colour, oldest habit at the bottom.
+  const [layered, setLayered] = useState(true)
   const skill = ctx.selected
   if (!skill) return <NoHabit ctx={ctx} />
 
-  const logs = new Set(skill.logs)
+  const oldestFirst = [...ctx.skills].sort((a, b) => a.startDate.localeCompare(b.startDate)) // stable: ties keep list order
+  const shown = layered ? oldestFirst : [skill]
   const today = startOfDay(new Date())
+
+  const doneOn = (date: Date) => shown.filter((h) => h.logs.includes(toDateKey(date)))
 
   const tileClass = ({ date, view }: { date: Date; view: string }) => {
     if (view !== 'month') return null
-    if (logs.has(toDateKey(date))) return 'day-on'
+    const done = doneOn(date)
+    if (done.length > 0) return layered ? 'day-layered' : 'day-on'
     if (!isBefore(date, today) || isBefore(date, parseISO(skill.startDate))) return null
     return 'day-off'
+  }
+
+  const tileContent = ({ date, view }: { date: Date; view: string }) => {
+    if (!layered || view !== 'month') return null
+    const done = doneOn(date)
+    if (done.length === 0) return null
+    return (
+      <span className="layers" title={done.map((h) => h.name).join(', ')} aria-hidden>
+        {done.map((h) => (
+          <span key={h.id} className="layer" style={{ background: h.color }} />
+        ))}
+      </span>
+    )
   }
 
   return (
@@ -167,23 +300,46 @@ export function CalendarWidget({ ctx }: { ctx: WidgetCtx }) {
       <Calendar
         value={null}
         tileClassName={tileClass}
+        tileContent={tileContent}
         tileDisabled={({ date, view }) => view === 'month' && isAfter(date, today)}
         onClickDay={(d) => ctx.toggleDay(skill.id, toDateKey(d))}
         // Month names only; year/decade views aren't useful for logging.
         minDetail="month"
       />
+      <label className="row" style={{ marginTop: 8 }}>
+        <input type="checkbox" checked={layered} onChange={(e) => setLayered(e.target.checked)} />
+        <span>Layer all habits (days they share stack up, oldest habit at the bottom)</span>
+      </label>
+      {layered && ctx.skills.length > 1 && (
+        <div className="row" style={{ gap: 12 }}>
+          {oldestFirst.map((h) => (
+            <span key={h.id} className="stat-label">
+              <span className="swatch" style={{ background: h.color, display: 'inline-block' }} /> {h.name}
+            </span>
+          ))}
+        </div>
+      )}
       <p className="stat-label" style={{ marginBottom: 0 }}>
-        Click a day to mark it on or off.
+        Click a day to mark it on or off{layered ? ` for ${skill.name}` : ''}.
       </p>
     </div>
   )
 }
-
 /* ---------------- Streak ---------------- */
 
 export function StreakWidget({ ctx }: { ctx: WidgetCtx }) {
   const skill = ctx.selected
   if (!skill) return <NoHabit ctx={ctx} />
+
+  if (!streakShown(ctx, skill)) {
+    return (
+      <p className="empty">
+        {ctx.hideAllStreaks
+          ? 'Streaks are hidden. Use Show streaks at the top of the page to see them again.'
+          : `${skill.name}'s streak is hidden. Open its ⋯ menu and choose Show streak.`}
+      </p>
+    )
+  }
 
   const streak = currentStreak(skill)
   const best = bestStreak(skill)

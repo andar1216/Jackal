@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { skillsApi } from '../../lib/api'
-import { todayKey } from '../../lib/dates'
 import { createWriteQueue } from '../../lib/writeQueue'
 import Board, { Panel } from '../../components/Board'
 import type { PanelSize, Skill } from '../../types'
@@ -36,6 +35,8 @@ const WIDGET_SIZES: Record<WidgetId, PanelSize> = {
 
 /* ---------- Habits data ---------- */
 
+const HIDE_STREAKS_KEY = 'jackal.habits.hideStreaks'
+
 const COLORS = ['#4f46e5', '#db2777', '#0891b2', '#16a34a', '#d97706', '#9333ea']
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.')
@@ -59,6 +60,14 @@ export default function HabitsPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Remembered in this browser, so streaks stay hidden next time too.
+  const [hideAllStreaks, setHideAllStreaks] = useState(() => localStorage.getItem(HIDE_STREAKS_KEY) === '1')
+  const toggleHideAllStreaks = () => {
+    const next = !hideAllStreaks
+    setHideAllStreaks(next)
+    if (next) localStorage.setItem(HIDE_STREAKS_KEY, '1')
+    else localStorage.removeItem(HIDE_STREAKS_KEY)
+  }
   const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null)
   const showToast = (text: string, undo?: () => void) => setToast({ message: text, undo })
   // The message goes away by itself after a few seconds.
@@ -138,16 +147,22 @@ export default function HabitsPage() {
     },
     status,
     select: setSelectedId,
-    addHabit: (name) =>
+    hideAllStreaks,
+    nextColor: COLORS[skills.length % COLORS.length],
+    addHabit: (fields) =>
       writes.enqueue(async () => {
-        const created = await skillsApi.create({
-          name,
-          color: COLORS[skills.length % COLORS.length],
-          startDate: todayKey(),
-        })
+        const created = await skillsApi.create(fields)
         setSkills((prev) => [...prev, created])
         setSelectedId(created.id)
       }),
+    updateHabit: (habit, changes) => {
+      setSkills((prev) => prev.map((s) => (s.id === habit.id ? { ...s, ...changes } : s)))
+      writes.enqueue(async () => {
+        const saved = await skillsApi.update(habit.id, changes)
+        // The server may have filled in days (a new start date, or marking every day), so take its copy.
+        if (writes.pending === 1) setSkills((prev) => prev.map((s) => (s.id === habit.id ? saved : s)))
+      })
+    },
     toggleDay: (id, key) => {
       // Update the screen right away, then save.
       setSkills((prev) => prev.map((s) => (s.id === id ? withDayToggled(s, key) : s)))
@@ -174,6 +189,9 @@ export default function HabitsPage() {
           <h1>Habits</h1>
           <p>Click a habit to show it in the other widgets. Customize layout to rearrange the widgets.</p>
         </div>
+        <button onClick={toggleHideAllStreaks} aria-pressed={hideAllStreaks} title="Hide or show the streak of every habit. Use a habit's ⋯ menu to hide just one.">
+          {hideAllStreaks ? 'Show streaks' : 'Hide all streaks'}
+        </button>
       </header>
 
       {message && (

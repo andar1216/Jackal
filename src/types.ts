@@ -6,13 +6,20 @@ export type Tracker = {
   notes?: string
 }
 
+/** A habit is either something you do (performing) or something you are quitting (giving up). */
+export type HabitKind = 'performing' | 'giving-up'
+
 export type Skill = {
   id: string
   name: string
   color: string
   startDate: string // YYYY-MM-DD, first day of the skill
+  endDate?: string | null // YYYY-MM-DD, optional goal end date
   logs: string[] // YYYY-MM-DD days the skill was practiced ("days on")
   avgWeeks: number // number of weeks used for the weekly average
+  kind?: HabitKind // missing means performing
+  hideStreak?: boolean // keep this habit's streak out of sight
+  autoMark?: boolean // every day counts as done unless unmarked
   archived?: boolean // put away: hidden from the habits list until restored (or deleted)
 }
 
