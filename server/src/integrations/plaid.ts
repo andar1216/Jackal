@@ -31,7 +31,7 @@ const isInternalMove = (t: PlaidTx) =>
   t.primaryCategory === 'TRANSFER_OUT' ||
   t.detailedCategory === 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT'
 
-type AccountInfo = { name?: string | null; mask?: string | null; type?: string | null }
+type AccountInfo = { name?: string | null; mask?: string | null; type?: string | null; balanceCents?: number | null }
 
 /** How an account is shown, for example "Chase · Checking ••1234". Also what transactions are grouped by. */
 export const accountLabel = (institution: string, a: AccountInfo) =>
@@ -79,7 +79,14 @@ type ItemDoc = {
   cursor?: string | null
   lastSyncedAt?: Date | null
   syncVersion?: number | null
-  accounts: { accountId?: string | null; name?: string | null; mask?: string | null; type?: string | null }[]
+  accounts: {
+    accountId?: string | null
+    name?: string | null
+    mask?: string | null
+    type?: string | null
+    subtype?: string | null
+    balanceCents?: number | null
+  }[]
   save(): Promise<unknown>
 }
 
@@ -100,7 +107,17 @@ export async function syncItem(item: ItemDoc, options: { fromScratch?: boolean }
   // A transactions sync only mentions accounts that have changes, so ask for the full list separately.
   // This is how an account with no recent activity still gets listed.
   const accountList = await gateway.getAccounts(accessToken).catch(() => [])
-  if (accountList.length > 0) item.accounts = accountList
+  // Balances come along with the list, so Net worth stays as fresh as the last sync.
+  if (accountList.length > 0) {
+    item.accounts = accountList.map((a) => ({
+      accountId: a.accountId,
+      name: a.name,
+      mask: a.mask,
+      type: a.type,
+      subtype: a.subtype,
+      balanceCents: typeof a.balance === 'number' ? Math.round(a.balance * 100) : undefined,
+    }))
+  }
 
   for (;;) {
     let page
@@ -274,6 +291,7 @@ plaidRouter.get('/accounts', async (req, res) => {
         label: accountLabel(item.institutionName, a),
         institution: item.institutionName,
         type: a.type ?? undefined,
+        balanceCents: a.balanceCents ?? undefined,
       })),
     ),
   )

@@ -37,10 +37,16 @@ export const transactionSchema = z.strictObject({
   note: z.string().max(500).optional(),
 })
 
+export const accountViewSchema = z.strictObject({
+  name,
+  accounts: z.array(z.string().trim().min(1).max(200)).max(200),
+})
+
 export const manualAccountSchema = z.strictObject({
   name,
   kind: z.enum(['bank', 'credit']),
   mask: z.string().trim().regex(/^\d{2,6}$/, 'Use the last 2 to 6 digits').optional(),
+  balanceCents: z.number().int().min(-100_000_000_000).max(100_000_000_000).optional(), // for a card, what is owed
 })
 
 export const mealSchema = z.strictObject({

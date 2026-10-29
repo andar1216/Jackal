@@ -40,12 +40,20 @@ export type Transaction = {
   isRefund?: boolean // money back onto a credit card: lowers spending, is not income
 }
 
+/** A named group of accounts, like Business or Personal. Accounts are listed by the name Finances shows for them. */
+export type AccountView = {
+  id: string
+  name: string
+  accounts: string[]
+}
+
 /** An account the person listed by hand. */
 export type ManualAccount = {
   id: string
   name: string
   kind: 'bank' | 'credit'
   mask?: string
+  balanceCents?: number // for a card, what is owed
 }
 
 /** A bank or card account that came in through Plaid. */
@@ -53,6 +61,7 @@ export type BankAccount = {
   label: string
   institution: string
   type?: string // 'credit' for credit cards
+  balanceCents?: number // as of the last sync; for a card or loan, what is owed
 }
 
 export type Meal = {

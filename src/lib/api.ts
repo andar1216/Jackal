@@ -1,4 +1,4 @@
-import type { BankAccount, Integration, ManualAccount, Skill, Transaction, User } from '../types'
+import type { AccountView, BankAccount, Integration, ManualAccount, Skill, Transaction, User } from '../types'
 
 // Dev: Vite proxies /api to the backend. For a separate API host, set VITE_API_URL.
 const BASE = import.meta.env.VITE_API_URL ?? '/api'
@@ -95,9 +95,18 @@ export const transactionsApi = {
   remove: (id: string) => request<void>('DELETE', `/transactions/${id}`),
 }
 
+export const viewsApi = {
+  list: () => request<AccountView[]>('GET', '/views'),
+  create: (v: Pick<AccountView, 'name' | 'accounts'>) => request<AccountView>('POST', '/views', v),
+  update: (id: string, v: Partial<Pick<AccountView, 'name' | 'accounts'>>) => request<AccountView>('PATCH', `/views/${id}`, v),
+  remove: (id: string) => request<void>('DELETE', `/views/${id}`),
+}
+
 export const accountsApi = {
   list: () => request<ManualAccount[]>('GET', '/accounts'),
-  create: (a: Pick<ManualAccount, 'name' | 'kind' | 'mask'>) => request<ManualAccount>('POST', '/accounts', a),
+  create: (a: Pick<ManualAccount, 'name' | 'kind' | 'mask' | 'balanceCents'>) => request<ManualAccount>('POST', '/accounts', a),
+  update: (id: string, patch: Partial<Pick<ManualAccount, 'name' | 'balanceCents'>>) =>
+    request<ManualAccount>('PATCH', `/accounts/${id}`, patch),
 }
 
 export type PlaidSyncResult = {

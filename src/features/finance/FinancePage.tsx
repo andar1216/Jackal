@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { addMonths, endOfMonth, format, isSameMonth, startOfMonth } from 'date-fns'
-import { accountsApi, plaidApi, TRANSACTIONS_CHANGED, transactionsApi } from '../../lib/api'
+import { accountsApi, plaidApi, TRANSACTIONS_CHANGED, transactionsApi, viewsApi } from '../../lib/api'
 import { formatDay, formatMoney, toDateKey, todayKey } from '../../lib/dates'
-import type { BankAccount, ManualAccount, Transaction } from '../../types'
+import type { AccountView, BankAccount, ManualAccount, Transaction } from '../../types'
+import NetWorthCard from './NetWorthCard'
+import ViewsBar, { type AccountChoice } from './ViewsBar'
 
 const BUDGETS: Record<string, number> = {
   Food: 40000,
@@ -13,7 +15,10 @@ const BUDGETS: Record<string, number> = {
 }
 const CATEGORIES = Object.keys(BUDGETS)
 
+const VIEW_KEY = 'jackal.finance.view'
 const BY_HAND = 'Added by hand'
+/** The name an account added by hand goes by on this page. */
+const manualLabel = (a: ManualAccount) => (a.mask ? `${a.name} ••${a.mask}` : a.name)
 const accountOf = (t: Transaction) => t.accountName ?? BY_HAND
 
 /** What a transaction does to spending: a refund on a credit card counts as negative spending. */
@@ -64,10 +69,20 @@ export default function FinancePage() {
   const [syncing, setSyncing] = useState(false)
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
   const [manualAccounts, setManualAccounts] = useState<ManualAccount[]>([])
+  const [views, setViews] = useState<AccountView[]>([])
+  // Remembered between visits, so Finances opens on the view you were last using.
+  const [viewId, setViewId] = useState<string | null>(() => localStorage.getItem(VIEW_KEY))
+  const chooseView = (id: string | null) => {
+    setViewId(id)
+    setAccount(null)
+    if (id) localStorage.setItem(VIEW_KEY, id)
+    else localStorage.removeItem(VIEW_KEY)
+  }
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
   const [newKind, setNewKind] = useState<ManualAccount['kind']>('credit')
   const [newMask, setNewMask] = useState('')
+  const [newBalance, setNewBalance] = useState('')
 
   const [type, setType] = useState<Transaction['type']>('expense')
   const [amount, setAmount] = useState('')
@@ -100,6 +115,10 @@ export default function FinancePage() {
       .list()
       .then((list) => !cancelled && setManualAccounts(list))
       .catch(() => {})
+    viewsApi
+      .list()
+      .then((list) => !cancelled && setViews(list))
+      .catch(() => {})
     return () => {
       cancelled = true
     }
@@ -121,16 +140,29 @@ export default function FinancePage() {
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   // Accounts typed in by hand sit alongside the ones from Plaid.
   const handAccounts: BankAccount[] = manualAccounts.map((a) => ({
-    label: a.mask ? `${a.name} ••${a.mask}` : a.name,
+    label: manualLabel(a),
     institution: a.name,
     type: a.kind === 'credit' ? 'credit' : 'depository',
   }))
-  const allAccounts = groupByAccount(transactions, [...bankAccounts, ...handAccounts])
+
+  // A saved view (like Business) narrows everything on the page to its accounts.
+  const view = views.find((v) => v.id === viewId) ?? null
+  const inView = (name: string) => !view || view.accounts.includes(name)
+  const viewChoices: AccountChoice[] = [
+    ...bankAccounts.map((a) => ({ name: a.label, tag: a.type === 'credit' ? 'Credit card' : 'Bank account' })),
+    ...handAccounts.map((a) => ({ name: a.label, tag: a.type === 'credit' ? 'Credit card' : 'Bank account' })),
+    { name: BY_HAND, tag: null },
+  ]
+  const scoped = transactions.filter((t) => inView(accountOf(t)))
+  const allAccounts = groupByAccount(
+    scoped,
+    [...bankAccounts, ...handAccounts].filter((a) => inView(a.label)),
+  )
   const kindByName = new Map(allAccounts.map((a) => [a.name, a.kind]))
   // "Bank accounts" and "Credit cards" narrow both the account list and everything below it.
   const byAccount = kindFilter === 'all' ? allAccounts : allAccounts.filter((a) => a.kind === kindFilter)
   const activeAccount = byAccount.some((a) => a.name === account) ? account : null
-  const shown = transactions.filter(
+  const shown = scoped.filter(
     (t) =>
       (kindFilter === 'all' || kindByName.get(accountOf(t)) === kindFilter) && (!activeAccount || accountOf(t) === activeAccount),
   )
@@ -168,10 +200,17 @@ export default function FinancePage() {
     const name = newName.trim()
     if (!name) return
     try {
-      const created = await accountsApi.create({ name, kind: newKind, mask: newMask.trim() || undefined })
+      const balance = Math.round(parseFloat(newBalance) * 100)
+      const created = await accountsApi.create({
+        name,
+        kind: newKind,
+        mask: newMask.trim() || undefined,
+        balanceCents: Number.isFinite(balance) ? balance : undefined,
+      })
       setManualAccounts((list) => [...list, created])
       setNewName('')
       setNewMask('')
+      setNewBalance('')
       setAdding(false)
       setError(null)
     } catch (err) {
@@ -222,6 +261,24 @@ export default function FinancePage() {
       )}
 
       <div className="stack">
+        <ViewsBar
+          views={views}
+          activeId={view?.id ?? null}
+          onSelect={chooseView}
+          choices={viewChoices}
+          onSaved={(saved) => setViews((list) => (list.some((v) => v.id === saved.id) ? list.map((v) => (v.id === saved.id ? saved : v)) : [...list, saved]))}
+          onDeleted={(id) => setViews((list) => list.filter((v) => v.id !== id))}
+          onError={setError}
+        />
+
+        <NetWorthCard
+          title={view ? `Net worth · ${view.name}` : 'Net worth'}
+          plaid={bankAccounts.filter((a) => inView(a.label))}
+          manual={manualAccounts.filter((a) => inView(manualLabel(a)))}
+          onManualChange={(updated) => setManualAccounts((list) => list.map((a) => (a.id === updated.id ? updated : a)))}
+          onError={setError}
+        />
+
         <div className="grid cols-3">
           <div className="card">
             <div className="stat-label">Income</div>
@@ -307,6 +364,14 @@ export default function FinancePage() {
                   <option value="bank">Bank account</option>
                 </select>
                 <input placeholder="Last digits (optional)" inputMode="numeric" value={newMask} onChange={(e) => setNewMask(e.target.value)} aria-label="Last digits" />
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder={newKind === 'credit' ? 'Amount owed (optional)' : 'Balance (optional)'}
+                  value={newBalance}
+                  onChange={(e) => setNewBalance(e.target.value)}
+                  aria-label="Balance"
+                />
                 <button className="primary" type="submit">
                   Add account
                 </button>

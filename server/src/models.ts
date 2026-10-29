@@ -162,7 +162,17 @@ export const PlaidItem = mongoose.model(
     lastSyncedAt: Date,
     accounts: {
       // `type` has to be spelled out, because Mongoose reads a bare `type` key as "the type of this whole object".
-      type: [{ _id: false, accountId: String, name: String, mask: String, type: { type: String }, subtype: String }],
+      type: [
+        {
+          _id: false,
+          accountId: String,
+          name: String,
+          mask: String,
+          type: { type: String },
+          subtype: String,
+          balanceCents: Number, // as of the last sync; owed amount for credit cards and loans
+        },
+      ],
       default: [],
     },
     // Bumped when how we import changes, so older imports get fetched again once.
@@ -178,10 +188,20 @@ export const ManualAccount = mongoose.model(
     name: { type: String, required: true, trim: true },
     kind: { type: String, enum: ['bank', 'credit'], required: true },
     mask: { type: String, trim: true }, // last digits, like "7946"
+    balanceCents: Number, // typed in by hand; what is owed for a credit card
   }),
 )
 
-export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount]
+/** A named group of accounts, like "Business" or "Personal", for looking at part of your money at a time. Accounts are listed by the name Finances shows for them. */
+export const AccountView = mongoose.model(
+  'AccountView',
+  ownedSchema({
+    name: { type: String, required: true, trim: true },
+    accounts: { type: [String], default: [] },
+  }),
+)
+
+export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView]
 
 /**
  * Data created before accounts existed has no owner. The first account to be created inherits it.

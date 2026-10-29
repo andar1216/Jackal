@@ -54,10 +54,10 @@ const plaid = {
   failExchange: false,
   failTokens: [] as string[],
   accounts: [
-    { accountId: 'acc1', name: 'Checking', mask: '0000', type: 'depository' },
-    { accountId: 'acc2', name: 'Business Card', mask: '1111', type: 'credit' },
+    { accountId: 'acc1', name: 'Checking', mask: '0000', type: 'depository', balance: 1200.5 },
+    { accountId: 'acc2', name: 'Business Card', mask: '1111', type: 'credit', balance: 300.25 },
     { accountId: 'acc3', name: 'Business Checking', mask: '3333', type: 'depository' },
-  ] as { accountId: string; name: string; mask?: string; type?: string }[],
+  ] as { accountId: string; name: string; mask?: string; type?: string; balance?: number }[],
 }
 const fakePlaid: PlaidGateway = {
   isConfigured: () => plaid.configured,
@@ -195,15 +195,41 @@ describe('transactions', () => {
 
 describe('hand-added accounts', () => {
   it('lists a card added by hand, validates it, and keeps it private', async () => {
-    const created = await call('POST', '/accounts', { name: 'Citi Pay Credit', kind: 'credit', mask: '7946' })
+    const created = await call('POST', '/accounts', { name: 'Citi Pay Credit', kind: 'credit', mask: '7946', balanceCents: 0 })
     assert.equal(created.status, 201)
     assert.equal(created.body.kind, 'credit')
+    assert.equal(created.body.balanceCents, 0)
+    assert.equal((await call('PATCH', '/accounts/' + created.body.id, { balanceCents: 12345 })).body.balanceCents, 12345)
+    assert.equal((await call('POST', '/accounts', { name: 'X', kind: 'bank', balanceCents: 1.5 })).status, 400)
 
     assert.equal((await call('POST', '/accounts', { name: 'X', kind: 'savings' })).status, 400)
     assert.equal((await call('POST', '/accounts', { name: 'X', kind: 'bank', mask: 'abcd' })).status, 400)
 
     assert.equal((await call('GET', '/accounts')).body.length, 1)
     assert.equal((await makeClient()('GET', '/accounts')).status, 401)
+  })
+})
+
+describe('account views', () => {
+  it('saves a named group of accounts, edits it, and keeps it private', async () => {
+    const made = await call('POST', '/views', { name: 'Business', accounts: ['Test Bank · Business Card ••1111'] })
+    assert.equal(made.status, 201)
+    assert.deepEqual(made.body.accounts, ['Test Bank · Business Card ••1111'])
+
+    const edited = await call('PATCH', '/views/' + made.body.id, { accounts: [], name: 'Work' })
+    assert.equal(edited.body.name, 'Work')
+    assert.deepEqual(edited.body.accounts, [])
+
+    assert.equal((await call('POST', '/views', { name: '', accounts: [] })).status, 400)
+    assert.equal((await call('POST', '/views', { name: 'X', accounts: [''] })).status, 400)
+
+    const other = makeClient()
+    await other('POST', '/auth/register', { email: 'views-other@example.com', name: 'Other', password: PASSWORD })
+    assert.deepEqual((await other('GET', '/views')).body, [])
+    assert.equal((await other('PATCH', '/views/' + made.body.id, { name: 'Hijack' })).status, 404)
+
+    assert.equal((await call('DELETE', '/views/' + made.body.id)).status, 204)
+    assert.equal((await call('GET', '/views')).body.length, 0)
   })
 })
 
@@ -541,6 +567,10 @@ describe('plaid', () => {
 
     const accounts = (await call('GET', '/integrations/plaid/accounts')).body
     assert.ok(accounts.some((a: { label: string; type: string }) => a.label === 'Test Bank · Business Card ••1111' && a.type === 'credit'))
+    const balanceOf = (label: string) => accounts.find((a: { label: string }) => a.label === label)?.balanceCents
+    assert.equal(balanceOf('Test Bank · Checking ••0000'), 120050, 'balances are stored as whole cents')
+    assert.equal(balanceOf('Test Bank · Business Card ••1111'), 30025, 'a card balance is what is owed')
+    assert.equal(balanceOf('Test Bank · Business Checking ••3333'), undefined, 'no balance from the bank yet')
     assert.ok(accounts.some((a: { label: string }) => a.label === 'Test Bank · Checking ••0000'))
     assert.ok(
       accounts.some((a: { label: string }) => a.label === 'Test Bank · Business Checking ••3333'),

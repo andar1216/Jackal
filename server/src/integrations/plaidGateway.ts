@@ -16,7 +16,15 @@ export type PlaidTx = {
   detailedCategory?: string
 }
 
-export type PlaidAccount = { accountId: string; name: string; mask?: string; type?: string; subtype?: string }
+export type PlaidAccount = {
+  accountId: string
+  name: string
+  mask?: string
+  type?: string
+  subtype?: string
+  /** Current balance in dollars. For a credit card or loan this is what is owed. Plaid may not have it yet. */
+  balance?: number
+}
 
 export type SyncPage = {
   added: PlaidTx[]
@@ -123,6 +131,7 @@ const realGateway: PlaidGateway = {
       mask: a.mask ?? undefined,
       type: a.type,
       subtype: a.subtype ?? undefined,
+      balance: a.balances.current ?? undefined,
     }))
   },
 
