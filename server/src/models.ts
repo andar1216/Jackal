@@ -94,6 +94,8 @@ const transactionSchema = ownedSchema({
   accountId: String,
   // A credit given back on a credit card (return, refund). It lowers spending instead of counting as income.
   isRefund: { type: Boolean, default: false },
+  // Hidden from Finances and left out of its totals. Never deleted, and syncing a bank leaves it alone.
+  archived: { type: Boolean, default: false },
 })
 transactionSchema.index(
   { userId: 1, source: 1, externalId: 1 },

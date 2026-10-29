@@ -35,6 +35,7 @@ export const transactionSchema = z.strictObject({
   category: name,
   date: dateString,
   note: z.string().max(500).optional(),
+  archived: z.boolean().optional(),
 })
 
 export const accountViewSchema = z.strictObject({

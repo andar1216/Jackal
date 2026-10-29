@@ -1,4 +1,4 @@
-import type { AccountView, BankAccount, Integration, ManualAccount, Skill, Transaction, User } from '../types'
+import type { AccountView, BankAccount, Integration, ManualAccount, Skill, Subscription, Transaction, User } from '../types'
 
 // Dev: Vite proxies /api to the backend. For a separate API host, set VITE_API_URL.
 const BASE = import.meta.env.VITE_API_URL ?? '/api'
@@ -92,7 +92,12 @@ export const transactionsApi = {
   // Both dates are YYYY-MM-DD, inclusive.
   list: (from: string, to: string) => request<Transaction[]>('GET', `/transactions?from=${from}&to=${to}`),
   create: (t: NewTransaction) => request<Transaction>('POST', '/transactions', t),
-  remove: (id: string) => request<void>('DELETE', `/transactions/${id}`),
+  /** Archiving hides a transaction and leaves it out of the totals. It is never deleted, and can be restored. */
+  setArchived: (id: string, archived: boolean) => request<Transaction>('PATCH', `/transactions/${id}`, { archived }),
+}
+
+export const subscriptionsApi = {
+  list: () => request<Subscription[]>('GET', '/subscriptions'),
 }
 
 export const viewsApi = {

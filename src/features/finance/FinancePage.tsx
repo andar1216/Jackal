@@ -4,6 +4,7 @@ import { accountsApi, plaidApi, TRANSACTIONS_CHANGED, transactionsApi, viewsApi 
 import { formatDay, formatMoney, toDateKey, todayKey } from '../../lib/dates'
 import type { AccountView, BankAccount, ManualAccount, Transaction } from '../../types'
 import NetWorthCard from './NetWorthCard'
+import SubscriptionsCard from './SubscriptionsCard'
 import ViewsBar, { type AccountChoice } from './ViewsBar'
 
 const BUDGETS: Record<string, number> = {
@@ -78,6 +79,7 @@ export default function FinancePage() {
     if (id) localStorage.setItem(VIEW_KEY, id)
     else localStorage.removeItem(VIEW_KEY)
   }
+  const [showArchived, setShowArchived] = useState(false)
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
   const [newKind, setNewKind] = useState<ManualAccount['kind']>('credit')
@@ -132,7 +134,9 @@ export default function FinancePage() {
   }, [])
 
   const loaded = data?.key === from
-  const transactions = loaded ? data.items : []
+  const everything = loaded ? data.items : []
+  // Archived transactions are hidden and left out of every total below. They stay stored, and can be restored.
+  const transactions = everything.filter((t) => !t.archived)
   const isCurrentMonth = isSameMonth(month, new Date())
 
   // Group the month's transactions by the account they came from. Clicking an account filters everything below.
@@ -154,6 +158,7 @@ export default function FinancePage() {
     { name: BY_HAND, tag: null },
   ]
   const scoped = transactions.filter((t) => inView(accountOf(t)))
+  const archivedHere = everything.filter((t) => t.archived && inView(accountOf(t))).sort((a, b) => b.date.localeCompare(a.date))
   const allAccounts = groupByAccount(
     scoped,
     [...bankAccounts, ...handAccounts].filter((a) => inView(a.label)),
@@ -189,6 +194,16 @@ export default function FinancePage() {
       setData((d) => (d ? { ...d, items: [...d.items, created] } : d))
       setAmount('')
       setNote('')
+      setError(null)
+    } catch (err) {
+      setError(errorText(err))
+    }
+  }
+
+  const setArchived = async (t: Transaction, archived: boolean) => {
+    try {
+      const updated = await transactionsApi.setArchived(t.id, archived)
+      setData((d) => (d ? { ...d, items: d.items.map((x) => (x.id === updated.id ? updated : x)) } : d))
       setError(null)
     } catch (err) {
       setError(errorText(err))
@@ -391,6 +406,12 @@ export default function FinancePage() {
           </section>
         )}
 
+        <SubscriptionsCard
+          reload={reload}
+          inView={inView}
+          creditAccounts={new Set([...bankAccounts, ...handAccounts].filter((a) => a.type === 'credit').map((a) => a.label))}
+        />
+
         <div className="grid cols-2">
           <section className="card">
             <h2>Budgets</h2>
@@ -461,10 +482,46 @@ export default function FinancePage() {
                       {t.type === 'income' || t.isRefund ? '+' : '-'}
                       {formatMoney(t.amountCents)}
                     </strong>
+                    <button className="link" onClick={() => setArchived(t, true)} title="Hide this and leave it out of the totals. It is not deleted.">
+                      Archive
+                    </button>
                   </span>
                 </li>
               ))}
             </ul>
+
+            {archivedHere.length > 0 && (
+              <>
+                <button className="link" onClick={() => setShowArchived((v) => !v)} aria-expanded={showArchived}>
+                  {showArchived ? 'Hide' : 'Show'} archived ({archivedHere.length})
+                </button>
+                {showArchived && (
+                  <ul className="list">
+                    {archivedHere.map((t) => (
+                      <li key={t.id} style={{ opacity: 0.6 }}>
+                        <span>
+                          {t.note ?? t.category}
+                          <br />
+                          <span className="stat-label">
+                            {t.category} · {formatDay(t.date)}
+                            {t.source === 'plaid' && ` · ${t.accountName ?? 'Bank'}`} · not counted
+                          </span>
+                        </span>
+                        <span className="row">
+                          <span>
+                            {t.type === 'income' || t.isRefund ? '+' : '-'}
+                            {formatMoney(t.amountCents)}
+                          </span>
+                          <button className="link" onClick={() => setArchived(t, false)}>
+                            Restore
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
           </section>
         </div>
       </div>

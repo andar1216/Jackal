@@ -38,6 +38,20 @@ export type Transaction = {
   source?: 'manual' | 'plaid' // imported bank transactions are 'plaid'
   accountName?: string
   isRefund?: boolean // money back onto a credit card: lowers spending, is not income
+  archived?: boolean // hidden and left out of totals, but not deleted
+}
+
+/** A charge that repeats on a schedule, found from your spending. */
+export type Subscription = {
+  name: string
+  account: string
+  amountCents: number
+  cadence: 'weekly' | 'every 2 weeks' | 'monthly' | 'quarterly' | 'yearly'
+  monthlyCents: number
+  lastDate: string
+  nextDate: string
+  count: number
+  active: boolean
 }
 
 /** A named group of accounts, like Business or Personal. Accounts are listed by the name Finances shows for them. */

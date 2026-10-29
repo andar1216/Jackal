@@ -4,6 +4,7 @@ import { currentUserId, requireAuth } from './auth/middleware.js'
 import { integrations } from './integrations/routes.js'
 import { crudRouter, requireId } from './lib/crud.js'
 import { HttpError } from './lib/errors.js'
+import { detectRecurring, type Charge } from './lib/recurring.js'
 import { AccountView, CalendarEvent, ManualAccount, Meal, Skill, TimeEntry, Tracker, Transaction, Workout } from './models.js'
 import {
   accountViewSchema,
@@ -63,6 +64,23 @@ api.use(
     sort: { date: -1, createdAt: -1 },
   }),
 )
+
+// Repeating charges (subscriptions), found from the last 13 months of spending on each account.
+api.get('/subscriptions', async (req, res) => {
+  const todayStr = new Date().toLocaleDateString('en-CA')
+  const since = new Date(Date.now() - 400 * 86_400_000).toLocaleDateString('en-CA')
+  const charges = await Transaction.find({
+    userId: currentUserId(req),
+    type: 'expense',
+    isRefund: { $ne: true },
+    archived: { $ne: true },
+    date: { $gte: since },
+  })
+    .select('note amountCents date accountName')
+    .lean()
+  const plain: Charge[] = charges.map((c) => ({ note: c.note, amountCents: c.amountCents, date: c.date, accountName: c.accountName }))
+  res.json(detectRecurring(plain, todayStr))
+})
 
 api.use('/views', crudRouter(AccountView, { schema: accountViewSchema, sort: { createdAt: 1 } }))
 

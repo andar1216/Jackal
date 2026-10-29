@@ -58,6 +58,7 @@ function BalanceEditor({ account, onSaved, onError }: { account: ManualAccount; 
 }
 
 type Props = {
+  title?: string
   plaid: BankAccount[]
   manual: ManualAccount[]
   onManualChange: (account: ManualAccount) => void
@@ -68,7 +69,7 @@ type Props = {
  * What you own minus what you owe, from each account's latest balance. Balances come from the
  * last bank sync (Sync banks refreshes them), or are typed in for accounts added by hand.
  */
-export default function NetWorthCard({ plaid, manual, onManualChange, onError }: Props) {
+export default function NetWorthCard({ title = 'Net worth', plaid, manual, onManualChange, onError }: Props) {
   const rows = [...plaid.map(plaidRow), ...manual.map(manualRow)].sort(
     (a, b) => Number(a.debt) - Number(b.debt) || a.name.localeCompare(b.name),
   )
@@ -83,7 +84,7 @@ export default function NetWorthCard({ plaid, manual, onManualChange, onError }:
   return (
     <section className="card">
       <div className="row between">
-        <h2>Net worth</h2>
+        <h2>{title}</h2>
         <div className={`stat-value ${net >= 0 ? 'good' : 'bad'}`}>{formatMoney(net)}</div>
       </div>
       <p className="stat-label" style={{ marginTop: 0 }}>

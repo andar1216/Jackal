@@ -186,6 +186,46 @@ describe('transactions', () => {
     assert.equal(mid.body[0].amountCents, 3200)
   })
 
+  it('archives a transaction without deleting it, and can restore it', async () => {
+    const made = await call('POST', '/transactions', { type: 'expense', amountCents: 999, category: 'Fun', date: '2026-09-01' })
+    assert.equal(made.body.archived, false)
+
+    const archived = await call('PATCH', '/transactions/' + made.body.id, { archived: true })
+    assert.equal(archived.body.archived, true)
+    const listed = (await call('GET', '/transactions?from=2026-09-01&to=2026-09-01')).body
+    assert.equal(listed.length, 1, 'still stored and returned, so the page can offer to restore it')
+    assert.equal(listed[0].archived, true)
+
+    assert.equal((await call('PATCH', '/transactions/' + made.body.id, { archived: false })).body.archived, false)
+    assert.equal((await call('PATCH', '/transactions/' + made.body.id, { archived: 'yes' })).status, 400)
+    await call('DELETE', '/transactions/' + made.body.id) // so the other tests' counts stay the same
+  })
+
+  it('lists subscriptions found in spending, and skips archived charges', async () => {
+    const month = (n: number) => {
+      const d = new Date()
+      d.setDate(1)
+      d.setMonth(d.getMonth() - n)
+      return d.toLocaleDateString('en-CA')
+    }
+    const ids: string[] = []
+    for (const n of [3, 2, 1]) {
+      const r = await call('POST', '/transactions', { type: 'expense', amountCents: 999, category: 'Fun', date: month(n), note: 'Streaming Plus' })
+      ids.push(r.body.id)
+    }
+    const found = (await call('GET', '/subscriptions')).body
+    assert.equal(found.length, 1)
+    assert.equal(found[0].name, 'Streaming Plus')
+    assert.equal(found[0].cadence, 'monthly')
+    assert.equal(found[0].account, 'Added by hand')
+
+    await call('PATCH', '/transactions/' + ids[0], { archived: true })
+    assert.equal((await call('GET', '/subscriptions')).body.length, 0, 'two charges left is not enough')
+
+    assert.equal((await makeClient()('GET', '/subscriptions')).status, 401)
+    for (const id of ids) await call('DELETE', '/transactions/' + id)
+  })
+
   it('ignores query operator injection', async () => {
     const r = await call('GET', '/transactions?type[$ne]=income')
     assert.equal(r.status, 200)
