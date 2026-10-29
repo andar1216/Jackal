@@ -572,29 +572,90 @@ button:disabled {
   background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 }
 
-.dash-grid {
+/* A page's movable panels. */
+.board {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 16px;
   align-items: start;
+}
+
+.board-item {
+  min-width: 0;
+}
+
+.board-item.third {
+  grid-column: span 2;
+}
+
+.board-item.half {
+  grid-column: span 3;
+}
+
+.board-item.full {
+  grid-column: 1 / -1;
+}
+
+.board-toolbar {
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.board-status {
+  font-size: 0.85rem;
+  margin-right: auto;
+}
+
+.board.editing .board-item {
+  outline: 2px dashed var(--border);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+.board.editing .board-content {
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.board-item.dragging {
+  opacity: 0.4;
+}
+
+.board-item.drop-target {
+  outline: 2px dashed var(--accent);
+}
+
+.board-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: grab;
+  user-select: none;
+}
+
+.board-bar-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-bar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .widget {
   padding: 0;
 }
 
-.widget.wide {
-  grid-column: 1 / -1;
-}
-
-.widget.dragging {
-  opacity: 0.4;
-}
-
-.widget.drop-target {
-  outline: 2px dashed var(--accent);
-  outline-offset: 3px;
-}
 
 .widget-head {
   display: flex;
@@ -602,8 +663,6 @@ button:disabled {
   gap: 8px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
-  cursor: grab;
-  user-select: none;
 }
 
 .widget-head h2 {
@@ -615,10 +674,6 @@ button:disabled {
   font-size: 0.85rem;
 }
 
-.widget-actions {
-  margin-left: auto;
-  display: flex;
-}
 
 .drag-handle {
   color: var(--muted);
@@ -715,8 +770,9 @@ button:disabled {
 /* ---------- Responsive ---------- */
 
 @media (max-width: 800px) {
-  .dash-grid {
-    grid-template-columns: 1fr;
+  .board-item.third,
+  .board-item.half {
+    grid-column: 1 / -1;
   }
 
   .topbar {

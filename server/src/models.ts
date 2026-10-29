@@ -213,7 +213,27 @@ const subscriptionMarkSchema = ownedSchema({
 subscriptionMarkSchema.index({ userId: 1, account: 1, key: 1 }, { unique: true })
 export const SubscriptionMark = mongoose.model('SubscriptionMark', subscriptionMarkSchema)
 
-export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark]
+/** How the person arranged the panels on one page: the order, how wide each is, and which are put away. */
+const boardLayoutSchema = ownedSchema({
+  page: { type: String, required: true },
+  items: {
+    type: [
+      new mongoose.Schema(
+        {
+          id: { type: String, required: true },
+          size: { type: String, enum: ['third', 'half', 'full'], required: true },
+          hidden: { type: Boolean, default: false },
+        },
+        { _id: false },
+      ),
+    ],
+    default: [],
+  },
+})
+boardLayoutSchema.index({ userId: 1, page: 1 }, { unique: true })
+export const BoardLayout = mongoose.model('BoardLayout', boardLayoutSchema)
+
+export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout]
 
 /**
  * Data created before accounts existed has no owner. The first account to be created inherits it.

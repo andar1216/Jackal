@@ -3,6 +3,7 @@ import { format, isSameDay, parseISO } from 'date-fns'
 import { formatDuration, uid } from '../../lib/dates'
 import ConnectorsButton from '../connections/ConnectorsButton'
 import type { Integration, TimeEntry } from '../../types'
+import Board, { Panel } from '../../components/Board'
 
 const isScreenTimeConnector = (i: Integration) => i.category === 'screen-time'
 
@@ -57,82 +58,86 @@ export default function TimePage() {
         <ConnectorsButton filter={isScreenTimeConnector} title="Screen time connectors" />
       </header>
 
-      <div className="grid cols-2">
-        <section className="card">
-          <h2>Timer</h2>
-          <div className="timer-display">{running ? formatDuration(entrySeconds(running, now)) : '00:00:00'}</div>
-          <p className="muted">{running ? `${running.label} · ${running.category}` : 'No timer running'}</p>
-          <div className="form">
-            <input
-              placeholder="What are you working on?"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              disabled={!!running}
-            />
-            <select value={category} onChange={(e) => setCategory(e.target.value)} disabled={!!running}>
-              {CATEGORIES.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-            {running ? (
-              <button className="danger" onClick={stop}>
-                Stop
-              </button>
-            ) : (
-              <button className="primary" onClick={start}>
-                Start
-              </button>
-            )}
-          </div>
-
-          <h2>Today by category</h2>
-          {byCategory.length === 0 ? (
-            <p className="empty">Nothing tracked yet.</p>
-          ) : (
-            <div className="stack" style={{ gap: 12 }}>
-              {byCategory.map((c) => (
-                <div key={c.category}>
-                  <div className="row between">
-                    <span>{c.category}</span>
-                    <span className="muted">{formatDuration(c.seconds)}</span>
-                  </div>
-                  <div className="bar">
-                    <span style={{ width: `${(c.seconds / totalToday) * 100}%` }} />
-                  </div>
-                </div>
-              ))}
+      <Board page="time">
+        <Panel id="timer" title="Timer" size="half">
+          <section className="card">
+            <h2>Timer</h2>
+            <div className="timer-display">{running ? formatDuration(entrySeconds(running, now)) : '00:00:00'}</div>
+            <p className="muted">{running ? `${running.label} · ${running.category}` : 'No timer running'}</p>
+            <div className="form">
+              <input
+                placeholder="What are you working on?"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                disabled={!!running}
+              />
+              <select value={category} onChange={(e) => setCategory(e.target.value)} disabled={!!running}>
+                {CATEGORIES.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+              {running ? (
+                <button className="danger" onClick={stop}>
+                  Stop
+                </button>
+              ) : (
+                <button className="primary" onClick={start}>
+                  Start
+                </button>
+              )}
             </div>
-          )}
-        </section>
 
-        <section className="card">
-          <div className="row between">
-            <h2>Today's entries</h2>
-            <strong>{formatDuration(totalToday)}</strong>
-          </div>
-          {today.length === 0 ? (
-            <p className="empty">No entries yet. Start the timer.</p>
-          ) : (
-            <ul className="list">
-              {today.map((e) => (
-                <li key={e.id}>
-                  <span>
-                    {e.label}
-                    <br />
-                    <span className="stat-label">
-                      {e.category} · {format(parseISO(e.start), 'h:mm a')}
-                      {e.end ? ` – ${format(parseISO(e.end), 'h:mm a')}` : ' – running'}
+            <h2>Today by category</h2>
+            {byCategory.length === 0 ? (
+              <p className="empty">Nothing tracked yet.</p>
+            ) : (
+              <div className="stack" style={{ gap: 12 }}>
+                {byCategory.map((c) => (
+                  <div key={c.category}>
+                    <div className="row between">
+                      <span>{c.category}</span>
+                      <span className="muted">{formatDuration(c.seconds)}</span>
+                    </div>
+                    <div className="bar">
+                      <span style={{ width: `${(c.seconds / totalToday) * 100}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </Panel>
+
+        <Panel id="entries" title="Today's entries" size="half">
+          <section className="card">
+            <div className="row between">
+              <h2>Today's entries</h2>
+              <strong>{formatDuration(totalToday)}</strong>
+            </div>
+            {today.length === 0 ? (
+              <p className="empty">No entries yet. Start the timer.</p>
+            ) : (
+              <ul className="list">
+                {today.map((e) => (
+                  <li key={e.id}>
+                    <span>
+                      {e.label}
+                      <br />
+                      <span className="stat-label">
+                        {e.category} · {format(parseISO(e.start), 'h:mm a')}
+                        {e.end ? ` – ${format(parseISO(e.end), 'h:mm a')}` : ' – running'}
+                      </span>
                     </span>
-                  </span>
-                  <span className="row">
-                    <strong>{formatDuration(entrySeconds(e, now))}</strong>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
+                    <span className="row">
+                      <strong>{formatDuration(entrySeconds(e, now))}</strong>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </Panel>
+      </Board>
     </>
   )
 }

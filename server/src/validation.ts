@@ -44,6 +44,17 @@ export const subscriptionMarkBody = z.strictObject({
   status: z.enum(['subscription', 'not', 'clear']),
 })
 
+const layoutId = z.string().trim().min(1).max(60)
+
+export const layoutPageParam = z.string().trim().regex(/^[a-z][a-z0-9-]{0,39}$/)
+
+export const layoutBody = z.strictObject({
+  items: z
+    .array(z.strictObject({ id: layoutId, size: z.enum(['third', 'half', 'full']), hidden: z.boolean() }))
+    .max(50)
+    .refine((items) => new Set(items.map((i) => i.id)).size === items.length, 'Each panel can be listed once.'),
+})
+
 export const accountViewSchema = z.strictObject({
   name,
   accounts: z.array(z.string().trim().min(1).max(200)).max(200),

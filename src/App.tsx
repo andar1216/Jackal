@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Activity, CircleGauge, Landmark, Soup } from 'lucide-react'
 import { subDays } from 'date-fns'
+import { CgPerformance } from 'react-icons/cg'
 import TopBar, { type Theme } from './components/TopBar'
 import CalendarPage from './features/calendar/CalendarPage'
 import PlaidOAuthReturn from './features/connections/PlaidOAuthReturn'
@@ -9,6 +10,7 @@ import DashboardPage from './features/dashboard/DashboardPage'
 import DietPage from './features/diet/DietPage'
 import FinancePage from './features/finance/FinancePage'
 import FitnessPage from './features/fitness/FitnessPage'
+import HabitsPage from './features/habits/HabitsPage'
 import StreaksPage from './features/streaks/StreaksPage'
 import TimePage from './features/time/TimePage'
 import AuthPage from './auth/AuthPage'
@@ -21,6 +23,7 @@ const ICON_SIZE = 18
 // A page with hidden: true is kept in the code but left out of the menu and not shown. Remove the flag to bring it back.
 const PAGES: { id: string; label: string; icon: ReactNode; hidden?: boolean }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <CircleGauge size={ICON_SIZE} /> },
+  { id: 'habits', label: 'Habits', icon: <CgPerformance size={ICON_SIZE} /> },
   { id: 'streaks', label: 'Streaks', icon: '🔥', hidden: true },
   { id: 'finance', label: 'Finances', icon: <Landmark size={ICON_SIZE} /> },
   { id: 'diet', label: 'Diet', icon: <Soup size={ICON_SIZE} /> },
@@ -31,7 +34,7 @@ const PAGES: { id: string; label: string; icon: ReactNode; hidden?: boolean }[] 
 
 const isShown = (id: PageId) => !PAGES.find((p) => p.id === id)?.hidden
 
-type PageId = 'dashboard' | 'streaks' | 'finance' | 'diet' | 'fitness' | 'time' | 'calendar'
+type PageId = 'dashboard' | 'habits' | 'streaks' | 'finance' | 'diet' | 'fitness' | 'time' | 'calendar'
 
 const SEED_TRACKERS: Tracker[] = [
   { id: 't1', name: 'Daily reading', startDate: toDateKey(subDays(new Date(), 12)), color: '#4f46e5' },
@@ -93,7 +96,7 @@ function Shell({ user, theme, onThemeChange }: ShellProps) {
   const [meals, setMeals] = useState<Meal[]>(SEED_MEALS)
 
   // Every page stays mounted (just hidden) so switching tabs doesn't lose
-  // in-memory state, such as a running timer or the dashboard layout.
+  // in-memory state, such as a running timer or a half-typed form.
   const show = (id: PageId) => ({ hidden: page !== id })
 
   return (
@@ -126,6 +129,9 @@ function Shell({ user, theme, onThemeChange }: ShellProps) {
         <main className="content">
           <div {...show('dashboard')}>
             <DashboardPage />
+          </div>
+          <div {...show('habits')}>
+            <HabitsPage />
           </div>
           {isShown('streaks') && (
             <div {...show('streaks')}>

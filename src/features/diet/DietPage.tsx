@@ -3,6 +3,7 @@ import { uid } from '../../lib/dates'
 import ConnectorsButton from '../connections/ConnectorsButton'
 import type { Integration, Meal } from '../../types'
 import { CALORIE_GOAL } from './constants'
+import Board, { Panel } from '../../components/Board'
 
 const isDietConnector = (i: Integration) => i.id === 'myfitnesspal'
 
@@ -46,8 +47,8 @@ export default function DietPage({ meals, setMeals }: Props) {
         <ConnectorsButton filter={isDietConnector} title="Diet connectors" />
       </header>
 
-      <div className="stack">
-        <div className="grid cols-3">
+      <Board page="diet">
+        <Panel id="eaten" title="Eaten" size="third">
           <div className="card">
             <div className="stat-label">Eaten (goal {CALORIE_GOAL})</div>
             <div className="stat-value">{eaten} kcal</div>
@@ -55,10 +56,16 @@ export default function DietPage({ meals, setMeals }: Props) {
               <span style={{ width: `${Math.min(100, (eaten / CALORIE_GOAL) * 100)}%` }} />
             </div>
           </div>
+        </Panel>
+
+        <Panel id="left" title="Left for today" size="third">
           <div className="card">
             <div className="stat-label">Left for today</div>
             <div className={`stat-value ${remaining >= 0 ? 'good' : 'bad'}`}>{remaining} kcal</div>
           </div>
+        </Panel>
+
+        <Panel id="macros" title="Macros" size="third">
           <div className="card">
             <div className="stat-label">Macros</div>
             <div className="stat-value">P {protein}g</div>
@@ -66,66 +73,68 @@ export default function DietPage({ meals, setMeals }: Props) {
               C {carbs}g · F {fat}g
             </div>
           </div>
-        </div>
+        </Panel>
 
-        <section className="card">
-          <h2>Meals</h2>
-          <form className="form" onSubmit={addMeal}>
-            <input placeholder="Meal" value={meal.name} onChange={(e) => setMeal({ ...meal, name: e.target.value })} />
-            <input
-              type="number"
-              min="0"
-              placeholder="kcal"
-              value={meal.calories}
-              onChange={(e) => setMeal({ ...meal, calories: e.target.value })}
-            />
-            <input
-              type="number"
-              min="0"
-              placeholder="P (g)"
-              value={meal.protein}
-              onChange={(e) => setMeal({ ...meal, protein: e.target.value })}
-            />
-            <input
-              type="number"
-              min="0"
-              placeholder="C (g)"
-              value={meal.carbs}
-              onChange={(e) => setMeal({ ...meal, carbs: e.target.value })}
-            />
-            <input
-              type="number"
-              min="0"
-              placeholder="F (g)"
-              value={meal.fat}
-              onChange={(e) => setMeal({ ...meal, fat: e.target.value })}
-            />
-            <button className="primary" type="submit">
-              Add
-            </button>
-          </form>
-          {meals.length === 0 ? (
-            <p className="empty">No meals logged today.</p>
-          ) : (
-            <ul className="list">
-              {meals.map((m) => (
-                <li key={m.id}>
-                  <span>
-                    {m.name}
-                    <br />
-                    <span className="stat-label">
-                      P {m.protein}g · C {m.carbs}g · F {m.fat}g
+        <Panel id="meals" title="Meals" size="full">
+          <section className="card">
+            <h2>Meals</h2>
+            <form className="form" onSubmit={addMeal}>
+              <input placeholder="Meal" value={meal.name} onChange={(e) => setMeal({ ...meal, name: e.target.value })} />
+              <input
+                type="number"
+                min="0"
+                placeholder="kcal"
+                value={meal.calories}
+                onChange={(e) => setMeal({ ...meal, calories: e.target.value })}
+              />
+              <input
+                type="number"
+                min="0"
+                placeholder="P (g)"
+                value={meal.protein}
+                onChange={(e) => setMeal({ ...meal, protein: e.target.value })}
+              />
+              <input
+                type="number"
+                min="0"
+                placeholder="C (g)"
+                value={meal.carbs}
+                onChange={(e) => setMeal({ ...meal, carbs: e.target.value })}
+              />
+              <input
+                type="number"
+                min="0"
+                placeholder="F (g)"
+                value={meal.fat}
+                onChange={(e) => setMeal({ ...meal, fat: e.target.value })}
+              />
+              <button className="primary" type="submit">
+                Add
+              </button>
+            </form>
+            {meals.length === 0 ? (
+              <p className="empty">No meals logged today.</p>
+            ) : (
+              <ul className="list">
+                {meals.map((m) => (
+                  <li key={m.id}>
+                    <span>
+                      {m.name}
+                      <br />
+                      <span className="stat-label">
+                        P {m.protein}g · C {m.carbs}g · F {m.fat}g
+                      </span>
                     </span>
-                  </span>
-                  <span className="row">
-                    <strong>{m.calories} kcal</strong>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
+                    <span className="row">
+                      <strong>{m.calories} kcal</strong>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </Panel>
+      </Board>
     </>
   )
 }

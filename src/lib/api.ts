@@ -1,4 +1,4 @@
-import type { AccountView, BankAccount, Integration, ManualAccount, Skill, SubscriptionData, Transaction, User } from '../types'
+import type { AccountView, BankAccount, Integration, ManualAccount, PanelState, Skill, SubscriptionData, Transaction, User } from '../types'
 
 // Dev: Vite proxies /api to the backend. For a separate API host, set VITE_API_URL.
 const BASE = import.meta.env.VITE_API_URL ?? '/api'
@@ -143,4 +143,10 @@ export const plaidApi = {
     notifyTransactionsChanged()
     return res
   },
+}
+
+export const layoutsApi = {
+  list: () => request<Record<string, PanelState[]>>('GET', '/layouts'),
+  save: (page: string, items: PanelState[]) => request<PanelState[]>('PUT', `/layouts/${page}`, { items }),
+  reset: (page: string) => request<void>('DELETE', `/layouts/${page}`),
 }

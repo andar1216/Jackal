@@ -3,38 +3,38 @@ import Calendar from 'react-calendar'
 import { isAfter, isBefore, parseISO, startOfDay } from 'date-fns'
 import { formatDay, todayKey, toDateKey } from '../../lib/dates'
 import type { Skill } from '../../types'
-import { bestStreak, currentStreak, daysOnOff, weeklyStats } from './skillStats'
+import { bestStreak, currentStreak, daysOnOff, weeklyStats } from './habitStats'
 
 export type WidgetCtx = {
   skills: Skill[]
   selected: Skill | undefined
   status: 'loading' | 'ready' | 'error'
   select: (id: string) => void
-  addSkill: (name: string) => void
+  addHabit: (name: string) => void
   toggleDay: (id: string, dateKey: string) => void
   setAvgWeeks: (id: string, weeks: number) => void
 }
 
-const NoSkill = ({ ctx }: { ctx: WidgetCtx }) => (
+const NoHabit = ({ ctx }: { ctx: WidgetCtx }) => (
   <p className="empty">
     {ctx.status === 'loading'
       ? 'Loading...'
       : ctx.status === 'error'
-        ? "Couldn't load skills."
-        : 'Add a skill in the Skills widget to see this.'}
+        ? "Couldn't load habits."
+        : 'Add a habit in the Habits widget to see this.'}
   </p>
 )
 
-/* ---------------- Skills list ---------------- */
+/* ---------------- Habits list ---------------- */
 
-export function SkillsWidget({ ctx }: { ctx: WidgetCtx }) {
+export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
   const [name, setName] = useState('')
   const today = todayKey()
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
-    ctx.addSkill(name.trim())
+    ctx.addHabit(name.trim())
     setName('')
   }
 
@@ -42,10 +42,10 @@ export function SkillsWidget({ ctx }: { ctx: WidgetCtx }) {
     <>
       <form className="form" onSubmit={submit}>
         <input
-          placeholder="Add a skill you're working on"
+          placeholder="Add a habit you're working on"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          aria-label="Skill name"
+          aria-label="Habit name"
         />
         <button className="primary" type="submit">
           Add
@@ -57,8 +57,8 @@ export function SkillsWidget({ ctx }: { ctx: WidgetCtx }) {
           {ctx.status === 'loading'
             ? 'Loading...'
             : ctx.status === 'error'
-              ? "Couldn't load skills."
-              : 'No skills yet. Add one above.'}
+              ? "Couldn't load habits."
+              : 'No habits yet. Add one above.'}
         </p>
       ) : (
         <ul className="list">
@@ -71,7 +71,7 @@ export function SkillsWidget({ ctx }: { ctx: WidgetCtx }) {
                   className="skill-name"
                   onClick={() => ctx.select(s.id)}
                   aria-pressed={isSelected}
-                  title="Show this skill in the other widgets"
+                  title="Show this habit in the other widgets"
                 >
                   <span className="swatch" style={{ background: s.color }} />
                   <span>
@@ -104,7 +104,7 @@ export function SkillsWidget({ ctx }: { ctx: WidgetCtx }) {
 
 export function CalendarWidget({ ctx }: { ctx: WidgetCtx }) {
   const skill = ctx.selected
-  if (!skill) return <NoSkill ctx={ctx} />
+  if (!skill) return <NoHabit ctx={ctx} />
 
   const logs = new Set(skill.logs)
   const today = startOfDay(new Date())
@@ -137,7 +137,7 @@ export function CalendarWidget({ ctx }: { ctx: WidgetCtx }) {
 
 export function StreakWidget({ ctx }: { ctx: WidgetCtx }) {
   const skill = ctx.selected
-  if (!skill) return <NoSkill ctx={ctx} />
+  if (!skill) return <NoHabit ctx={ctx} />
 
   const streak = currentStreak(skill)
   const best = bestStreak(skill)
@@ -170,7 +170,7 @@ export function StreakWidget({ ctx }: { ctx: WidgetCtx }) {
 
 export function DaysOnOffWidget({ ctx }: { ctx: WidgetCtx }) {
   const skill = ctx.selected
-  if (!skill) return <NoSkill ctx={ctx} />
+  if (!skill) return <NoHabit ctx={ctx} />
 
   const { on, off } = daysOnOff(skill)
   const total = on + off
@@ -202,7 +202,7 @@ export function DaysOnOffWidget({ ctx }: { ctx: WidgetCtx }) {
 
 export function AverageWidget({ ctx }: { ctx: WidgetCtx }) {
   const skill = ctx.selected
-  if (!skill) return <NoSkill ctx={ctx} />
+  if (!skill) return <NoHabit ctx={ctx} />
 
   const { counts, average } = weeklyStats(skill)
 
@@ -240,7 +240,7 @@ export function AverageWidget({ ctx }: { ctx: WidgetCtx }) {
         />
       </label>
       <p className="stat-label" style={{ margin: 0 }}>
-        Set per skill ({skill.name}).
+        Set per habit ({skill.name}).
       </p>
     </div>
   )

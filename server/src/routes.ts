@@ -5,11 +5,13 @@ import { integrations } from './integrations/routes.js'
 import { crudRouter, requireId } from './lib/crud.js'
 import { HttpError } from './lib/errors.js'
 import { detectRecurring, markId, merchantKey, type Charge, type Mark } from './lib/recurring.js'
-import { AccountView, CalendarEvent, ManualAccount, Meal, Skill, SubscriptionMark, TimeEntry, Tracker, Transaction, Workout } from './models.js'
+import { AccountView, BoardLayout, CalendarEvent, ManualAccount, Meal, Skill, SubscriptionMark, TimeEntry, Tracker, Transaction, Workout } from './models.js'
 import {
   accountViewSchema,
   dateString,
   eventSchema,
+  layoutBody,
+  layoutPageParam,
   manualAccountSchema,
   mealSchema,
   skillSchema,
@@ -28,11 +30,11 @@ api.use(requireAuth)
 
 api.use('/integrations', integrations)
 
-/* ---------- Skills (dashboard) ---------- */
+/* ---------- Skills (shown as Habits) ---------- */
 
 const skills = crudRouter(Skill, { schema: skillSchema, sort: { createdAt: 1 } })
 
-// Toggle one day on or off for a skill, like clicking a day in the dashboard calendar.
+// Toggle one day on or off for a skill, like clicking a day in the habits calendar.
 // Logging a day before the skill's start date moves the start date back to that day.
 skills.post('/:id/logs/:date/toggle', async (req, res) => {
   const date = dateString.parse(req.params.date)
@@ -95,6 +97,28 @@ api.put('/subscriptions/marks', async (req, res) => {
   const owner = { userId: currentUserId(req), account, key }
   if (status === 'clear') await SubscriptionMark.deleteOne(owner)
   else await SubscriptionMark.updateOne(owner, { $set: { name, status } }, { upsert: true })
+  res.status(204).end()
+})
+
+/* ---------- Page layouts ---------- */
+
+// Every page's saved arrangement, keyed by page.
+api.get('/layouts', async (req, res) => {
+  const saved = await BoardLayout.find({ userId: currentUserId(req) }).lean()
+  res.json(Object.fromEntries(saved.map((l) => [l.page, l.items])))
+})
+
+api.put('/layouts/:page', async (req, res) => {
+  const page = layoutPageParam.parse(req.params.page)
+  const { items } = layoutBody.parse(req.body)
+  await BoardLayout.updateOne({ userId: currentUserId(req), page }, { $set: { items } }, { upsert: true })
+  res.json(items)
+})
+
+// Put a page back to how it came.
+api.delete('/layouts/:page', async (req, res) => {
+  const page = layoutPageParam.parse(req.params.page)
+  await BoardLayout.deleteOne({ userId: currentUserId(req), page })
   res.status(204).end()
 })
 

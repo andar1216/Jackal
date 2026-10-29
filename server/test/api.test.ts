@@ -296,6 +296,39 @@ describe('account views', () => {
   })
 })
 
+describe('page layouts', () => {
+  it('saves how a page is arranged, replaces it, resets it, and keeps it private', async () => {
+    assert.deepEqual((await call('GET', '/layouts')).body, {})
+
+    const items = [
+      { id: 'networth', size: 'full', hidden: false },
+      { id: 'budgets', size: 'third', hidden: true },
+    ]
+    assert.equal((await call('PUT', '/layouts/finance', { items })).status, 200)
+    assert.deepEqual((await call('GET', '/layouts')).body, { finance: items })
+
+    const swapped = [...items].reverse()
+    await call('PUT', '/layouts/finance', { items: swapped })
+    assert.deepEqual((await call('GET', '/layouts')).body.finance, swapped)
+
+    assert.equal((await call('PUT', '/layouts/finance', { items: [{ id: 'a', size: 'huge', hidden: false }] })).status, 400)
+    assert.equal(
+      (await call('PUT', '/layouts/finance', { items: [{ id: 'a', size: 'full', hidden: false }, { id: 'a', size: 'half', hidden: false }] })).status,
+      400,
+    )
+    assert.equal((await call('PUT', '/layouts/Not%20A%20Page', { items: [] })).status, 400)
+    assert.deepEqual((await call('GET', '/layouts')).body.finance, swapped, 'a rejected save changes nothing')
+
+    const other = makeClient()
+    await other('POST', '/auth/register', { email: 'layout-other@example.com', name: 'Other', password: PASSWORD })
+    assert.deepEqual((await other('GET', '/layouts')).body, {})
+
+    assert.equal((await call('DELETE', '/layouts/finance')).status, 204)
+    assert.deepEqual((await call('GET', '/layouts')).body, {})
+    assert.equal((await makeClient()('GET', '/layouts')).status, 401)
+  })
+})
+
 describe('meals and time entries', () => {
   it('defaults a meal to today with zeroed macros', async () => {
     const { status, body } = await call('POST', '/meals', { name: 'Oatmeal', calories: 380 })

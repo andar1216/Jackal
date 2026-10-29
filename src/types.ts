@@ -126,3 +126,8 @@ export type User = {
   email: string
   name: string
 }
+
+export type PanelSize = 'third' | 'half' | 'full'
+
+/** How one panel sits on a page: how wide it is and whether it is put away. The list's order is the panels' order. */
+export type PanelState = { id: string; size: PanelSize; hidden: boolean }

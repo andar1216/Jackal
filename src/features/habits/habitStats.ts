@@ -47,7 +47,7 @@ export function daysOnOff(skill: Skill): { on: number; off: number } {
 /**
  * Per-week "days on" for the last N rolling 7-day weeks (oldest first),
  * and the average days per week over that window.
- * If the skill is newer than the window, only days since the start are used.
+ * If the habit is newer than the window, only days since the start are used.
  */
 export function weeklyStats(skill: Skill): { counts: number[]; average: number } {
   const logs = new Set(skill.logs)

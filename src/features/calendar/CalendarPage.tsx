@@ -4,6 +4,7 @@ import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { formatDay, toDateKey, uid } from '../../lib/dates'
 import ConnectorsButton from '../connections/ConnectorsButton'
 import type { CalendarEvent, Integration, Tracker } from '../../types'
+import Board, { Panel } from '../../components/Board'
 
 const isCalendarConnector = (i: Integration) => i.category === 'calendar'
 
@@ -40,70 +41,74 @@ export default function CalendarPage({ trackers, events, setEvents }: Props) {
         <ConnectorsButton filter={isCalendarConnector} title="Calendar connectors" />
       </header>
 
-      <div className="grid cols-2">
-        <section>
-          <Calendar
-            value={selected}
-            onChange={(v) => v instanceof Date && setSelected(v)}
-            tileContent={({ date, view }) => {
-              if (view !== 'month') return null
-              const k = toDateKey(date)
-              const evs = events.filter((e) => e.date === k)
-              const trs = trackers.filter((t) => t.startDate === k)
-              if (evs.length + trs.length === 0) return null
-              return (
-                <div className="dots">
-                  {trs.map((t) => (
-                    <span key={t.id} className="dot" style={{ background: t.color }} />
-                  ))}
-                  {evs.map((e) => (
-                    <span key={e.id} className="dot" />
-                  ))}
-                </div>
-              )
-            }}
-          />
-        </section>
-
-        <section className="card">
-          <h2>{formatDay(key)}</h2>
-          <form className="form" onSubmit={add}>
-            <input
-              placeholder="Add an event"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              aria-label="Event title"
+      <Board page="calendar">
+        <Panel id="calendar" title="Calendar" size="half">
+          <section>
+            <Calendar
+              value={selected}
+              onChange={(v) => v instanceof Date && setSelected(v)}
+              tileContent={({ date, view }) => {
+                if (view !== 'month') return null
+                const k = toDateKey(date)
+                const evs = events.filter((e) => e.date === k)
+                const trs = trackers.filter((t) => t.startDate === k)
+                if (evs.length + trs.length === 0) return null
+                return (
+                  <div className="dots">
+                    {trs.map((t) => (
+                      <span key={t.id} className="dot" style={{ background: t.color }} />
+                    ))}
+                    {evs.map((e) => (
+                      <span key={e.id} className="dot" />
+                    ))}
+                  </div>
+                )
+              }}
             />
-            <button className="primary" type="submit">
-              Add
-            </button>
-          </form>
+          </section>
+        </Panel>
 
-          {dayEvents.length === 0 && dayTrackers.length === 0 && activeTrackers.length === 0 ? (
-            <p className="empty">Nothing on this day.</p>
-          ) : (
-            <ul className="list">
-              {dayEvents.map((e) => (
-                <li key={e.id}>
-                  <span>{e.title}</span>
-                </li>
-              ))}
-              {dayTrackers.map((t) => (
-                <li key={t.id}>
-                  <span style={{ color: t.color }}>Started: {t.name}</span>
-                  <span className="muted">Day 0</span>
-                </li>
-              ))}
-              {activeTrackers.map((t) => (
-                <li key={t.id}>
-                  <span>{t.name}</span>
-                  <span className="muted">Day {differenceInCalendarDays(selected, parseISO(t.startDate))}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
+        <Panel id="events" title="Events" size="half">
+          <section className="card">
+            <h2>{formatDay(key)}</h2>
+            <form className="form" onSubmit={add}>
+              <input
+                placeholder="Add an event"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                aria-label="Event title"
+              />
+              <button className="primary" type="submit">
+                Add
+              </button>
+            </form>
+
+            {dayEvents.length === 0 && dayTrackers.length === 0 && activeTrackers.length === 0 ? (
+              <p className="empty">Nothing on this day.</p>
+            ) : (
+              <ul className="list">
+                {dayEvents.map((e) => (
+                  <li key={e.id}>
+                    <span>{e.title}</span>
+                  </li>
+                ))}
+                {dayTrackers.map((t) => (
+                  <li key={t.id}>
+                    <span style={{ color: t.color }}>Started: {t.name}</span>
+                    <span className="muted">Day 0</span>
+                  </li>
+                ))}
+                {activeTrackers.map((t) => (
+                  <li key={t.id}>
+                    <span>{t.name}</span>
+                    <span className="muted">Day {differenceInCalendarDays(selected, parseISO(t.startDate))}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </Panel>
+      </Board>
     </>
   )
 }

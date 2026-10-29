@@ -3,6 +3,7 @@ import { uid } from '../../lib/dates'
 import type { Integration, Meal, Workout } from '../../types'
 import ConnectorsButton from '../connections/ConnectorsButton'
 import { CALORIE_GOAL } from '../diet/constants'
+import Board, { Panel } from '../../components/Board'
 
 const isFitnessConnector = (i: Integration) => i.category === 'fitness'
 
@@ -44,8 +45,8 @@ export default function FitnessPage({ meals }: { meals: Meal[] }) {
         <ConnectorsButton filter={isFitnessConnector} title="Fitness connectors" />
       </header>
 
-      <div className="stack">
-        <div className="grid cols-3">
+      <Board page="fitness">
+        <Panel id="eaten" title="Eaten" size="third">
           <div className="card">
             <div className="stat-label">Eaten (goal {CALORIE_GOAL})</div>
             <div className="stat-value">{eaten} kcal</div>
@@ -53,62 +54,70 @@ export default function FitnessPage({ meals }: { meals: Meal[] }) {
               <span style={{ width: `${Math.min(100, (eaten / CALORIE_GOAL) * 100)}%` }} />
             </div>
           </div>
+        </Panel>
+
+        <Panel id="burned" title="Burned" size="third">
           <div className="card">
             <div className="stat-label">Burned</div>
             <div className="stat-value">{burned} kcal</div>
           </div>
+        </Panel>
+
+        <Panel id="remaining" title="Remaining" size="third">
           <div className="card">
             <div className="stat-label">Remaining</div>
             <div className={`stat-value ${remaining >= 0 ? 'good' : 'bad'}`}>{remaining} kcal</div>
           </div>
-        </div>
+        </Panel>
 
-        <section className="card">
-          <h2>Workouts</h2>
-          <form className="form" onSubmit={addWorkout}>
-            <input
-              placeholder="Type (Run, Lift...)"
-              value={workout.type}
-              onChange={(e) => setWorkout({ ...workout, type: e.target.value })}
-            />
-            <input
-              type="number"
-              min="0"
-              placeholder="Minutes"
-              value={workout.durationMin}
-              onChange={(e) => setWorkout({ ...workout, durationMin: e.target.value })}
-            />
-            <input
-              type="number"
-              min="0"
-              placeholder="kcal burned"
-              value={workout.caloriesBurned}
-              onChange={(e) => setWorkout({ ...workout, caloriesBurned: e.target.value })}
-            />
-            <button className="primary" type="submit">
-              Add
-            </button>
-          </form>
-          {workouts.length === 0 ? (
-            <p className="empty">No workouts logged today.</p>
-          ) : (
-            <ul className="list">
-              {workouts.map((w) => (
-                <li key={w.id}>
-                  <span>
-                    {w.type}
-                    <br />
-                    <span className="stat-label">{w.durationMin} min</span>
-                  </span>
-                  <span className="row">
-                    <strong>{w.caloriesBurned} kcal</strong>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
+        <Panel id="workouts" title="Workouts" size="full">
+          <section className="card">
+            <h2>Workouts</h2>
+            <form className="form" onSubmit={addWorkout}>
+              <input
+                placeholder="Type (Run, Lift...)"
+                value={workout.type}
+                onChange={(e) => setWorkout({ ...workout, type: e.target.value })}
+              />
+              <input
+                type="number"
+                min="0"
+                placeholder="Minutes"
+                value={workout.durationMin}
+                onChange={(e) => setWorkout({ ...workout, durationMin: e.target.value })}
+              />
+              <input
+                type="number"
+                min="0"
+                placeholder="kcal burned"
+                value={workout.caloriesBurned}
+                onChange={(e) => setWorkout({ ...workout, caloriesBurned: e.target.value })}
+              />
+              <button className="primary" type="submit">
+                Add
+              </button>
+            </form>
+            {workouts.length === 0 ? (
+              <p className="empty">No workouts logged today.</p>
+            ) : (
+              <ul className="list">
+                {workouts.map((w) => (
+                  <li key={w.id}>
+                    <span>
+                      {w.type}
+                      <br />
+                      <span className="stat-label">{w.durationMin} min</span>
+                    </span>
+                    <span className="row">
+                      <strong>{w.caloriesBurned} kcal</strong>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </Panel>
+      </Board>
     </>
   )
 }

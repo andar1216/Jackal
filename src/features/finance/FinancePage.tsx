@@ -7,6 +7,7 @@ import ConnectorsButton from '../connections/ConnectorsButton'
 import NetWorthCard from './NetWorthCard'
 import SubscriptionsCard from './SubscriptionsCard'
 import ViewsBar, { type AccountChoice } from './ViewsBar'
+import Board, { Panel } from '../../components/Board'
 
 const BUDGETS: Record<string, number> = {
   Food: 40000,
@@ -322,145 +323,159 @@ export default function FinancePage() {
         </div>
       )}
 
-      <div className="stack">
-        <ViewsBar
-          views={views}
-          activeId={view?.id ?? null}
-          onSelect={chooseView}
-          choices={viewChoices}
-          onSaved={(saved) => setViews((list) => (list.some((v) => v.id === saved.id) ? list.map((v) => (v.id === saved.id ? saved : v)) : [...list, saved]))}
-          onDeleted={(id) => setViews((list) => list.filter((v) => v.id !== id))}
-          onError={setError}
-        />
+      <Board page="finance">
+        <Panel id="views" title="Saved views" size="full">
+          <ViewsBar
+            views={views}
+            activeId={view?.id ?? null}
+            onSelect={chooseView}
+            choices={viewChoices}
+            onSaved={(saved) => setViews((list) => (list.some((v) => v.id === saved.id) ? list.map((v) => (v.id === saved.id ? saved : v)) : [...list, saved]))}
+            onDeleted={(id) => setViews((list) => list.filter((v) => v.id !== id))}
+            onError={setError}
+          />
+        </Panel>
 
-        <NetWorthCard
-          title={view ? `Net worth · ${view.name}` : 'Net worth'}
-          plaid={bankAccounts.filter((a) => inView(a.label))}
-          manual={manualAccounts.filter((a) => inView(manualLabel(a)))}
-          onManualChange={(updated) => setManualAccounts((list) => list.map((a) => (a.id === updated.id ? updated : a)))}
-          onError={setError}
-        />
+        <Panel id="networth" title="Net worth" size="full">
+          <NetWorthCard
+            title={view ? `Net worth · ${view.name}` : 'Net worth'}
+            plaid={bankAccounts.filter((a) => inView(a.label))}
+            manual={manualAccounts.filter((a) => inView(manualLabel(a)))}
+            onManualChange={(updated) => setManualAccounts((list) => list.map((a) => (a.id === updated.id ? updated : a)))}
+            onError={setError}
+          />
+        </Panel>
 
-        <div className="grid cols-3">
+        <Panel id="income" title="Income" size="third">
           <div className="card">
             <div className="stat-label">Income</div>
             <div className="stat-value good">{formatMoney(income)}</div>
           </div>
+        </Panel>
+
+        <Panel id="spent" title="Spent" size="third">
           <div className="card">
             <div className="stat-label">Spent</div>
             <div className="stat-value bad">{formatMoney(spent)}</div>
           </div>
+        </Panel>
+
+        <Panel id="net" title="Net" size="third">
           <div className="card">
             <div className="stat-label">Net</div>
             <div className={`stat-value ${net >= 0 ? 'good' : 'bad'}`}>{formatMoney(net)}</div>
           </div>
-        </div>
+        </Panel>
 
         {(allAccounts.length > 0 || adding || transactions.length === 0) && (
-          <section className="card">
-            <div className="row between">
-              <h2>By account</h2>
-              <div className="row">
-                {activeAccount && (
-                  <button className="link" onClick={() => setAccount(null)}>
-                    Show all accounts
-                  </button>
-                )}
-                <div className="segmented" role="group" aria-label="Account type">
-                  {KIND_FILTERS.map((k) => (
-                    <button
-                      key={k.id}
-                      className={kindFilter === k.id ? 'active' : ''}
-                      aria-pressed={kindFilter === k.id}
-                      onClick={() => setKindFilter(k.id)}
-                    >
-                      {k.label}
+          <Panel id="accounts" title="By account" size="full">
+            <section className="card">
+              <div className="row between">
+                <h2>By account</h2>
+                <div className="row">
+                  {activeAccount && (
+                    <button className="link" onClick={() => setAccount(null)}>
+                      Show all accounts
                     </button>
-                  ))}
+                  )}
+                  <div className="segmented" role="group" aria-label="Account type">
+                    {KIND_FILTERS.map((k) => (
+                      <button
+                        key={k.id}
+                        className={kindFilter === k.id ? 'active' : ''}
+                        aria-pressed={kindFilter === k.id}
+                        onClick={() => setKindFilter(k.id)}
+                      >
+                        {k.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-            <ul className="list">
-              {byAccount.map((a) => {
-                const selected = a.name === activeAccount
-                return (
-                  <li key={a.name} className={`skill-row ${selected ? 'selected' : ''}`}>
-                    <button
-                      className="skill-name"
-                      aria-pressed={selected}
-                      title="Show only this account"
-                      onClick={() => setAccount(selected ? null : a.name)}
-                    >
-                      <span>
-                        {a.name}
-                        {KIND_LABELS[a.kind] && (
-                          <span className="pill" style={{ marginLeft: 8 }}>
-                            {KIND_LABELS[a.kind]}
+              <ul className="list">
+                {byAccount.map((a) => {
+                  const selected = a.name === activeAccount
+                  return (
+                    <li key={a.name} className={`skill-row ${selected ? 'selected' : ''}`}>
+                      <button
+                        className="skill-name"
+                        aria-pressed={selected}
+                        title="Show only this account"
+                        onClick={() => setAccount(selected ? null : a.name)}
+                      >
+                        <span>
+                          {a.name}
+                          {KIND_LABELS[a.kind] && (
+                            <span className="pill" style={{ marginLeft: 8 }}>
+                              {KIND_LABELS[a.kind]}
+                            </span>
+                          )}
+                          <span className="stat-label">
+                            {' '}
+                            · {a.count === 0 ? 'no activity this month' : `${a.count} ${a.count === 1 ? 'transaction' : 'transactions'}`}
                           </span>
-                        )}
-                        <span className="stat-label">
-                          {' '}
-                          · {a.count === 0 ? 'no activity this month' : `${a.count} ${a.count === 1 ? 'transaction' : 'transactions'}`}
                         </span>
+                      </button>
+                      <span className="row">
+                        {a.income > 0 && <strong className="good">+{formatMoney(a.income)}</strong>}
+                        {a.count === 0 ? (
+                          <span className="muted">{formatMoney(0)}</span>
+                        ) : a.spent < 0 ? (
+                          <strong className="good">+{formatMoney(-a.spent)}</strong>
+                        ) : (
+                          a.spent > 0 && <strong className="bad">-{formatMoney(a.spent)}</strong>
+                        )}
                       </span>
-                    </button>
-                    <span className="row">
-                      {a.income > 0 && <strong className="good">+{formatMoney(a.income)}</strong>}
-                      {a.count === 0 ? (
-                        <span className="muted">{formatMoney(0)}</span>
-                      ) : a.spent < 0 ? (
-                        <strong className="good">+{formatMoney(-a.spent)}</strong>
-                      ) : (
-                        a.spent > 0 && <strong className="bad">-{formatMoney(a.spent)}</strong>
-                      )}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-            {adding ? (
-              <form className="form" onSubmit={addAccount} style={{ marginTop: 12 }}>
-                <input placeholder="Name, like Citi Pay Credit" value={newName} onChange={(e) => setNewName(e.target.value)} aria-label="Account name" autoFocus />
-                <select value={newKind} onChange={(e) => setNewKind(e.target.value as ManualAccount['kind'])} aria-label="Account type">
-                  <option value="credit">Credit card</option>
-                  <option value="bank">Bank account</option>
-                </select>
-                <input placeholder="Last digits (optional)" inputMode="numeric" value={newMask} onChange={(e) => setNewMask(e.target.value)} aria-label="Last digits" />
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder={newKind === 'credit' ? 'Amount owed (optional)' : 'Balance (optional)'}
-                  value={newBalance}
-                  onChange={(e) => setNewBalance(e.target.value)}
-                  aria-label="Balance"
-                />
-                <button className="primary" type="submit">
-                  Add account
-                </button>
-                <button type="button" onClick={() => setAdding(false)}>
-                  Cancel
-                </button>
-              </form>
-            ) : (
-              <p className="stat-label" style={{ marginBottom: 0 }}>
-                Missing an account? Open Connect, choose Add a bank, and tick every account in Plaid's list (or use
-                Sync banks if a bank is still loading). Can't link one yet?{' '}
-                <button className="link" onClick={() => setAdding(true)}>
-                  Add it by hand
-                </button>
-              </p>
-            )}
-          </section>
+                    </li>
+                  )
+                })}
+              </ul>
+              {adding ? (
+                <form className="form" onSubmit={addAccount} style={{ marginTop: 12 }}>
+                  <input placeholder="Name, like Citi Pay Credit" value={newName} onChange={(e) => setNewName(e.target.value)} aria-label="Account name" autoFocus />
+                  <select value={newKind} onChange={(e) => setNewKind(e.target.value as ManualAccount['kind'])} aria-label="Account type">
+                    <option value="credit">Credit card</option>
+                    <option value="bank">Bank account</option>
+                  </select>
+                  <input placeholder="Last digits (optional)" inputMode="numeric" value={newMask} onChange={(e) => setNewMask(e.target.value)} aria-label="Last digits" />
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder={newKind === 'credit' ? 'Amount owed (optional)' : 'Balance (optional)'}
+                    value={newBalance}
+                    onChange={(e) => setNewBalance(e.target.value)}
+                    aria-label="Balance"
+                  />
+                  <button className="primary" type="submit">
+                    Add account
+                  </button>
+                  <button type="button" onClick={() => setAdding(false)}>
+                    Cancel
+                  </button>
+                </form>
+              ) : (
+                <p className="stat-label" style={{ marginBottom: 0 }}>
+                  Missing an account? Open Connect, choose Add a bank, and tick every account in Plaid's list (or use
+                  Sync banks if a bank is still loading). Can't link one yet?{' '}
+                  <button className="link" onClick={() => setAdding(true)}>
+                    Add it by hand
+                  </button>
+                </p>
+              )}
+            </section>
+          </Panel>
         )}
 
-        <SubscriptionsCard
-          reload={reload}
-          inView={inView}
-          creditAccounts={new Set([...bankAccounts, ...handAccounts].filter((a) => a.type === 'credit').map((a) => a.label))}
-          onError={setError}
-        />
+        <Panel id="subscriptions" title="Subscriptions" size="full">
+          <SubscriptionsCard
+            reload={reload}
+            inView={inView}
+            creditAccounts={new Set([...bankAccounts, ...handAccounts].filter((a) => a.type === 'credit').map((a) => a.label))}
+            onError={setError}
+          />
+        </Panel>
 
-        <div className="grid cols-2">
+        <Panel id="budgets" title="Budgets" size="half">
           <section className="card">
             <h2>Budgets</h2>
             <div className="stack" style={{ gap: 12 }}>
@@ -483,7 +498,9 @@ export default function FinancePage() {
               })}
             </div>
           </section>
+        </Panel>
 
+        <Panel id="transactions" title="Transactions" size="half">
           <section className="card">
             <h2>Add transaction</h2>
             <form className="form" onSubmit={add}>
@@ -576,8 +593,8 @@ export default function FinancePage() {
               </>
             )}
           </section>
-        </div>
-      </div>
+        </Panel>
+      </Board>
     </>
   )
 }
