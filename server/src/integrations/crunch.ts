@@ -35,7 +35,7 @@ async function replaceData(userId: unknown, snap: CrunchSnapshot) {
   const seen = new Set<string>()
   const checkIns = snap.checkIns.filter((c) => !seen.has(c.id) && seen.add(c.id))
   await Promise.all([
-    CrunchCheckIn.insertMany(checkIns.map((c) => ({ userId, externalId: c.id, at: new Date(c.at), club: c.club }))),
+    CrunchCheckIn.insertMany(checkIns.map((c) => ({ userId, externalId: c.id, at: new Date(`${c.at.slice(0, 16)}:00Z`), club: c.club }))),
     CrunchClass.insertMany(snap.classes.map((c) => ({ userId, ...c }))),
     CrunchPayment.insertMany(snap.payments.map((p) => ({ userId, ...p }))),
   ])
@@ -240,7 +240,7 @@ crunchRouter.get('/data', async (req, res) => {
     balanceCents: link.balanceCents ?? null,
     lastSyncedAt: link.lastSyncedAt ?? null,
     lastError: link.lastError ?? null,
-    checkIns: checkIns.map((c) => ({ id: c.externalId, at: c.at, club: c.club ?? '' })),
+    checkIns: checkIns.map((c) => ({ id: c.externalId, at: c.at.toISOString().slice(0, 16), club: c.club ?? '' })),
     classes: classes.map((c) => ({ id: c.id, program: c.program, startsAt: c.startsAt, club: c.club ?? '', status: c.status, feeCents: c.feeCents ?? null })),
     payments: payments.map((p) => ({ id: p.id, service: p.service, amountCents: p.amountCents, date: p.date })),
   })

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { skillsApi } from '../../lib/api'
 import { createWriteQueue } from '../../lib/writeQueue'
 import Board, { Panel } from '../../components/Board'
-import FilterMenu from '../../components/FilterMenu'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
 import ConnectorsButton from '../connections/ConnectorsButton'
@@ -213,6 +212,7 @@ export default function HabitsPage() {
     },
     hideAllStreaks,
     calendarHabits: calendarShown,
+    chooseCalendarHabits,
     nextColor: COLORS[skills.length % COLORS.length],
     addHabit: (fields) =>
       writes.enqueue(async () => {
@@ -255,13 +255,6 @@ export default function HabitsPage() {
           <p>Click a habit to show it in the other widgets. Use the gear to hide streaks or rearrange the widgets.</p>
         </div>
         <div className="row">
-          <FilterMenu
-            label="Filter the calendar"
-            heading="Show on the calendar"
-            options={active.map((s) => ({ id: s.id, label: s.name, color: s.color }))}
-            selected={calendarShown.map((s) => s.id)}
-            onChange={chooseCalendarHabits}
-          />
           <ConnectorsButton filter={isHabitConnector} title="Habit connectors" />
           <SettingsMenu
             items={[

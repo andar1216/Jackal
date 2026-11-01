@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { addMonths, endOfMonth, format, getDay, parseISO, startOfMonth } from 'date-fns'
 import { toDateKey, todayKey } from '../lib/dates'
+import FilterMenu from './FilterMenu'
 
-/** One thing a page tracks, as a number for each day. A dot of its colour marks the days that have some. */
+/** One thing a page tracks, as a number for each day. A day that has some is filled with its colour. */
 export type CalendarMetric = {
   id: string
   label: string
@@ -13,7 +14,7 @@ export type CalendarMetric = {
   format: (amount: number) => string
   /** What made up a day, for the list under the calendar. */
   entries?: Record<string, string[]>
-  /** Starts switched off (it can be switched on with its chip). */
+  /** Starts switched off (it can be switched on in the filter). */
   off?: boolean
 }
 
@@ -25,22 +26,20 @@ type Props = {
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
-/** A month of days, each marked with what the page tracked that day. Click a day to see the details. */
+/**
+ * A month of days. Every day that has something tracked is filled with that metric's colour, and metrics that share
+ * a day are stacked as bands, the first one at the bottom (the same look as the habit calendar). The filter at the top
+ * chooses which metrics show, and clicking a day lists what was tracked.
+ */
 export default function MetricCalendar({ metrics, month }: Props) {
   const [ownMonth, setOwnMonth] = useState(() => startOfMonth(new Date()))
   const [selected, setSelected] = useState<string | null>(null)
-  // Metrics the person has flipped from their starting state.
-  const [flipped, setFlipped] = useState<Set<string>>(new Set())
+  // Until the person picks, every metric is shown except those that start off.
+  const [picked, setPicked] = useState<string[] | null>(null)
 
   const shownMonth = month ?? ownMonth
-  const isOn = (m: CalendarMetric) => (m.off ? flipped.has(m.id) : !flipped.has(m.id))
-  const on = metrics.filter(isOn)
-  const flip = (id: string) =>
-    setFlipped((s) => {
-      const next = new Set(s)
-      if (!next.delete(id)) next.add(id)
-      return next
-    })
+  const chosen = new Set(picked ?? metrics.filter((m) => !m.off).map((m) => m.id))
+  const on = metrics.filter((m) => chosen.has(m.id))
 
   const first = startOfMonth(shownMonth)
   const daysInMonth = endOfMonth(first).getDate()
@@ -48,19 +47,22 @@ export default function MetricCalendar({ metrics, month }: Props) {
   const monthKeys = new Set(days)
   const today = todayKey()
 
-  // The busiest day sets the strongest colour, so a big day stands out from a small one.
-  const peak = (m: CalendarMetric) => Math.max(0, ...days.map((d) => m.byDay[d] ?? 0))
-  const peaks = new Map(on.map((m) => [m.id, peak(m)]))
-
   const has = (m: CalendarMetric, day: string) => (m.byDay[day] ?? 0) > 0
-  const chosen = selected && monthKeys.has(selected) ? selected : null
-  const chosenMetrics = chosen ? on.filter((m) => has(m, chosen) || (m.entries?.[chosen]?.length ?? 0) > 0) : []
+  const day = selected && monthKeys.has(selected) ? selected : null
+  const dayMetrics = day ? on.filter((m) => has(m, day) || (m.entries?.[day]?.length ?? 0) > 0) : []
 
   return (
     <section className="card mcal">
       <div className="row between">
         <h2>Calendar</h2>
         <div className="row">
+          <FilterMenu
+            label="Calendar metrics"
+            heading="Show on the calendar"
+            options={metrics.map((m) => ({ id: m.id, label: m.label, color: m.color }))}
+            selected={[...chosen]}
+            onChange={setPicked}
+          />
           {!month && (
             <button aria-label="Previous month" onClick={() => setOwnMonth((m) => addMonths(m, -1))}>
               ‹
@@ -75,21 +77,6 @@ export default function MetricCalendar({ metrics, month }: Props) {
         </div>
       </div>
 
-      <div className="mcal-chips">
-        {metrics.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            className={`mcal-chip ${isOn(m) ? '' : 'off'}`}
-            aria-pressed={isOn(m)}
-            onClick={() => flip(m.id)}
-          >
-            <span className="mcal-dot" style={{ background: m.color }} aria-hidden />
-            {m.label}
-          </button>
-        ))}
-      </div>
-
       <div className="mcal-grid" role="grid" aria-label={format(shownMonth, 'MMMM yyyy')}>
         {WEEKDAYS.map((d, i) => (
           <div key={i} className="mcal-dow" aria-hidden>
@@ -99,50 +86,50 @@ export default function MetricCalendar({ metrics, month }: Props) {
         {Array.from({ length: getDay(first) }, (_, i) => (
           <div key={`blank-${i}`} />
         ))}
-        {days.map((day) => {
-          const marks = on.filter((m) => has(m, day))
+        {days.map((d) => {
+          const marks = on.filter((m) => has(m, d))
+          const summary = marks.map((m) => `${m.label} ${m.format(m.byDay[d])}`).join(', ')
           return (
             <button
-              key={day}
+              key={d}
               type="button"
-              className={`mcal-day ${day === today ? 'today' : ''} ${day === chosen ? 'selected' : ''}`}
-              aria-pressed={day === chosen}
-              aria-label={`${format(parseISO(day), 'MMMM d')}${marks.length ? `: ${marks.map((m) => `${m.label} ${m.format(m.byDay[day])}`).join(', ')}` : ''}`}
-              onClick={() => setSelected(day === chosen ? null : day)}
+              className={`mcal-day ${marks.length > 0 ? 'on' : ''} ${d === today ? 'today' : ''} ${d === day ? 'selected' : ''}`}
+              aria-pressed={d === day}
+              aria-label={`${format(parseISO(d), 'MMMM d')}${summary ? `: ${summary}` : ''}`}
+              title={summary || undefined}
+              onClick={() => setSelected(d === day ? null : d)}
             >
-              <span className="mcal-num">{Number(day.slice(8))}</span>
-              <span className="mcal-dots">
-                {marks.map((m) => (
-                  <span
-                    key={m.id}
-                    className="mcal-dot"
-                    style={{ background: m.color, opacity: 0.35 + 0.65 * ((m.byDay[day] ?? 0) / (peaks.get(m.id) || 1)) }}
-                  />
-                ))}
-              </span>
+              {marks.length > 0 && (
+                <span className="layers" aria-hidden>
+                  {marks.map((m) => (
+                    <span key={m.id} className="layer" style={{ background: m.color }} />
+                  ))}
+                </span>
+              )}
+              <span className="mcal-num">{Number(d.slice(8))}</span>
             </button>
           )
         })}
       </div>
 
-      {chosen ? (
+      {day ? (
         <div className="mcal-details">
-          <strong>{format(parseISO(chosen), 'EEEE, MMMM d, yyyy')}</strong>
-          {chosenMetrics.length === 0 ? (
+          <strong>{format(parseISO(day), 'EEEE, MMMM d, yyyy')}</strong>
+          {dayMetrics.length === 0 ? (
             <p className="empty">Nothing tracked this day.</p>
           ) : (
             <ul className="list">
-              {chosenMetrics.map((m) => (
+              {dayMetrics.map((m) => (
                 <li key={m.id}>
                   <span>
-                    <span className="mcal-dot" style={{ background: m.color }} aria-hidden /> {m.label}
-                    {(m.entries?.[chosen] ?? []).map((line, i) => (
+                    <span className="swatch" style={{ background: m.color, display: 'inline-block' }} aria-hidden /> {m.label}
+                    {(m.entries?.[day] ?? []).map((line, i) => (
                       <span key={i} className="stat-label" style={{ display: 'block' }}>
                         {line}
                       </span>
                     ))}
                   </span>
-                  <strong>{m.format(m.byDay[chosen] ?? 0)}</strong>
+                  <strong>{m.format(m.byDay[day] ?? 0)}</strong>
                 </li>
               ))}
             </ul>

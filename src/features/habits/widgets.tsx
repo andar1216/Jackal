@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Calendar from 'react-calendar'
 import { differenceInCalendarDays, isAfter, isBefore, parseISO, startOfDay } from 'date-fns'
 import { formatDay, todayKey, toDateKey } from '../../lib/dates'
+import FilterMenu from '../../components/FilterMenu'
 import MenuButton from '../../components/MenuButton'
 import type { HabitKind, Skill } from '../../types'
 import { bestStreak, currentStreak, daysOnOff, streakShown, weeklyStats } from './habitStats'
@@ -42,8 +43,10 @@ export type WidgetCtx = {
   status: 'loading' | 'ready' | 'error'
   /** Streaks are hidden for every habit. */
   hideAllStreaks: boolean
-  /** The habits the calendar draws (the filter at the top of the page picks them). */
+  /** The habits the calendar draws (the filter in the calendar picks them). */
   calendarHabits: Skill[]
+  /** Chooses which habits the calendar draws, by id. */
+  chooseCalendarHabits: (shownIds: string[]) => void
   /** The colour the next new habit starts with. */
   nextColor: string
   select: (id: string) => void
@@ -326,6 +329,15 @@ export function CalendarWidget({ ctx }: { ctx: WidgetCtx }) {
 
   return (
     <div className="dash-cal" style={{ '--skill': skill.color } as React.CSSProperties}>
+      <div className="row" style={{ justifyContent: 'flex-end' }}>
+        <FilterMenu
+          label="Calendar habits"
+          heading="Show on the calendar"
+          options={ctx.skills.map((s) => ({ id: s.id, label: s.name, color: s.color }))}
+          selected={shown.map((s) => s.id)}
+          onChange={ctx.chooseCalendarHabits}
+        />
+      </div>
       <Calendar
         value={null}
         tileClassName={tileClass}
@@ -337,7 +349,7 @@ export function CalendarWidget({ ctx }: { ctx: WidgetCtx }) {
       />
       {shown.length === 0 ? (
         <p className="stat-label" style={{ marginBottom: 0 }}>
-          No habits are shown. Use the filter at the top of the page to choose some.
+          No habits are shown. Use the filter above the calendar to choose some.
         </p>
       ) : (
         shown.length > 1 && (

@@ -587,35 +587,6 @@ button.link {
 }
 
 /* Calendar panel (MetricCalendar): a month of days marked with what the page tracked. */
-.mcal-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 10px 0;
-}
-
-.mcal-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 0.8rem;
-}
-
-.mcal-chip.off {
-  opacity: 0.5;
-  text-decoration: line-through;
-}
-
-.mcal-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
 .mcal-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -629,10 +600,10 @@ button.link {
 }
 
 .mcal-day {
+  position: relative;
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-start;
   min-height: 52px;
   padding: 4px 6px;
   border-radius: 8px;
@@ -643,20 +614,31 @@ button.link {
   border-color: var(--accent);
 }
 
+/* A day with something tracked is filled all over, like the habit calendar (the bands are .layers). */
+.mcal-day.on {
+  color: #fff;
+  font-weight: 600;
+  border-color: transparent;
+}
+
+.mcal-day.on .mcal-num {
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 0 3px rgb(0 0 0 / 0.55);
+}
+
 .mcal-day.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.mcal-day:not(.on).selected {
   background: var(--accent-soft);
 }
 
 .mcal-num {
   font-size: 0.8rem;
 }
-
-.mcal-dots {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-}
-
 .mcal-details {
   margin-top: 12px;
 }
@@ -1133,4 +1115,31 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+
+/* Devices on the Screen Time page. */
+.device-list {
+  display: grid;
+  gap: 10px;
+}
+
+.device {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.device p {
+  margin: 6px 0 0;
+}
+
+.device-steps {
+  margin-top: 8px;
+}
+
+.device-steps ol {
+  margin: 0 0 6px;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
 }

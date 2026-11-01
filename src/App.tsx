@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Activity, CircleGauge, Landmark, Soup } from 'lucide-react'
+import { Activity, CircleGauge, Landmark, Smartphone, Soup } from 'lucide-react'
 import { subDays } from 'date-fns'
 import { CgPerformance } from 'react-icons/cg'
 import { useBoardLayout } from './components/useBoardLayout'
@@ -12,6 +12,7 @@ import DietPage from './features/diet/DietPage'
 import FinancePage from './features/finance/FinancePage'
 import FitnessPage from './features/fitness/FitnessPage'
 import HabitsPage from './features/habits/HabitsPage'
+import ScreenTimePage from './features/screentime/ScreenTimePage'
 import StreaksPage from './features/streaks/StreaksPage'
 import TimePage from './features/time/TimePage'
 import AuthPage from './auth/AuthPage'
@@ -31,13 +32,14 @@ const PAGES: { id: string; label: string; icon: ReactNode; hidden?: boolean }[] 
   { id: 'finance', label: 'Finances', icon: <Landmark size={ICON_SIZE} /> },
   { id: 'diet', label: 'Diet', icon: <Soup size={ICON_SIZE} /> },
   { id: 'fitness', label: 'Fitness', icon: <Activity size={ICON_SIZE} /> },
+  { id: 'screentime', label: 'Screen Time', icon: <Smartphone size={ICON_SIZE} /> },
   { id: 'time', label: 'Time', icon: '⏱️', hidden: true },
   { id: 'calendar', label: 'Calendar', icon: '📅', hidden: true },
 ]
 
 const isShown = (id: PageId) => !PAGES.find((p) => p.id === id)?.hidden
 
-type PageId = 'dashboard' | 'habits' | 'streaks' | 'finance' | 'diet' | 'fitness' | 'time' | 'calendar'
+type PageId = 'dashboard' | 'habits' | 'streaks' | 'finance' | 'diet' | 'fitness' | 'screentime' | 'time' | 'calendar'
 
 const SEED_TRACKERS: Tracker[] = [
   { id: 't1', name: 'Daily reading', startDate: toDateKey(subDays(new Date(), 12)), color: '#4f46e5' },
@@ -193,6 +195,9 @@ function Shell({ user, theme, onThemeChange }: ShellProps) {
           </div>
           <div {...show('fitness')}>
             <FitnessPage meals={meals} />
+          </div>
+          <div {...show('screentime')}>
+            <ScreenTimePage />
           </div>
           {isShown('time') && (
             <div {...show('time')}>

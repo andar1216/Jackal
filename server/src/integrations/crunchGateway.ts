@@ -98,9 +98,11 @@ export function parseCheckIns(json: unknown): CrunchCheckIn[] {
   const out: CrunchCheckIn[] = []
   for (const raw of json) {
     const r = asRecord(raw)
-    const at = new Date(str(r.checkin_time))
-    if (Number.isNaN(at.getTime())) continue
-    out.push({ id: String(r.mms_checkin_id ?? r.id ?? at.toISOString()), at: at.toISOString(), club: str(r.location) })
+    // Crunch tags these times with "Z" even though they are the club's wall-clock time, so read the digits as they are.
+    const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/.exec(str(r.checkin_time).trim())
+    if (!m) continue
+    const at = `${m[1]}T${m[2]}`
+    out.push({ id: String(r.mms_checkin_id ?? r.id ?? at), at, club: str(r.location) })
   }
   return out
 }

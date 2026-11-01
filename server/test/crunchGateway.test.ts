@@ -26,7 +26,7 @@ describe('reading what Crunch sends', () => {
       { id: 1, location: 'Club One', checkin_time: '2026-10-30T22:00:00.000Z', mms_checkin_id: 'abc' },
       { id: 2, location: 'Club One', checkin_time: 'garbage', mms_checkin_id: 'def' },
     ])
-    assert.deepEqual(rows, [{ id: 'abc', at: '2026-10-30T22:00:00.000Z', club: 'Club One' }])
+    assert.deepEqual(rows, [{ id: 'abc', at: '2026-10-30T22:00', club: 'Club One' }])
   })
 
   it('reads class history, turning 12-hour times into club-local ones', () => {
