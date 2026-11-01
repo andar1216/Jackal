@@ -7,7 +7,9 @@ import ConnectorsButton from '../connections/ConnectorsButton'
 import NetWorthCard from './NetWorthCard'
 import SubscriptionsCard from './SubscriptionsCard'
 import ViewsBar, { type AccountChoice } from './ViewsBar'
+import { buildMetric } from '../../lib/calendarMetrics'
 import Board, { Panel } from '../../components/Board'
+import MetricCalendar from '../../components/MetricCalendar'
 import PanelFilter from '../../components/PanelFilter'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
@@ -287,6 +289,17 @@ export default function FinancePage() {
     }
   }
   const sorted = [...shown].sort((a, b) => b.date.localeCompare(a.date))
+
+  // The calendar follows the page's month and filters, so it shows the same transactions the totals count.
+  const label = (t: Transaction) => t.note ?? t.category
+  const calendarMetrics = [
+    buildMetric({ id: 'spent', label: 'Spent', color: '#dc2626', format: formatMoney }, shown, (t) =>
+      spend(t) === 0 ? undefined : { day: t.date, amount: spend(t), line: `${label(t)} · ${formatMoney(spend(t))}` },
+    ),
+    buildMetric({ id: 'income', label: 'Income', color: '#16a34a', format: formatMoney }, shown, (t) =>
+      t.type !== 'income' ? undefined : { day: t.date, amount: t.amountCents, line: `${label(t)} · ${formatMoney(t.amountCents)}` },
+    ),
+  ]
 
   return (
     <>
@@ -599,6 +612,9 @@ export default function FinancePage() {
               </>
             )}
           </section>
+        </Panel>
+        <Panel id="calendar" title="Calendar" size="full">
+          <MetricCalendar metrics={calendarMetrics} month={month} />
         </Panel>
       </Board>
     </>

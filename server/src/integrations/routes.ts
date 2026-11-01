@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { currentUserId } from '../auth/middleware.js'
 import { HttpError } from '../lib/errors.js'
 import { Connection } from '../models.js'
+import { crunchRouter, disconnectCrunch } from './crunch.js'
 import { disconnectPlaid, plaidRouter, plaidStatus } from './plaid.js'
 import { findProvider, providers } from './registry.js'
 
@@ -15,6 +16,7 @@ const requireProvider = (id: string) => {
 
 // Provider-specific steps (Plaid Link and so on) live under their own path.
 integrations.use('/plaid', plaidRouter)
+integrations.use('/crunch', crunchRouter)
 
 // List every integration with this user's connection state.
 integrations.get('/', async (req, res) => {
@@ -32,6 +34,8 @@ integrations.get('/', async (req, res) => {
         name: p.name,
         description: p.description,
         category: p.category,
+        api: p.api,
+        url: p.url,
         note: p.note,
         available: p.implemented && (p.isConfigured?.() ?? true),
         status: connection ? 'connected' : 'not_connected',
@@ -47,6 +51,7 @@ integrations.get('/', async (req, res) => {
 integrations.post('/:id/connect', (req) => {
   const provider = requireProvider(req.params.id)
   if (provider.id === 'plaid') throw new HttpError(400, 'Plaid connects through Plaid Link. See /integrations/plaid/link-token.')
+  if (provider.id === 'crunch') throw new HttpError(400, 'Crunch connects with your member email and password. See /integrations/crunch/connect.')
   throw new HttpError(501, `${provider.name} isn't available yet.`)
 })
 
@@ -54,6 +59,7 @@ integrations.delete('/:id/connection', async (req, res) => {
   const provider = requireProvider(req.params.id)
   const userId = currentUserId(req)
   if (provider.id === 'plaid') await disconnectPlaid(userId)
+  else if (provider.id === 'crunch') await disconnectCrunch(userId)
   else await Connection.deleteOne({ provider: provider.id, userId })
   res.status(204).end()
 })

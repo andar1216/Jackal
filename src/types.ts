@@ -23,11 +23,33 @@ export type Skill = {
   archived?: boolean // put away: hidden from the habits list until restored (or deleted)
 }
 
+/** What Jackal imported from the person's Crunch membership (see server/src/integrations/crunch.ts). */
+export type CrunchCheckIn = { id: string; at: string; club: string }
+export type CrunchClass = { id: string; program: string; startsAt: string; club: string; status: string; feeCents: number | null }
+export type CrunchPayment = { id: string; service: string; amountCents: number; date: string }
+export type CrunchData = {
+  connected: boolean
+  email?: string | null
+  /** False when the data was sent from the browser, so Jackal has no login to refresh with. */
+  autoSync?: boolean
+  workoutGoal?: number | null
+  balanceCents?: number | null
+  lastSyncedAt?: string | null
+  lastError?: string | null
+  checkIns: CrunchCheckIn[]
+  classes: CrunchClass[]
+  payments: CrunchPayment[]
+}
+
 export type Integration = {
   id: string
   name: string
   description: string
   category: 'calendar' | 'finance' | 'fitness' | 'screen-time'
+  /** Official: the service offers an API. Unofficial: we have to get at it another way, and it can break. */
+  api: 'official' | 'unofficial'
+  /** A page to open, for services that are only linked to for now. */
+  url?: string
   note?: string
   /** False until the connection flow for this service is built. */
   available: boolean
@@ -106,6 +128,7 @@ export type Meal = {
   protein: number
   carbs: number
   fat: number
+  date: string // YYYY-MM-DD
 }
 
 export type Workout = {
@@ -113,6 +136,7 @@ export type Workout = {
   type: string
   durationMin: number
   caloriesBurned: number
+  date: string // YYYY-MM-DD
 }
 
 export type TimeEntry = {

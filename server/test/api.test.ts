@@ -6,6 +6,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server'
 import { createApp } from '../src/app.js'
 import { config } from '../src/config.js'
 import { connectDb, disconnectDb } from '../src/db.js'
+import { CrunchError, setCrunchGateway, type CrunchGateway, type CrunchSnapshot } from '../src/integrations/crunchGateway.js'
 import { PlaidError, setPlaidGateway, type PlaidGateway, type PlaidTx, type SyncPage } from '../src/integrations/plaidGateway.js'
 
 let mongod: MongoMemoryServer
@@ -442,7 +443,7 @@ describe('meals and time entries', () => {
 })
 
 describe('integrations', () => {
-  it('lists every planned integration as not connected and not yet available', async () => {
+  it('lists every planned integration as not connected, and only Crunch (which needs no keys) as available', async () => {
     const { status, body } = await call('GET', '/integrations')
     assert.equal(status, 200)
     assert.deepEqual(
@@ -451,8 +452,24 @@ describe('integrations', () => {
     )
     for (const item of body) {
       assert.equal(item.status, 'not_connected')
-      assert.equal(item.available, false)
+      assert.equal(item.available, item.id === 'crunch')
     }
+  })
+
+  it('says for each one whether its API is official, and gives Crunch its members link', async () => {
+    const { body } = await call('GET', '/integrations')
+    const api = Object.fromEntries(body.map((i: { id: string; api: string }) => [i.id, i.api]))
+    assert.deepEqual(api, {
+      'google-calendar': 'official',
+      plaid: 'official',
+      myfitnesspal: 'official',
+      crunch: 'unofficial',
+      'samsung-screen-time': 'unofficial',
+      'windows-screen-time': 'unofficial',
+    })
+    const crunch = body.find((i: { id: string }) => i.id === 'crunch')
+    assert.equal(crunch.category, 'fitness')
+    assert.equal(crunch.url, 'https://members.crunch.com/')
   })
 
   it('answers 501 when connecting something that is not built yet, and 404 for unknown ids', async () => {
@@ -464,6 +481,213 @@ describe('integrations', () => {
 
   it('disconnecting is harmless when nothing is connected', async () => {
     assert.equal((await call('DELETE', '/integrations/plaid/connection')).status, 204)
+  })
+})
+
+/** Stands in for the Crunch members site. */
+const crunch = {
+  fail: undefined as CrunchError | undefined,
+  calls: [] as string[],
+  snapshot: {
+    memberId: '123',
+    workoutGoal: 4,
+    balanceCents: 0,
+    checkIns: [
+      { id: 'a', at: '2026-10-30T22:00:00.000Z', club: 'Club One' },
+      { id: 'b', at: '2026-10-28T11:00:00.000Z', club: 'Club One' },
+    ],
+    classes: [{ program: 'Yoga', startsAt: '2026-10-05T18:30', club: 'Club One', status: 'attended' }],
+    payments: [
+      { service: 'Dues', amountCents: 1999, date: '2026-10-01' },
+      { service: 'Payment', amountCents: -1999, date: '2026-10-01' },
+    ],
+  } as CrunchSnapshot,
+}
+const fakeCrunch: CrunchGateway = {
+  fetchAll: async (email, password) => {
+    crunch.calls.push(`${email}:${password}`)
+    if (crunch.fail) throw crunch.fail
+    return crunch.snapshot
+  },
+}
+
+describe('crunch', () => {
+  before(() => setCrunchGateway(fakeCrunch))
+  after(() => setCrunchGateway(undefined))
+
+  it('has no data until it is connected', async () => {
+    const r = await call('GET', '/integrations/crunch/data')
+    assert.equal(r.status, 200)
+    assert.deepEqual(r.body, { connected: false, checkIns: [], classes: [], payments: [] })
+    assert.equal((await call('POST', '/integrations/crunch/sync')).status, 409)
+  })
+
+  it('says a wrong password plainly, without signing the person out of Jackal', async () => {
+    crunch.fail = new CrunchError('BAD_LOGIN', "Crunch didn't accept that email and password.")
+    const r = await call('POST', '/integrations/crunch/connect', { email: 'me@example.com', password: 'nope' })
+    assert.equal(r.status, 422)
+    assert.match(r.body.error, /didn't accept/)
+    assert.equal((await call('GET', '/auth/me')).status, 200)
+    assert.equal((await call('GET', '/integrations/crunch/data')).body.connected, false)
+    crunch.fail = undefined
+  })
+
+  it('connects, imports everything, and never returns the password', async () => {
+    const r = await call('POST', '/integrations/crunch/connect', { email: 'me@example.com', password: 'hunter2-secret' })
+    assert.equal(r.status, 201)
+    assert.deepEqual(r.body, { checkIns: 2, classes: 1, payments: 2 })
+
+    const { body } = await call('GET', '/integrations/crunch/data')
+    assert.equal(body.connected, true)
+    assert.equal(body.email, 'me@example.com')
+    assert.equal(body.workoutGoal, 4)
+    assert.deepEqual(
+      body.checkIns.map((c: { id: string }) => c.id),
+      ['a', 'b'], // newest first
+    )
+    assert.equal(body.classes[0].program, 'Yoga')
+    assert.equal(body.payments.length, 2)
+    assert.ok(!JSON.stringify(body).includes('hunter2'))
+
+    const { CrunchLink } = await import('../src/models.js')
+    const stored = await CrunchLink.findOne({ email: 'me@example.com' }).select('+password')
+    assert.ok(stored)
+    assert.ok(!stored.password.includes('hunter2'), 'stored encrypted')
+
+    const list = await call('GET', '/integrations')
+    const item = list.body.find((i: { id: string }) => i.id === 'crunch')
+    assert.equal(item.status, 'connected')
+    assert.equal(item.accountLabel, 'me@example.com')
+  })
+
+  it('syncs again with the saved login and replaces what was imported', async () => {
+    crunch.snapshot = { ...crunch.snapshot, checkIns: [{ id: 'c', at: '2026-11-01T12:00:00.000Z', club: 'Club One' }], workoutGoal: 5 }
+    const r = await call('POST', '/integrations/crunch/sync')
+    assert.equal(r.status, 200)
+    assert.equal(crunch.calls.at(-1), 'me@example.com:hunter2-secret')
+    const { body } = await call('GET', '/integrations/crunch/data')
+    assert.deepEqual(
+      body.checkIns.map((c: { id: string }) => c.id),
+      ['c'],
+    )
+    assert.equal(body.workoutGoal, 5)
+    assert.ok(body.lastSyncedAt)
+  })
+
+  it('keeps the old data and records why when a sync fails', async () => {
+    crunch.fail = new CrunchError('UNEXPECTED', 'Crunch showed an unexpected page after sign-in.')
+    const r = await call('POST', '/integrations/crunch/sync')
+    assert.equal(r.status, 502)
+    const { body } = await call('GET', '/integrations/crunch/data')
+    assert.equal(body.checkIns.length, 1)
+    assert.match(body.lastError, /unexpected page/)
+    crunch.fail = undefined
+    await call('POST', '/integrations/crunch/sync')
+    assert.equal((await call('GET', '/integrations/crunch/data')).body.lastError, null)
+  })
+
+  it("keeps one person's Crunch data away from another's", async () => {
+    const other = makeClient()
+    const reg = await other('POST', '/auth/register', { email: 'crunch-other@example.com', name: 'Other', password: PASSWORD })
+    // Registration may be switched off in this environment; the point only matters if a second account exists.
+    if (reg.status === 201) assert.equal((await other('GET', '/integrations/crunch/data')).body.connected, false)
+  })
+
+  it('forgets the login and the data when disconnected', async () => {
+    assert.equal((await call('DELETE', '/integrations/crunch/connection')).status, 204)
+    assert.equal((await call('GET', '/integrations/crunch/data')).body.connected, false)
+    const list = await call('GET', '/integrations')
+    assert.equal(list.body.find((i: { id: string }) => i.id === 'crunch').status, 'not_connected')
+  })
+})
+
+describe('crunch bookmark (data sent from the browser)', () => {
+  const CRUNCH_SITE = 'https://members.crunch.com'
+  const payload = {
+    memberId: '123',
+    workoutGoal: 4,
+    checkIns: [{ id: 1, location: 'Club One', checkin_time: '2026-10-30T22:00:00.000Z', mms_checkin_id: 'x1' }],
+    classes: [{ program_name: 'Yoga', occurrence_start_time: '2026-10-05 06:30pm', club: { name: 'Club One' }, status: 'attended', fee_amount: null }],
+    billing: { invoices: [{ mms_club_id: '1', amount: '19.99', service_name: 'Dues', purchase_date: '10/01/26' }], total_balance: '0.00' },
+  }
+  /** What the bookmark does: a plain request from the Crunch site, with no Jackal sign-in cookie. */
+  const send = (token: string | undefined, body: unknown = payload, origin = CRUNCH_SITE) =>
+    fetch(`${base}/integrations/crunch/import`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin, ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    })
+  let token = ''
+
+  it('only gives the bookmark secret to a signed-in person', async () => {
+    assert.equal((await makeClient()('POST', '/integrations/crunch/import-token')).status, 401)
+    const r = await call('POST', '/integrations/crunch/import-token')
+    assert.equal(r.status, 201)
+    assert.ok(r.body.token.length >= 40)
+    token = r.body.token
+    const { CrunchImportToken } = await import('../src/models.js')
+    assert.equal(await CrunchImportToken.countDocuments({ tokenHash: token }), 0, 'only a hash is stored')
+  })
+
+  it('answers the browser check from the Crunch site, and only from there', async () => {
+    const ask = (origin: string) =>
+      fetch(`${base}/integrations/crunch/import`, {
+        method: 'OPTIONS',
+        headers: {
+          origin,
+          'access-control-request-method': 'POST',
+          'access-control-request-headers': 'authorization,content-type',
+          'access-control-request-private-network': 'true',
+        },
+      })
+    const ok = await ask(CRUNCH_SITE)
+    assert.equal(ok.status, 204)
+    assert.equal(ok.headers.get('access-control-allow-origin'), CRUNCH_SITE)
+    assert.equal(ok.headers.get('access-control-allow-private-network'), 'true')
+    // Another site is told the only allowed site is Crunch's, so its browser refuses to let it read the answer.
+    assert.equal((await ask('https://evil.example')).headers.get('access-control-allow-origin'), CRUNCH_SITE)
+  })
+
+  it('imports with the secret, without a Jackal sign-in, and marks the link as not refreshable by Jackal', async () => {
+    const res = await send(token)
+    assert.equal(res.status, 200)
+    assert.equal(res.headers.get('access-control-allow-origin'), CRUNCH_SITE)
+    assert.deepEqual(await res.json(), { checkIns: 1, classes: 1, payments: 1 })
+
+    const { body } = await call('GET', '/integrations/crunch/data')
+    assert.equal(body.connected, true)
+    assert.equal(body.autoSync, false)
+    assert.equal(body.email, null)
+    assert.equal(body.workoutGoal, 4)
+    assert.equal(body.checkIns[0].id, 'x1')
+    assert.equal(body.classes[0].startsAt, '2026-10-05T18:30')
+    assert.equal(body.payments[0].amountCents, 1999)
+    const list = await call('GET', '/integrations')
+    assert.equal(list.body.find((i: { id: string }) => i.id === 'crunch').status, 'connected')
+  })
+
+  it('has nothing to sign in with, and says what to do instead', async () => {
+    const r = await call('POST', '/integrations/crunch/sync')
+    assert.equal(r.status, 409)
+    assert.match(r.body.error, /Send to Jackal/)
+  })
+
+  it('refuses a missing, wrong or replaced secret, and Crunch data in a shape it does not know', async () => {
+    assert.equal((await send(undefined)).status, 401)
+    assert.equal((await send('nope')).status, 401)
+    assert.equal((await send(token, { ...payload, checkIns: { oops: true } })).status, 400)
+    assert.equal((await send(token, { ...payload, memberId: 'x; drop' })).status, 400)
+
+    const fresh = await call('POST', '/integrations/crunch/import-token')
+    assert.equal((await send(token)).status, 401, 'the old bookmark stops working')
+    assert.equal((await send(fresh.body.token)).status, 200)
+    token = fresh.body.token
+  })
+
+  it('stops working once Crunch is disconnected', async () => {
+    assert.equal((await call('DELETE', '/integrations/crunch/connection')).status, 204)
+    assert.equal((await send(token)).status, 401)
+    assert.equal((await call('GET', '/integrations/crunch/data')).body.connected, false)
   })
 })
 

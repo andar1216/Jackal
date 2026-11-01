@@ -1,50 +1,82 @@
 import { useState } from 'react'
-import { uid } from '../../lib/dates'
+import { format } from 'date-fns'
+import { workoutsApi, type NewMeal, type NewWorkout } from '../../lib/api'
+import { buildMetric } from '../../lib/calendarMetrics'
+import { toDateKey, todayKey } from '../../lib/dates'
+import type { DayEntries } from '../../lib/useDayEntries'
+import { useDayEntries } from '../../lib/useDayEntries'
 import type { Integration, Meal, Workout } from '../../types'
 import ConnectorsButton from '../connections/ConnectorsButton'
 import { CALORIE_GOAL } from '../diet/constants'
 import Board, { Panel } from '../../components/Board'
+import MetricCalendar from '../../components/MetricCalendar'
 import PanelFilter from '../../components/PanelFilter'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
+import { CheckInHistoryPanel, CheckInProgressPanel, ClassHistoryPanel, PaymentHistoryPanel } from './CrunchPanels'
+import { useCrunch } from './useCrunch'
 
 const isFitnessConnector = (i: Integration) => i.category === 'fitness'
-
-const SEED_WORKOUTS: Workout[] = [{ id: 'w1', type: 'Run', durationMin: 35, caloriesBurned: 340 }]
 
 const num = (v: string) => Math.max(0, parseInt(v, 10) || 0)
 
 /** Meals are logged on the Diet page. They are only read here, to work out calories left after exercise. */
-export default function FitnessPage({ meals }: { meals: Meal[] }) {
+export default function FitnessPage({ meals }: { meals: DayEntries<Meal, NewMeal> }) {
   const layout = useLayoutEditing()
-  const [workouts, setWorkouts] = useState<Workout[]>(SEED_WORKOUTS)
+  const crunch = useCrunch()
+  const log = useDayEntries<Workout, NewWorkout>(workoutsApi)
   const [workout, setWorkout] = useState({ type: '', durationMin: '', caloriesBurned: '' })
 
-  const eaten = meals.reduce((s, m) => s + m.calories, 0)
+  // The numbers and the list are for today. The calendar below looks across every day.
+  const today = todayKey()
+  const workouts = log.items.filter((w) => w.date === today)
+  const eaten = meals.items.filter((m) => m.date === today).reduce((s, m) => s + m.calories, 0)
   const burned = workouts.reduce((s, w) => s + w.caloriesBurned, 0)
   const remaining = CALORIE_GOAL - eaten + burned
 
-  const addWorkout = (e: React.FormEvent) => {
+  const addWorkout = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!workout.type.trim() || !workout.durationMin) return
-    setWorkouts((p) => [
-      ...p,
-      {
-        id: uid(),
-        type: workout.type.trim(),
-        durationMin: num(workout.durationMin),
-        caloriesBurned: num(workout.caloriesBurned),
-      },
-    ])
-    setWorkout({ type: '', durationMin: '', caloriesBurned: '' })
+    const minutes = num(workout.durationMin)
+    if (!workout.type.trim() || minutes < 1) return
+    const saved = await log.add({
+      type: workout.type.trim(),
+      durationMin: minutes,
+      caloriesBurned: num(workout.caloriesBurned),
+      date: today,
+    })
+    if (saved) setWorkout({ type: '', durationMin: '', caloriesBurned: '' })
   }
 
+  // Gym visits and classes come from Crunch (when it is connected); workouts are the ones logged here.
+  const checkIns = crunch.data?.checkIns ?? []
+  const classes = (crunch.data?.classes ?? []).filter((c) => c.status.toLowerCase() === 'attended')
+  const metrics = [
+    buildMetric({ id: 'workouts', label: 'Workout minutes', color: '#4f46e5', format: (n: number) => `${n} min` }, log.items, (w) => ({
+      day: w.date,
+      amount: w.durationMin,
+      line: `${w.type} · ${w.durationMin} min`,
+    })),
+    buildMetric({ id: 'burned', label: 'Calories burned', color: '#f97316', format: (n: number) => `${n} kcal`, off: true }, log.items, (w) => ({
+      day: w.date,
+      amount: w.caloriesBurned,
+    })),
+    buildMetric({ id: 'checkins', label: 'Gym check-ins', color: '#16a34a', format: (n: number) => (n === 1 ? '1 check-in' : `${n} check-ins`) }, checkIns, (c) => ({
+      day: toDateKey(new Date(c.at)),
+      amount: 1,
+      line: `${format(new Date(c.at), 'h:mm a')}${c.club ? ` · ${c.club}` : ''}`,
+    })),
+    buildMetric({ id: 'classes', label: 'Classes attended', color: '#db2777', format: (n: number) => (n === 1 ? '1 class' : `${n} classes`) }, classes, (c) => ({
+      day: c.startsAt.slice(0, 10),
+      amount: 1,
+      line: c.program,
+    })),
+  ]
   return (
     <>
       <header className="page-header row between">
         <div>
           <h1>Fitness</h1>
-          <p>Today's workouts and calories burned. Meals are on the Diet page.</p>
+          <p>Today's workouts and calories burned. Meals are on the Diet page. The calendar shows every day.</p>
         </div>
         <div className="row">
           <PanelFilter page="fitness" />
@@ -52,6 +84,12 @@ export default function FitnessPage({ meals }: { meals: Meal[] }) {
           <SettingsMenu items={[layout.item]} />
         </div>
       </header>
+
+      {log.error && (
+        <div className="banner error" role="alert">
+          <span>{log.error}</span>
+        </div>
+      )}
 
       <Board page="fitness" editing={layout.editing} onEditingChange={layout.setEditing}>
         <Panel id="eaten" title="Eaten" size="third">
@@ -118,12 +156,35 @@ export default function FitnessPage({ meals }: { meals: Meal[] }) {
                     </span>
                     <span className="row">
                       <strong>{w.caloriesBurned} kcal</strong>
+                      <button className="link" aria-label={`Remove ${w.type}`} onClick={() => void log.remove(w.id)}>
+                        ✕
+                      </button>
                     </span>
                   </li>
                 ))}
               </ul>
             )}
           </section>
+        </Panel>
+
+        <Panel id="crunch-progress" title="Club Check-In Progress" size="half">
+          <CheckInProgressPanel crunch={crunch} />
+        </Panel>
+
+        <Panel id="crunch-checkins" title="Club Check-In History" size="half">
+          <CheckInHistoryPanel crunch={crunch} />
+        </Panel>
+
+        <Panel id="crunch-classes" title="Class History" size="half">
+          <ClassHistoryPanel crunch={crunch} />
+        </Panel>
+
+        <Panel id="crunch-payments" title="Payment History" size="half">
+          <PaymentHistoryPanel crunch={crunch} />
+        </Panel>
+
+        <Panel id="calendar" title="Calendar" size="full">
+          <MetricCalendar metrics={metrics} />
         </Panel>
       </Board>
     </>

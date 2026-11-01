@@ -5,6 +5,10 @@ export type Provider = {
   name: string
   description: string
   category: 'calendar' | 'finance' | 'fitness' | 'screen-time'
+  /** Whether the service offers an API for this, or we have to get at it another way (and it could break). */
+  api: 'official' | 'unofficial'
+  /** A page to open for services that are only linked to for now. */
+  url?: string
   /** True once the connection flow and data sync for this provider are built. */
   implemented: boolean
   /** Optional extra check, such as API keys being present on the server. */
@@ -23,6 +27,7 @@ export const providers: Provider[] = [
     name: 'Google Calendar',
     description: 'Show your Google Calendar events on the Calendar screen.',
     category: 'calendar',
+    api: 'official',
     implemented: false,
     note: 'Official API. Needs a Google Cloud project with an OAuth client.',
   },
@@ -31,6 +36,7 @@ export const providers: Provider[] = [
     name: 'Plaid (bank accounts)',
     description: 'Import transactions from your personal and business accounts.',
     category: 'finance',
+    api: 'official',
     implemented: true,
     isConfigured: () => plaidGateway().isConfigured(),
     note: 'Sign in to your bank through Plaid. Transfers between your own accounts are skipped.',
@@ -40,22 +46,26 @@ export const providers: Provider[] = [
     name: 'MyFitnessPal',
     description: 'Pull calorie and meal tracking.',
     category: 'fitness',
+    api: 'official',
     implemented: false,
     note: 'As far as we know, MyFitnessPal only gives its API to approved partners, so this may not be possible.',
   },
   {
     id: 'crunch',
     name: 'Crunch Fitness',
-    description: 'Log gym sessions.',
+    description: 'Check-ins and weekly goal, class history and payment history from your Crunch membership.',
     category: 'fitness',
-    implemented: false,
-    note: 'Unofficial API. It can break without warning and may go against their terms.',
+    api: 'unofficial',
+    url: 'https://members.crunch.com/',
+    implemented: true,
+    note: 'Crunch has no public API. You sign in on members.crunch.com and a bookmark sends your data to Jackal (or let Jackal sign in for you, with your password stored encrypted). Either way it can break if Crunch changes their site.',
   },
   {
     id: 'samsung-screen-time',
     name: 'Samsung S23 screen time',
     description: 'Track phone screen time.',
     category: 'screen-time',
+    api: 'unofficial',
     implemented: false,
     note: 'No public API. Would likely need a small companion app on the phone.',
   },
@@ -64,6 +74,7 @@ export const providers: Provider[] = [
     name: 'Windows screen time',
     description: 'Track time spent in apps on this PC.',
     category: 'screen-time',
+    api: 'unofficial',
     implemented: false,
     note: 'Needs a small background agent running on the PC.',
   },

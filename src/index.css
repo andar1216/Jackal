@@ -7,6 +7,7 @@
   --accent: #4f46e5;
   --accent-soft: #eceafd;
   --good: #16a34a;
+  --info: #2563eb;
   --bad: #dc2626;
   --radius: 12px;
 
@@ -28,6 +29,7 @@
     --accent: #818cf8;
     --accent-soft: #272a45;
     --good: #4ade80;
+    --info: #60a5fa;
     --bad: #f87171;
   }
 }
@@ -41,6 +43,7 @@
   --accent: #818cf8;
   --accent-soft: #272a45;
   --good: #4ade80;
+  --info: #60a5fa;
   --bad: #f87171;
 }
 
@@ -556,6 +559,146 @@ button.link {
 .pill.good-pill {
   background: color-mix(in srgb, var(--good) 18%, transparent);
   color: var(--good);
+}
+
+/* Official API in green, unofficial in blue. */
+.pill.api-official {
+  background: color-mix(in srgb, var(--good) 18%, transparent);
+  color: var(--good);
+}
+
+.pill.api-unofficial {
+  background: color-mix(in srgb, var(--info) 18%, transparent);
+  color: var(--info);
+}
+
+/* Sync line at the bottom of the Crunch panels. */
+.crunch-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.crunch-status .banner {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* Calendar panel (MetricCalendar): a month of days marked with what the page tracked. */
+.mcal-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.mcal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.mcal-chip.off {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.mcal-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mcal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.mcal-dow {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.mcal-day {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.mcal-day.today {
+  border-color: var(--accent);
+}
+
+.mcal-day.selected {
+  background: var(--accent-soft);
+}
+
+.mcal-num {
+  font-size: 0.8rem;
+}
+
+.mcal-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.mcal-details {
+  margin-top: 12px;
+}
+
+/* The steps for connecting Crunch from its own tab. */
+.crunch-setup {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.crunch-setup ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+
+a.link {
+  color: var(--muted);
+  padding: 2px 6px;
+  text-decoration: none;
+}
+
+a.link:hover {
+  text-decoration: underline;
+}
+
+/* A link that looks like a button. */
+a.button-link {
+  display: inline-block;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+a.button-link:hover {
+  background: var(--accent-soft);
 }
 
 button:disabled {

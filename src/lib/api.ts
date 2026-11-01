@@ -1,4 +1,4 @@
-import type { AccountView, BankAccount, Integration, ManualAccount, PanelState, Skill, SubscriptionData, Transaction, User } from '../types'
+import type { AccountView, BankAccount, CrunchData, Integration, ManualAccount, Meal, PanelState, Skill, SubscriptionData, Transaction, User, Workout } from '../types'
 import { todayKey } from './dates'
 
 // Dev: Vite proxies /api to the backend. For a separate API host, set VITE_API_URL.
@@ -81,6 +81,7 @@ export const integrationsApi = {
   disconnect: async (id: string) => {
     await request<void>('DELETE', `/integrations/${id}/connection`)
     if (id === 'plaid') notifyTransactionsChanged()
+    if (id === 'crunch') notifyCrunchChanged()
   },
 }
 
@@ -96,6 +97,22 @@ export const transactionsApi = {
   create: (t: NewTransaction) => request<Transaction>('POST', '/transactions', t),
   /** Archiving hides a transaction and leaves it out of the totals. It is never deleted, and can be restored. */
   setArchived: (id: string, archived: boolean) => request<Transaction>('PATCH', `/transactions/${id}`, { archived }),
+}
+
+export type NewMeal = Pick<Meal, 'name' | 'calories' | 'protein' | 'carbs' | 'fat' | 'date'>
+export type NewWorkout = Pick<Workout, 'type' | 'durationMin' | 'caloriesBurned' | 'date'>
+
+/** Meals and workouts are kept per day, so the Diet and Fitness calendars can show every day. */
+export const mealsApi = {
+  list: () => request<Meal[]>('GET', '/meals'),
+  create: (m: NewMeal) => request<Meal>('POST', '/meals', m),
+  remove: (id: string) => request<void>('DELETE', `/meals/${id}`),
+}
+
+export const workoutsApi = {
+  list: () => request<Workout[]>('GET', '/workouts'),
+  create: (w: NewWorkout) => request<Workout>('POST', '/workouts', w),
+  remove: (id: string) => request<void>('DELETE', `/workouts/${id}`),
 }
 
 export const subscriptionsApi = {
@@ -143,6 +160,28 @@ export const plaidApi = {
   sync: async () => {
     const res = await request<PlaidSyncResult>('POST', '/integrations/plaid/sync')
     notifyTransactionsChanged()
+    return res
+  },
+}
+
+/** Fitness listens for this, so it reloads after Crunch is connected or disconnected from the Connectors dialog. */
+export const CRUNCH_CHANGED = 'jackal:crunch-changed'
+const notifyCrunchChanged = () => window.dispatchEvent(new Event(CRUNCH_CHANGED))
+
+export const crunchApi = {
+  data: () => request<CrunchData>('GET', '/integrations/crunch/data'),
+  /** The secret inside the "Send to Jackal" bookmark. Getting a new one makes the old bookmark stop working. */
+  importToken: () => request<{ token: string }>('POST', '/integrations/crunch/import-token'),
+  /** Tells the Fitness page to reload, for data that arrived by another route (the bookmark). */
+  changed: () => notifyCrunchChanged(),
+  connect: async (email: string, password: string) => {
+    const res = await request<{ checkIns: number; classes: number; payments: number }>('POST', '/integrations/crunch/connect', { email, password })
+    notifyCrunchChanged()
+    return res
+  },
+  sync: async () => {
+    const res = await request<{ checkIns: number; classes: number; payments: number }>('POST', '/integrations/crunch/sync')
+    notifyCrunchChanged()
     return res
   },
 }

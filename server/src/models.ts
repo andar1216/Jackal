@@ -188,6 +188,62 @@ export const PlaidItem = mongoose.model(
   }),
 )
 
+/** The person's Crunch member login (password stored encrypted, never sent to the browser) and the state of the last sync. */
+const crunchLinkSchema = ownedSchema({
+  // One login per person. Declared here, because ownedSchema already adds a plain index on userId and a second one clashes with it.
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+  email: { type: String, trim: true }, // only when the person let Jackal sign in for them
+  password: { type: String, select: false }, // encrypted, see lib/secrets.ts. Missing when the data was sent from the browser instead.
+  // Whether Jackal can sign in and refresh by itself. Older links (made before this field) all had a password.
+  autoSync: Boolean,
+  memberId: { type: String, required: true },
+  workoutGoal: Number, // check-ins per week, set on Crunch's site
+  balanceCents: Number,
+  lastSyncedAt: Date,
+  lastError: String, // why the last sync failed, cleared by a good one
+})
+export const CrunchLink = mongoose.model('CrunchLink', crunchLinkSchema)
+
+/** The secret in the "Send to Jackal" bookmark. It can only send Crunch data for this one person. Only a hash is kept. */
+export const CrunchImportToken = mongoose.model(
+  'CrunchImportToken',
+  ownedSchema({
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true }, // one at a time
+    tokenHash: { type: String, required: true, unique: true },
+    expiresAt: { type: Date, required: true, index: { expires: 0 } },
+  }),
+)
+
+/** Everything imported from Crunch is replaced on each sync, so these hold no edits of ours. */
+const crunchCheckInSchema = ownedSchema({
+  externalId: { type: String, required: true },
+  at: { type: Date, required: true, index: true },
+  club: String,
+})
+crunchCheckInSchema.index({ userId: 1, externalId: 1 }, { unique: true })
+export const CrunchCheckIn = mongoose.model('CrunchCheckIn', crunchCheckInSchema)
+
+export const CrunchClass = mongoose.model(
+  'CrunchClass',
+  ownedSchema({
+    program: { type: String, required: true },
+    startsAt: { type: String, required: true, index: true }, // YYYY-MM-DDTHH:mm, club-local
+    club: String,
+    status: { type: String, required: true },
+    feeCents: Number,
+  }),
+)
+
+export const CrunchPayment = mongoose.model(
+  'CrunchPayment',
+  ownedSchema({
+    service: { type: String, required: true },
+    amountCents: { type: Number, required: true }, // charges positive, payments and credits negative
+    date: day,
+    club: String,
+  }),
+)
+
 /** Every model that belongs to a user. */
 /** A bank or card the person lists by hand (for example one Plaid can't reach yet). It shows up under Finances > By account. */
 export const ManualAccount = mongoose.model(
@@ -239,7 +295,7 @@ const boardLayoutSchema = ownedSchema({
 boardLayoutSchema.index({ userId: 1, page: 1 }, { unique: true })
 export const BoardLayout = mongoose.model('BoardLayout', boardLayoutSchema)
 
-export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout]
+export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment]
 
 /**
  * Data created before accounts existed has no owner. The first account to be created inherits it.

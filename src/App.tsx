@@ -17,7 +17,9 @@ import TimePage from './features/time/TimePage'
 import AuthPage from './auth/AuthPage'
 import { useAuth } from './auth/context'
 import { toDateKey, todayKey } from './lib/dates'
-import type { CalendarEvent, Meal, Tracker, User } from './types'
+import { mealsApi } from './lib/api'
+import { useDayEntries } from './lib/useDayEntries'
+import type { CalendarEvent, Tracker, User } from './types'
 
 const ICON_SIZE = 18
 
@@ -40,11 +42,6 @@ type PageId = 'dashboard' | 'habits' | 'streaks' | 'finance' | 'diet' | 'fitness
 const SEED_TRACKERS: Tracker[] = [
   { id: 't1', name: 'Daily reading', startDate: toDateKey(subDays(new Date(), 12)), color: '#4f46e5' },
   { id: 't2', name: 'No soda', startDate: toDateKey(subDays(new Date(), 45)), color: '#db2777' },
-]
-
-const SEED_MEALS: Meal[] = [
-  { id: 'm1', name: 'Oatmeal & banana', calories: 380, protein: 12, carbs: 68, fat: 7 },
-  { id: 'm2', name: 'Chicken burrito bowl', calories: 720, protein: 48, carbs: 70, fat: 24 },
 ]
 
 const SEED_EVENTS: CalendarEvent[] = [{ id: 'e1', title: 'Dentist', date: todayKey() }]
@@ -93,8 +90,8 @@ function Shell({ user, theme, onThemeChange }: ShellProps) {
   // Trackers and events are shared so the calendar can show them.
   const [trackers, setTrackers] = useState<Tracker[]>(SEED_TRACKERS)
   const [events, setEvents] = useState<CalendarEvent[]>(SEED_EVENTS)
-  // Meals are logged on Diet and also counted on Fitness (calories left after exercise).
-  const [meals, setMeals] = useState<Meal[]>(SEED_MEALS)
+  // Meals are logged on Diet and also counted on Fitness (calories left after exercise). They are kept per day.
+  const meals = useDayEntries(mealsApi)
 
   // The menu's order is the person's own, kept on their account like a page layout.
   const navPages = PAGES.filter((p) => !p.hidden)
@@ -192,7 +189,7 @@ function Shell({ user, theme, onThemeChange }: ShellProps) {
             <FinancePage />
           </div>
           <div {...show('diet')}>
-            <DietPage meals={meals} setMeals={setMeals} />
+            <DietPage meals={meals} />
           </div>
           <div {...show('fitness')}>
             <FitnessPage meals={meals} />

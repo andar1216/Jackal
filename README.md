@@ -216,7 +216,7 @@ The Dashboard's **Connect** button lists the outside services we want to pull da
 | Google Calendar | Official API (OAuth) | Not started |
 | Plaid (bank accounts) | Official API (Plaid Link) | **Built** (Sandbox tested; see below) |
 | MyFitnessPal | Likely partner-only API | Not started, may not be possible |
-| Crunch Fitness | Unofficial, can break | Not started |
+| Crunch Fitness | Unofficial (no public API). Connect opens https://members.crunch.com/ in a new tab; you sign in there and click a "Send to Jackal" bookmark, which sends the same data the My Profile page shows. Optionally Jackal can sign in for you instead (password stored encrypted; needs INTEGRATION_ENCRYPTION_KEY) so it refreshes by itself | Built: check-in progress and history, class history, payment history on the Fitness page |
 | Samsung S23 screen time | No public API, needs a companion app | Not started |
 | Windows screen time | Needs a local background agent | Not started |
 
