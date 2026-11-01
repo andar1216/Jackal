@@ -23,7 +23,8 @@ export const skillSchema = z.strictObject({
   avgWeeks: z.number().int().min(1).max(52).optional(),
   archived: z.boolean().optional(),
   autoMark: z.boolean().optional(),
-  hideStreak: z.boolean().optional(),
+  // Whether this habit's streak shows. Unset follows the page's hide-all / show-all choice; true or false overrides it.
+  streakVisible: z.boolean().nullable().optional(),
   kind: z.enum(['performing', 'eliminating']).optional(),
 })
 
@@ -41,9 +42,6 @@ export const transactionSchema = z.strictObject({
   date: dateString,
   note: z.string().max(500).optional(),
   archived: z.boolean().optional(),
-  autoMark: z.boolean().optional(),
-  hideStreak: z.boolean().optional(),
-  kind: z.enum(['performing', 'eliminating']).optional(),
 })
 
 export const subscriptionMarkBody = z.strictObject({

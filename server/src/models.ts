@@ -71,7 +71,7 @@ export const Skill = mongoose.model(
     archived: { type: Boolean, default: false }, // put away: left out of the habits list and widgets until restored
     endDate: { type: String, match: /^\d{4}-\d{2}-\d{2}$/ }, // optional goal date: the day the habit is meant to run until
     kind: { type: String, enum: ['performing', 'eliminating'], default: 'performing' }, // doing something, or getting rid of something
-    hideStreak: { type: Boolean, default: false }, // keep this habit's streak out of sight
+    streakVisible: { type: Boolean }, // true or false overrides the page's hide-all / show-all; unset follows it
     autoMark: { type: Boolean, default: false }, // every day counts as done unless unmarked
     autoThrough: { type: String, match: /^\d{4}-\d{2}-\d{2}$/ }, // the last day autoMark has filled in
   }),
@@ -253,5 +253,11 @@ export async function adoptOrphanedData(userId: unknown) {
 /** Create missing indexes and drop stale ones (for example the old one-per-provider rule). */
 /** Habits labelled before "Giving up" was renamed "Eliminating" are moved over. */
 export const renameOldHabitKinds = () => Skill.updateMany({ kind: 'giving-up' }, { $set: { kind: 'eliminating' } })
+
+/** Habits that had their streak hidden one by one (the old "hideStreak" flag) move to the new override. */
+export const migrateStreakFlags = async () => {
+  await Skill.collection.updateMany({ hideStreak: true }, { $set: { streakVisible: false }, $unset: { hideStreak: '' } })
+  await Skill.collection.updateMany({ hideStreak: false }, { $unset: { hideStreak: '' } })
+}
 
 export const syncAllIndexes = () => Promise.all(mongoose.modelNames().map((name) => mongoose.model(name).syncIndexes()))

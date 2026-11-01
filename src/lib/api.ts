@@ -69,7 +69,7 @@ export const skillsApi = {
   // The server needs the person's today to fill in habits that mark themselves.
   list: () => request<Skill[]>('GET', `/skills?today=${todayKey()}`),
   create: (skill: NewSkill) => request<Skill>('POST', `/skills?today=${todayKey()}`, skill),
-  update: (id: string, changes: Partial<Pick<Skill, 'name' | 'color' | 'startDate' | 'endDate' | 'avgWeeks' | 'archived' | 'autoMark' | 'hideStreak' | 'kind'>>) =>
+  update: (id: string, changes: Partial<Pick<Skill, 'name' | 'color' | 'startDate' | 'endDate' | 'avgWeeks' | 'archived' | 'autoMark' | 'streakVisible' | 'kind'>>) =>
     request<Skill>('PATCH', `/skills/${id}?today=${todayKey()}`, changes),
   remove: (id: string) => request<void>('DELETE', `/skills/${id}`),
   toggleDay: (id: string, dateKey: string) => request<Skill>('POST', `/skills/${id}/logs/${dateKey}/toggle`),

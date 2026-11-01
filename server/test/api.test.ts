@@ -150,11 +150,16 @@ describe('skills', () => {
     await call('DELETE', `/skills/${quit.body.id}`)
   })
 
-  it('hides and shows one habit\'s streak', async () => {
-    assert.equal((await call('GET', `/skills/${id}`)).body.hideStreak, false)
-    assert.equal((await call('PATCH', `/skills/${id}`, { hideStreak: true })).body.hideStreak, true)
-    assert.equal((await call('PATCH', `/skills/${id}`, { hideStreak: 'no' })).status, 400)
-    assert.equal((await call('PATCH', `/skills/${id}`, { hideStreak: false })).body.hideStreak, false)
+
+
+  it('lets one habit override whether its streak shows, and go back to following the page', async () => {
+    assert.equal((await call('GET', `/skills/${id}`)).body.streakVisible, undefined, 'follows the page by default')
+    assert.equal((await call('PATCH', `/skills/${id}`, { streakVisible: false })).body.streakVisible, false)
+    assert.equal((await call('PATCH', `/skills/${id}`, { streakVisible: true })).body.streakVisible, true)
+    assert.equal((await call('PATCH', `/skills/${id}`, { streakVisible: 'no' })).status, 400)
+    const followed = await call('PATCH', `/skills/${id}`, { streakVisible: null })
+    assert.equal(followed.status, 200)
+    assert.ok(followed.body.streakVisible == null)
   })
 
   it('changes the start date and colour of a habit', async () => {

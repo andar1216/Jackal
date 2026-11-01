@@ -7,7 +7,7 @@ import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
 import ConnectorsButton from '../connections/ConnectorsButton'
 import type { Integration, PanelSize, Skill } from '../../types'
-import { hasEnoughForAverage } from './habitStats'
+import { hasEnoughForAverage, streakShown } from './habitStats'
 import {
   AverageWidget,
   CalendarWidget,
@@ -39,7 +39,7 @@ const WIDGETS: Record<WidgetId, Widget> = {
   streak: {
     title: 'Streak',
     perHabit: true,
-    visible: (ctx) => ctx.skills.length === 0 || (!ctx.hideAllStreaks && ctx.skills.some((h) => !h.hideStreak)),
+    visible: (ctx) => ctx.skills.length === 0 || ctx.skills.some((h) => streakShown(ctx.hideAllStreaks, h)),
     render: (ctx) => <StreakWidget ctx={ctx} />,
   },
   daysOnOff: { title: 'Days on / off', perHabit: true, render: (ctx) => <DaysOnOffWidget ctx={ctx} /> },
@@ -110,12 +110,6 @@ export default function HabitsPage() {
   }
   // Remembered in this browser, so streaks stay hidden next time too.
   const [hideAllStreaks, setHideAllStreaks] = useState(() => localStorage.getItem(HIDE_STREAKS_KEY) === '1')
-  const toggleHideAllStreaks = () => {
-    const next = !hideAllStreaks
-    setHideAllStreaks(next)
-    if (next) localStorage.setItem(HIDE_STREAKS_KEY, '1')
-    else localStorage.removeItem(HIDE_STREAKS_KEY)
-  }
   const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null)
   const showToast = (text: string, undo?: () => void) => setToast({ message: text, undo })
   // The message goes away by itself after a few seconds.
@@ -171,6 +165,23 @@ export default function HabitsPage() {
   // Archived habits are put away: they stay out of the list and the other widgets until restored.
   const active = skills.filter((s) => !s.archived)
   const archived = skills.filter((s) => s.archived)
+  // Hide all / show all wins over every habit's own choice: it clears them, so each habit follows the page again.
+  const anyStreakShown = active.some((s) => streakShown(hideAllStreaks, s))
+  const setAllStreaks = (hide: boolean) => {
+    setHideAllStreaks(hide)
+    if (hide) localStorage.setItem(HIDE_STREAKS_KEY, '1')
+    else localStorage.removeItem(HIDE_STREAKS_KEY)
+    const overridden = skills.filter((s) => s.streakVisible != null)
+    if (overridden.length === 0) return
+    setSkills((prev) => prev.map((s) => (s.streakVisible != null ? { ...s, streakVisible: null } : s)))
+    for (const s of overridden) {
+      writes.enqueue(async () => {
+        await skillsApi.update(s.id, { streakVisible: null })
+      })
+    }
+  }
+
+  const calendarShown = active.filter((s) => !calendarHidden.includes(s.id))
   const selected = active.find((s) => s.id === selectedId) ?? active[0]
 
   const setArchived = (habit: Skill, value: boolean) => {
@@ -194,9 +205,14 @@ export default function HabitsPage() {
       })
     },
     status,
-    select: setSelectedId,
+    // Clicking a habit shows it, on its own, on the calendar. Clicking it again brings the others back.
+    select: (id) => {
+      setSelectedId(id)
+      const onlyThis = calendarShown.length === 1 && calendarShown[0].id === id
+      chooseCalendarHabits(onlyThis ? active.map((s) => s.id) : [id])
+    },
     hideAllStreaks,
-    calendarHabits: active.filter((s) => !calendarHidden.includes(s.id)),
+    calendarHabits: calendarShown,
     nextColor: COLORS[skills.length % COLORS.length],
     addHabit: (fields) =>
       writes.enqueue(async () => {
@@ -243,13 +259,13 @@ export default function HabitsPage() {
             label="Filter the calendar"
             heading="Show on the calendar"
             options={active.map((s) => ({ id: s.id, label: s.name, color: s.color }))}
-            selected={active.filter((s) => !calendarHidden.includes(s.id)).map((s) => s.id)}
+            selected={calendarShown.map((s) => s.id)}
             onChange={chooseCalendarHabits}
           />
           <ConnectorsButton filter={isHabitConnector} title="Habit connectors" />
           <SettingsMenu
             items={[
-              { label: hideAllStreaks ? 'Show streaks' : 'Hide all streaks', onSelect: toggleHideAllStreaks },
+              { label: anyStreakShown ? 'Hide all streaks' : 'Show all streaks', onSelect: () => setAllStreaks(anyStreakShown) },
               layout.item,
             ]}
           />

@@ -3,6 +3,9 @@ import { toDateKey } from '../../lib/dates'
 import type { Skill } from '../../types'
 
 /** Consecutive days ending today (or yesterday, if today isn't logged yet). */
+/** A habit's own choice wins; without one it follows the page's hide-all / show-all. */
+export const streakShown = (hideAll: boolean, habit: Skill): boolean => habit.streakVisible ?? !hideAll
+
 const MIN_DAYS_FOR_AVERAGE = 21 // three weeks
 
 /** The weekly average only means something once a habit has been going for three weeks. */

@@ -18,7 +18,7 @@ export type Skill = {
   logs: string[] // YYYY-MM-DD days the skill was practiced ("days on")
   avgWeeks: number // number of weeks used for the weekly average
   kind?: HabitKind // missing means performing
-  hideStreak?: boolean // keep this habit's streak out of sight
+  streakVisible?: boolean | null // true or false overrides the page's hide-all / show-all; missing follows it
   autoMark?: boolean // every day counts as done unless unmarked
   archived?: boolean // put away: hidden from the habits list until restored (or deleted)
 }

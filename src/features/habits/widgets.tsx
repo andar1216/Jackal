@@ -4,7 +4,7 @@ import { differenceInCalendarDays, isAfter, isBefore, parseISO, startOfDay } fro
 import { formatDay, todayKey, toDateKey } from '../../lib/dates'
 import MenuButton from '../../components/MenuButton'
 import type { HabitKind, Skill } from '../../types'
-import { bestStreak, currentStreak, daysOnOff, weeklyStats } from './habitStats'
+import { bestStreak, currentStreak, daysOnOff, streakShown, weeklyStats } from './habitStats'
 
 export type HabitFields = {
   name: string
@@ -24,7 +24,7 @@ const KindSelect = ({ value, onChange }: { value: HabitKind; onChange: (kind: Ha
   </select>
 )
 
-export type HabitChanges = Partial<HabitFields> & { hideStreak?: boolean }
+export type HabitChanges = Partial<HabitFields> & { streakVisible?: boolean | null }
 
 /** "goal Dec 31 · 12 days left", or that the goal date has passed. */
 function goalText(habit: Skill, today: string): string | null {
@@ -55,7 +55,7 @@ export type WidgetCtx = {
   setAvgWeeks: (id: string, weeks: number) => void
 }
 
-const streakShown = (ctx: WidgetCtx, habit: Skill) => !ctx.hideAllStreaks && !habit.hideStreak
+const streakOf = (ctx: WidgetCtx, habit: Skill) => streakShown(ctx.hideAllStreaks, habit)
 
 const NoHabit = ({ ctx }: { ctx: WidgetCtx }) => (
   <p className="empty">
@@ -203,7 +203,7 @@ export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
                       className="skill-name"
                       onClick={() => ctx.select(s.id)}
                       aria-pressed={isSelected}
-                      title="Show this habit in the other widgets"
+                      title="Show only this habit on the calendar (click again to show them all)"
                     >
                       <span className="swatch" style={{ background: s.color }} />
                       <span>
@@ -211,8 +211,8 @@ export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
                         <span className="pill" style={{ marginLeft: 8 }}>
                           {KIND_LABELS[s.kind ?? 'performing']}
                         </span>
-                        {streakShown(ctx, s) && <span className="stat-label"> · since {formatDay(s.startDate)}</span>}
-                        {streakShown(ctx, s) && goalText(s, today) && (
+                        {streakOf(ctx, s) && <span className="stat-label"> · since {formatDay(s.startDate)}</span>}
+                        {streakOf(ctx, s) && goalText(s, today) && (
                           <span className="stat-label"> · {goalText(s, today)}</span>
                         )}
                         {s.autoMark && (
@@ -223,7 +223,7 @@ export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
                       </span>
                     </button>
                     <span className="row">
-                      {streakShown(ctx, s) && (
+                      {streakOf(ctx, s) && (
                         <span className="muted" title="Current streak">
                           🔥 {currentStreak(s)}
                         </span>
@@ -240,8 +240,9 @@ export function HabitsWidget({ ctx }: { ctx: WidgetCtx }) {
                         items={[
                           { label: 'Edit', onSelect: () => setEditingId(s.id) },
                           {
-                            label: s.hideStreak ? 'Show streak' : 'Hide streak',
-                            onSelect: () => ctx.updateHabit(s, { hideStreak: !s.hideStreak }),
+                            // This habit's own choice, which wins over hide-all / show-all.
+                            label: streakOf(ctx, s) ? 'Hide streak' : 'Show streak',
+                            onSelect: () => ctx.updateHabit(s, { streakVisible: !streakOf(ctx, s) }),
                           },
                           { label: 'Archive', onSelect: () => ctx.setArchived(s, true) },
                         ]}
@@ -361,11 +362,11 @@ export function StreakWidget({ ctx }: { ctx: WidgetCtx }) {
   const skill = ctx.selected
   if (!skill) return <NoHabit ctx={ctx} />
 
-  if (!streakShown(ctx, skill)) {
+  if (!streakOf(ctx, skill)) {
     return (
       <p className="empty">
-        {ctx.hideAllStreaks
-          ? 'Streaks are hidden. Use Show streaks at the top of the page to see them again.'
+        {skill.streakVisible == null && ctx.hideAllStreaks
+          ? 'Streaks are hidden. Use Show all streaks in the gear at the top of the page to see them again.'
           : `${skill.name}'s streak is hidden. Open its ⋯ menu and choose Show streak.`}
       </p>
     )
