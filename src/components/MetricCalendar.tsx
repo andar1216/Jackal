@@ -22,6 +22,8 @@ type Props = {
   metrics: CalendarMetric[]
   /** Pin the calendar to one month, for a page that already has its own month picker. Otherwise it has arrows. */
   month?: Date
+  /** Writes a short label inside each day that has something shown on it (for example its total time). Nothing is written if it gives back nothing. */
+  dayLabel?: (day: string, shown: CalendarMetric[]) => string | undefined
 }
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -31,7 +33,7 @@ const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
  * a day are stacked as bands, the first one at the bottom (the same look as the habit calendar). The filter at the top
  * chooses which metrics show, and clicking a day lists what was tracked.
  */
-export default function MetricCalendar({ metrics, month }: Props) {
+export default function MetricCalendar({ metrics, month, dayLabel }: Props) {
   const [ownMonth, setOwnMonth] = useState(() => startOfMonth(new Date()))
   const [selected, setSelected] = useState<string | null>(null)
   // Until the person picks, every metric is shown except those that start off.
@@ -89,6 +91,7 @@ export default function MetricCalendar({ metrics, month }: Props) {
         {days.map((d) => {
           const marks = on.filter((m) => has(m, d))
           const summary = marks.map((m) => `${m.label} ${m.format(m.byDay[d])}`).join(', ')
+          const label = marks.length > 0 ? dayLabel?.(d, marks) : undefined
           return (
             <button
               key={d}
@@ -107,6 +110,11 @@ export default function MetricCalendar({ metrics, month }: Props) {
                 </span>
               )}
               <span className="mcal-num">{Number(d.slice(8))}</span>
+              {label && (
+                <span className="mcal-amount" aria-hidden>
+                  {label}
+                </span>
+              )}
             </button>
           )
         })}

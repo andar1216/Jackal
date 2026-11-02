@@ -16,7 +16,7 @@ import DevicesPanel from './DevicesPanel'
 import DeviceViewsBar from './DeviceViewsBar'
 import { devicesIn, resolveView } from './deviceViews'
 import ItemIcon from './ItemIcon'
-import { appName, formatSeconds, ofKind, recentDays, topApps, topSites, totalsByDay } from './screenTimeStats'
+import { appName, formatCompact, formatSeconds, ofKind, recentDays, topApps, topSites, totalsByDay } from './screenTimeStats'
 import { useDeviceGroups, useDeviceView } from './useDeviceViews'
 import { useScreenTime } from './useScreenTime'
 
@@ -245,7 +245,11 @@ export default function ScreenTimePage() {
         </Panel>
 
         <Panel id="calendar" title="Calendar" size="full">
-          <MetricCalendar metrics={metrics} />
+          <MetricCalendar
+            metrics={metrics}
+            // Each day with numbers shows how long it was: the total of whichever of computer and phone are switched on.
+            dayLabel={(day, shown) => formatCompact(shown.reduce((sum, m) => sum + (m.byDay[day] ?? 0), 0))}
+          />
         </Panel>
       </Board>
     </>

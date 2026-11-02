@@ -653,6 +653,21 @@ button.link {
   background: var(--accent-soft);
 }
 
+/* A short label at the bottom of a day, like its total time. */
+.mcal-amount {
+  position: absolute;
+  left: 6px;
+  right: 4px;
+  bottom: 4px;
+  z-index: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-shadow: 0 0 3px rgb(0 0 0 / 0.55);
+}
+
 .mcal-num {
   font-size: 0.8rem;
 }

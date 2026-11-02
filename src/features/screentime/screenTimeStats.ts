@@ -10,6 +10,15 @@ export function formatSeconds(seconds: number) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`
 }
 
+/** A shorter version of the above for tight places, like inside a calendar day: "2h05", "45m", or "<1m". */
+export function formatCompact(seconds: number) {
+  const minutes = Math.round(seconds / 60)
+  if (seconds > 0 && minutes < 1) return '<1m'
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m}m`
+}
+
 /** Seconds on each day, summed over every app (and every device in the list). */
 export function totalsByDay(usage: ScreenTimeUsage[]) {
   const byDay: Record<string, number> = {}
