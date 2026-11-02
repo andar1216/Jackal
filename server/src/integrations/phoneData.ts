@@ -9,7 +9,7 @@ import { dateString, layoutBody, layoutPageParam, mealSchema, skillSchema, worko
 import { crunchData, syncCrunch } from './crunch.js'
 import { integrationList } from './list.js'
 import { plaidAccounts } from './plaid.js'
-import { saveCategory, screenTimeData } from './screenTime.js'
+import { saveCategory, screenTimeData, slotsForDay } from './screenTime.js'
 import { importHealth, importStrongFile } from './workoutImport.js'
 
 /**
@@ -169,6 +169,11 @@ const DAYS_FOR_PHONE = 45 // the phone's longest "last 30 days" plus some room, 
 
 phoneDataRouter.get('/screen-time', async (_req, res) => {
   res.json(await screenTimeData(ownerOf(res), DAYS_FOR_PHONE))
+})
+
+// When each app was on screen on one day, by quarter hour, like on the website.
+phoneDataRouter.get('/screen-time/slots', async (req, res) => {
+  res.json(await slotsForDay(ownerOf(res), dateString.parse(req.query.day)))
 })
 
 // Files an app or website under a category, like on the website.

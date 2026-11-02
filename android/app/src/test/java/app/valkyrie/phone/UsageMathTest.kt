@@ -156,4 +156,40 @@ class UsageMathTest {
         val result = UsageMath.older(listOf(DailyStat(at(old, 15), "yt", 60_000)), day1, zone, emptySet())
         assertEquals(mapOf("yt" to 60L), result[old])
     }
+
+    private fun slots(events: List<Ev>, ignore: Set<String> = emptySet()) = UsageMath.slots(events, start, end, zone, ignore)
+
+    @Test
+    fun slotsSplitAnAppsTimeAcrossTheQuarterHoursItWasOpen() {
+        val result = slots(listOf(Ev(at(day1, 9, 10), UsageMath.RESUMED, "yt"), Ev(at(day1, 9, 40), UsageMath.PAUSED, "yt")))
+        assertEquals(mapOf("yt" to mapOf(36 to 300L, 37 to 900L, 38 to 600L)), result[day1])
+    }
+
+    @Test
+    fun slotsStartANewDayAtMidnightAndIgnoreWhatTotalsIgnore() {
+        val result = slots(
+            listOf(
+                Ev(at(day1, 23, 50), UsageMath.RESUMED, "yt"),
+                Ev(at(day2, 0, 10), UsageMath.PAUSED, "yt"),
+                Ev(at(day2, 8), UsageMath.RESUMED, "home"),
+                Ev(at(day2, 8, 5), UsageMath.PAUSED, "home"),
+            ),
+            ignore = setOf("home"),
+        )
+        assertEquals(mapOf("yt" to mapOf(95 to 600L)), result[day1])
+        assertEquals(mapOf("yt" to mapOf(0 to 600L)), result[day2])
+    }
+
+    @Test
+    fun slotsAddUpToTheSameSecondsAsTheDayTotals() {
+        val events = listOf(
+            Ev(at(day1, 9, 5), UsageMath.RESUMED, "yt"),
+            Ev(at(day1, 9, 50), UsageMath.RESUMED, "maps"),
+            Ev(at(day1, 10, 20), UsageMath.SCREEN_OFF, ""),
+            Ev(at(day1, 22), UsageMath.RESUMED, "yt"),
+            Ev(at(day1, 22, 3), UsageMath.PAUSED, "yt"),
+        )
+        val perApp = slots(events)[day1]!!.mapValues { (_, q) -> q.values.sum() }
+        assertEquals(totals(events)[day1], perApp)
+    }
 }

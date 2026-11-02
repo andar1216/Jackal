@@ -70,6 +70,15 @@ export type AppCategoryEntry = { kind: 'app' | 'site'; name: string; mine: strin
 
 export type ScreenTimeData = { usage: ScreenTimeUsage[]; sites: ScreenTimeSite[]; phoneDays: PhoneDayCounts[]; categories: AppCategoryEntry[] }
 
+/** When one app or website was on screen on one day: the seconds in each quarter hour (0 is 12:00 to 12:15 am, 95 is 11:45 pm to midnight). */
+export type ScreenTimeSlots = {
+  device: string
+  kind: 'computer' | 'phone'
+  type: 'app' | 'site'
+  name: string
+  slots: { q: number; seconds: number }[]
+}
+
 export type Integration = {
   id: string
   name: string

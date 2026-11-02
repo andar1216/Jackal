@@ -5,7 +5,8 @@ import { Router } from 'express'
 import { currentUserId } from '../auth/middleware.js'
 import { config } from '../config.js'
 import { HttpError } from '../lib/errors.js'
-import { Connection, ScreenTimeSite, ScreenTimeUsage } from '../models.js'
+import { SlotCounter } from '../lib/slots.js'
+import { Connection, ScreenTimeSite, ScreenTimeSlot, ScreenTimeUsage } from '../models.js'
 
 /**
  * Reads screen time from ActivityWatch (https://activitywatch.net), a free program that runs on this computer, counts
@@ -126,16 +127,21 @@ function activeWindowLines(b: Picked) {
 
 export const appQuery = (b: Picked) => [...activeWindowLines(b), 'RETURN = merge_events_by_keys(active, ["app"]);']
 
-export const webQuery = (b: Picked) => [
+/** Every stretch of time in an app, with when it began, for working out which quarter hours it fell in. */
+export const appEventsQuery = (b: Picked) => [...activeWindowLines(b), 'RETURN = sort_by_timestamp(active);']
+
+const webLines = (b: Picked) => [
   ...activeWindowLines(b),
   `browser = filter_keyvals(active, "app", ${JSON.stringify(BROWSERS)});`,
   `web = flood(query_bucket("${b.web[0]}"));`,
   ...b.web.slice(1).map((id) => `web = concat(web, flood(query_bucket("${id}")));`),
   'web = filter_period_intersect(web, browser);',
-  'RETURN = merge_events_by_keys(web, ["url"]);',
 ]
 
-type AwEvent = { duration?: number; data?: Record<string, unknown> }
+export const webQuery = (b: Picked) => [...webLines(b), 'RETURN = merge_events_by_keys(web, ["url"]);']
+export const webEventsQuery = (b: Picked) => [...webLines(b), 'RETURN = sort_by_timestamp(web);']
+
+type AwEvent = { timestamp?: string; duration?: number; data?: Record<string, unknown> }
 const events = (v: unknown): AwEvent[] => (Array.isArray(v) ? (v as AwEvent[]) : [])
 
 /** "chrome.exe" becomes "chrome", the way Valkyrie's own agent names programs. */
@@ -167,7 +173,32 @@ function addUp(list: AwEvent[], key: (e: AwEvent) => string | undefined) {
     .slice(0, 500)
 }
 
-export type SyncResult = { days: number; apps: number; sites: number }
+/** The quarter hours each app and website was on screen in, for the days asked about. Only names and times are kept. */
+async function readSlots(picked: Picked, timeperiods: string[], days: Set<string>) {
+  const apps = new SlotCounter()
+  const sites = new SlotCounter()
+  const take = (counter: SlotCounter, list: AwEvent[], name: (e: AwEvent) => string | undefined) => {
+    for (const e of list) {
+      const start = Date.parse(String(e.timestamp))
+      const seconds = Number(e.duration)
+      const who = name(e)
+      if (!who || !Number.isFinite(start) || !Number.isFinite(seconds) || seconds <= 0) continue
+      counter.add(who.slice(0, 120), start, start + seconds * 1000)
+    }
+  }
+  const appResults = await gateway.query(timeperiods, appEventsQuery(picked))
+  appResults.forEach((r) => take(apps, events(r), (e) => appName(e.data?.app) || undefined))
+  if (picked.web.length) {
+    const webResults = await gateway.query(timeperiods, webEventsQuery(picked))
+    webResults.forEach((r) => take(sites, events(r), (e) => siteName(e.data?.url)))
+  }
+  return [
+    ...apps.result().map((r) => ({ type: 'app' as const, ...r })),
+    ...sites.result().map((r) => ({ type: 'site' as const, ...r })),
+  ].filter((r) => days.has(r.day))
+}
+
+export type SyncResult ={ days: number; apps: number; sites: number }
 
 /** Reads the last `days` days from ActivityWatch and replaces Valkyrie's copy of them. */
 export async function syncActivityWatch(userId: unknown, days: number): Promise<SyncResult> {
@@ -190,14 +221,25 @@ export async function syncActivityWatch(userId: unknown, days: number): Promise<
     return bySite.map((r) => ({ userId, device, source: SOURCE, day: p.key, site: r.name, seconds: r.seconds }))
   })
 
-  // ActivityWatch is the source of truth for these days, so what was here is replaced, not added to.
+  // When each app and website was on screen, by quarter hour. The totals above stay right if this part fails.
   const keys = periods.map((p) => p.key)
+  const slotRows = await readSlots(picked, timeperiods, new Set(keys)).then(
+    (rows) => rows.map((r) => ({ userId, device, source: SOURCE, ...r })),
+    (err) => {
+      console.warn('ActivityWatch times failed:', err instanceof Error ? err.message : err)
+      return null
+    },
+  )
+
+  // ActivityWatch is the source of truth for these days, so what was here is replaced, not added to.
   await Promise.all([
     ScreenTimeUsage.deleteMany({ userId, source: SOURCE, day: { $in: keys } }),
     ScreenTimeSite.deleteMany({ userId, source: SOURCE, day: { $in: keys } }),
+    slotRows ? ScreenTimeSlot.deleteMany({ userId, source: SOURCE, day: { $in: keys } }) : undefined,
   ])
   if (apps.length) await ScreenTimeUsage.insertMany(apps)
   if (sites.length) await ScreenTimeSite.insertMany(sites)
+  if (slotRows?.length) await ScreenTimeSlot.insertMany(slotRows)
 
   const now = new Date()
   await Connection.findOneAndUpdate({ userId, provider: ACTIVITYWATCH_PROVIDER }, { lastSyncedAt: now }, { upsert: false })
@@ -275,6 +317,7 @@ export async function disconnectActivityWatch(userId: unknown) {
   await Promise.all([
     ScreenTimeUsage.deleteMany({ userId, source: SOURCE }),
     ScreenTimeSite.deleteMany({ userId, source: SOURCE }),
+    ScreenTimeSlot.deleteMany({ userId, source: SOURCE }),
     Connection.deleteOne({ userId, provider: ACTIVITYWATCH_PROVIDER }),
   ])
 }

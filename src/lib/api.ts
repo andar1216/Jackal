@@ -1,4 +1,4 @@
-import type { AccountView, Goal, GoalPriority, GoalStatus, ActivityWatchStatus, BankAccount, CrunchData, DeviceGroup, Integration, ManualAccount, Meal, PanelState, PhonePairCode, PhoneStatus, ScreenTimeData, Skill, SubscriptionData, Transaction, User, Workout } from '../types'
+import type { AccountView, Goal, GoalPriority, GoalStatus, ActivityWatchStatus, BankAccount, CrunchData, DeviceGroup, Integration, ManualAccount, Meal, PanelState, PhonePairCode, PhoneStatus, ScreenTimeData, ScreenTimeSlots, Skill, SubscriptionData, Transaction, User, Workout } from '../types'
 import { todayKey } from './dates'
 
 // Dev: Vite proxies /api to the backend. For a separate API host, set VITE_API_URL.
@@ -201,6 +201,8 @@ export const SCREEN_TIME_CHANGED = 'valkyrie:screen-time-changed'
 
 export const screenTimeApi = {
   data: () => request<ScreenTimeData>('GET', '/integrations/screen-time/data'),
+  /** When each app and website was on screen on one day, by quarter hour. */
+  slots: (day: string) => request<ScreenTimeSlots[]>('GET', `/integrations/screen-time/slots?day=${day}`),
   /** Files an app or website under a category. null puts it back to automatic. */
   setCategory: (kind: 'app' | 'site', name: string, category: string | null) =>
     request<void>('PUT', '/integrations/screen-time/category', { kind, name, category }),

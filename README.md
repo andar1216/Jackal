@@ -220,8 +220,15 @@ The Dashboard's **Connect** button lists the outside services we want to pull da
 | MyFitnessPal | Likely partner-only API | Not started, may not be possible |
 | Crunch Fitness | Unofficial (no public API). Connect opens https://members.crunch.com/ in a new tab; you sign in there and click a "Send to Valkyrie" bookmark, which sends the same data the My Profile page shows. Optionally Valkyrie can sign in for you instead (password stored encrypted; needs INTEGRATION_ENCRYPTION_KEY) so it refreshes by itself | Built: check-in progress and history, class history, payment history on the Fitness page |
 | Android phone screen time | Unofficial (Android has no outside API). The Valkyrie app in `android/` reads it on the phone and sends daily totals to this server over your Wi-Fi. Pair it from the Screen Time page | Built (see below) |
-| ActivityWatch | Free open-source tracker on this PC. Valkyrie reads its daily per-app and per-website totals from its local API (`localhost:5600`) and keeps only names and seconds. Connect from the Screen Time page | Built |
+| ActivityWatch | Free open-source tracker on this PC. Valkyrie reads its daily per-app and per-website totals from its local API (`localhost:5600`) and keeps only names and seconds. Connect from the Screen Time page. It also keeps *when* each app and website was on screen, by quarter hour (names and seconds only) | Built |
 
+### When each app was on screen (the day timeline)
+
+Click a day on the Screen Time calendar and under its totals is an hour-by-hour view: every hour is four squares (the first 15 minutes, 15 to 30, 30 to 45, 45 to 60), shaded in four steps by how much of those 15 minutes a screen was on (lightest for a little, darkest for all of it). Four darkest squares in a row is a full hour on screen. Click a square to see which apps and websites were on in that quarter, and below it each app and website lists the stretches it was open (for example "9:00 AM – 9:45 AM"). **All / Computer / Phone** switches whose screen counts when both have data, and the device view at the top of the page is respected. Two screens on at once are not added together (a quarter hour can't hold more than 15 minutes), only apps count towards the shade (a website is inside the browser app), and websites are listed separately.
+
+- Computers: ActivityWatch's window and browser-tab events are cut into quarter hours on each sync (`ScreenTimeSlot` in `server/src/models.ts`, `server/src/lib/slots.ts`).
+- Phone: the app cuts Android's usage log into quarter hours (`UsageMath.slots`) and sends them with each day. Android only keeps that detailed log for about a week, so older days have totals but no timeline. A day is only replaced when the phone sends times for it.
+- Precision is 15 minutes. Nothing but app/site names and seconds is stored; it goes away with the rest when a device is removed or ActivityWatch is disconnected. API: `GET /api/integrations/screen-time/slots?day=YYYY-MM-DD` (phone key: `GET /api/phone/app/screen-time/slots?day=`).
 ### Strong workouts (CSV import and Health Connect)
 
 Android won't let one app read another's data, so Strong's workouts come in two ways, both ending up as ordinary workouts in the Fitness page and calendar:

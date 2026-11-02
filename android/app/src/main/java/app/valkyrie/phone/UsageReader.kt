@@ -50,15 +50,23 @@ object UsageReader {
         val counted = UsageMath.counts(events, from, now, zone, ignore)
         val firstLogged = events.minOfOrNull { it.time }?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
         val all = (0 until days).map { today.minusDays((days - 1 - it).toLong()) }
+        val slotted = UsageMath.slots(events, from, now, zone, ignore)
         return Usage(
             days = all.associateWith { byDay[it] ?: emptyMap() },
             // A day the log only half covers (its first day) would show too few, so it gets no counts.
             counts = all.filter { firstLogged != null && it > firstLogged }.associateWith { counted[it] ?: UsageMath.DayCounts(0, emptyMap()) },
+            slots = all.filter { firstLogged != null && it > firstLogged }.associateWith { slotted[it] ?: emptyMap() },
         )
     }
 
     /** Seconds per app per day, and the unlocks and notifications for the days the log fully covers. */
-    class Usage(val days: Map<LocalDate, Map<String, Long>>, val counts: Map<LocalDate, UsageMath.DayCounts>, val note: String = "")
+    class Usage(
+        val days: Map<LocalDate, Map<String, Long>>,
+        val counts: Map<LocalDate, UsageMath.DayCounts>,
+        val note: String = "",
+        /** When each app (by package) was on screen, by quarter hour, for the days the log fully covers. See UsageMath.slots. */
+        val slots: Map<LocalDate, Map<String, Map<Int, Long>>> = emptyMap(),
+    )
 
     /**
      * Everything the phone still has, up to `days` days back. The recent days come from the detailed log, which is exact
@@ -93,7 +101,8 @@ object UsageReader {
             "It gave ${stats.size} daily totals, and the log starts ${firstLogged ?: "nowhere"}."
         val counted = UsageMath.counts(events, from, now, zone, ignore)
         val counts = recent.keys.associateWith { counted[it] ?: UsageMath.DayCounts(0, emptyMap()) }
-        return Usage(real, counts, note)
+        val slotted = UsageMath.slots(events, maxOf(from, exactFrom.atStartOfDay(zone).toInstant().toEpochMilli()), now, zone, ignore)
+        return Usage(real, counts, note, recent.keys.associateWith { slotted[it] ?: emptyMap() })
     }
 
     // The home screen and the system's own screens are not time "in an app".

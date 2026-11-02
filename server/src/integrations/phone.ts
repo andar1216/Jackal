@@ -7,7 +7,7 @@ import { config } from '../config.js'
 import { HttpError } from '../lib/errors.js'
 import { requireId } from '../lib/crud.js'
 import { phoneDataRouter } from './phoneData.js'
-import { AppCategory, Connection, PhoneDay, PhoneDevice, PhoneIcon, PhonePairing, ScreenTimeUsage } from '../models.js'
+import { AppCategory, Connection, PhoneDay, PhoneDevice, PhoneIcon, PhonePairing, ScreenTimeSlot, ScreenTimeUsage } from '../models.js'
 import { dateString } from '../validation.js'
 
 /**
@@ -74,6 +74,7 @@ async function removeDevices(userId: unknown, filter: { _id?: unknown } = {}) {
   await Promise.all([
     PhoneDevice.deleteMany({ _id: { $in: gone.map((d) => d._id) } }),
     ScreenTimeUsage.deleteMany({ userId, source: PHONE_SOURCE, device: { $in: gone.map((d) => d.name) } }),
+    ScreenTimeSlot.deleteMany({ userId, source: PHONE_SOURCE, device: { $in: gone.map((d) => d.name) } }),
     PhoneDay.deleteMany({ userId, device: { $in: gone.map((d) => d.name) } }),
   ])
   // Nothing left on the phone side: forget the connection, the code and the pictures too.
@@ -186,6 +187,16 @@ const syncSchema = z.strictObject({
       z.strictObject({
         day: dateString,
         apps: z.array(z.strictObject({ app: z.string().trim().min(1).max(120), seconds: z.number().min(1).max(MAX_DAY_SECONDS) })).max(500),
+        // When each app was on screen, in quarter hours (0 is 12:00 to 12:15 am). Only for days the phone has the detailed log for.
+        slots: z
+          .array(
+            z.strictObject({
+              app: z.string().trim().min(1).max(120),
+              q: z.array(z.tuple([z.number().int().min(0).max(95), z.number().min(1).max(900)])).min(1).max(96),
+            }),
+          )
+          .max(500)
+          .optional(),
         // Only days the phone could count exactly have these; for older days they are left out, and what is kept stays.
         unlocks: z.number().int().min(0).max(100_000).optional(),
         notifications: z.array(z.strictObject({ app: z.string().trim().min(1).max(120), count: z.number().int().min(1).max(100_000) })).max(500).optional(),
@@ -213,6 +224,28 @@ phoneAppRouter.post('/sync', requirePhone, async (req, res) => {
 
   await ScreenTimeUsage.deleteMany({ userId, source: PHONE_SOURCE, device: device.name, day: { $in: [...new Set(days.map((d) => d.day))] } })
   if (rows.length) await ScreenTimeUsage.insertMany(rows)
+
+  // The quarter hours of the days that came with them. Two apps with one name are one line.
+  for (const d of days) {
+    if (!d.slots) continue
+    const byApp = new Map<string, Map<number, number>>()
+    for (const s of d.slots) {
+      const quarters = byApp.get(s.app) ?? new Map<number, number>()
+      for (const [q, seconds] of s.q) quarters.set(q, Math.min(900, (quarters.get(q) ?? 0) + seconds))
+      byApp.set(s.app, quarters)
+    }
+    await ScreenTimeSlot.deleteMany({ userId, source: PHONE_SOURCE, device: device.name, day: d.day })
+    const slotRows = [...byApp].map(([name, quarters]) => ({
+      userId,
+      device: device.name,
+      source: PHONE_SOURCE,
+      type: 'app',
+      day: d.day,
+      name,
+      slots: [...quarters].map(([q, seconds]) => ({ q, seconds: Math.round(seconds) })).sort((a, b) => a.q - b.q),
+    }))
+    if (slotRows.length) await ScreenTimeSlot.insertMany(slotRows)
+  }
 
   const named = Object.entries(categories ?? {}).slice(0, 500)
   if (named.length) {

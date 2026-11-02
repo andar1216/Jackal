@@ -23,6 +23,57 @@ object UsageMath {
     const val NOTIFICATION = 12 // UsageEvents.Event.NOTIFICATION_INTERRUPTION: an app's notification got the person's attention
     const val UNLOCK = 18 // UsageEvents.Event.KEYGUARD_HIDDEN: the lock screen went away
 
+    /** Calls `each(pkg, start, end)` for every stretch an app was on screen (the ignored ones left out). See `totals` for the rules. */
+    private fun intervals(events: List<Ev>, to: Long, ignore: Set<String>, each: (String, Long, Long) -> Unit) {
+        var current: String? = null
+        var since = 0L
+        fun close(at: Long) {
+            val pkg = current ?: return
+            if (pkg !in ignore) each(pkg, since, at)
+            current = null
+        }
+
+        for (e in events.sortedBy { it.time }) {
+            when (e.type) {
+                RESUMED -> {
+                    close(e.time)
+                    current = e.pkg
+                    since = e.time
+                }
+                PAUSED -> if (current == e.pkg) close(e.time)
+                SCREEN_OFF, SHUTDOWN -> close(e.time)
+            }
+        }
+        close(to) // still on screen right now
+    }
+
+    /** A day has 96 quarter hours: 0 is 12:00 to 12:15 am, 37 is 9:15 to 9:30 am, by the phone's own clock. */
+    const val QUARTER_SECONDS = 900L
+
+    /**
+     * When each app was on screen: per day, per app (by package), the seconds in each quarter hour of the day that it was
+     * (so an app open from 9:10 to 9:40 has 300 seconds in quarter 36, 900 in 37 and 600 in 38). Same rules as `totals`.
+     */
+    fun slots(events: List<Ev>, from: Long, to: Long, zone: ZoneId, ignore: Set<String>): Map<LocalDate, Map<String, Map<Int, Long>>> {
+        val millis = HashMap<LocalDate, HashMap<String, HashMap<Int, Long>>>()
+        intervals(events, to, ignore) { pkg, start, end ->
+            var at = maxOf(start, from)
+            val stop = minOf(end, to)
+            while (at < stop) {
+                val local = Instant.ofEpochMilli(at).atZone(zone)
+                val quarter = local.hour * 4 + local.minute / 15
+                val next = local.truncatedTo(java.time.temporal.ChronoUnit.MINUTES).minusMinutes((local.minute % 15).toLong()).plusMinutes(15)
+                val until = minOf(stop, next.toInstant().toEpochMilli())
+                val perApp = millis.getOrPut(local.toLocalDate()) { HashMap() }.getOrPut(pkg) { HashMap() }
+                perApp[quarter] = (perApp[quarter] ?: 0L) + (until - at)
+                at = until
+            }
+        }
+        return millis.mapValues { (_, apps) ->
+            apps.mapValues { (_, quarters) -> quarters.mapValues { minOf(QUARTER_SECONDS, (it.value + 500) / 1000) }.filterValues { it > 0 } }
+                .filterValues { it.isNotEmpty() }
+        }.filterValues { it.isNotEmpty() }
+    }
     /**
      * Seconds each app was on screen, per day, for the time from `from` to `to` (milliseconds). Days are the phone's own days.
      * Only one app is on screen at a time: an app is on screen from when it resumes until it pauses, another app takes over,
@@ -44,26 +95,7 @@ object UsageMath {
             }
         }
 
-        var current: String? = null
-        var since = 0L
-        fun close(at: Long) {
-            val pkg = current ?: return
-            if (pkg !in ignore) add(pkg, since, at)
-            current = null
-        }
-
-        for (e in events.sortedBy { it.time }) {
-            when (e.type) {
-                RESUMED -> {
-                    close(e.time)
-                    current = e.pkg
-                    since = e.time
-                }
-                PAUSED -> if (current == e.pkg) close(e.time)
-                SCREEN_OFF, SHUTDOWN -> close(e.time)
-            }
-        }
-        close(to) // still on screen right now
+        intervals(events, to, ignore) { pkg, start, end -> add(pkg, start, end) }
 
         return millis.mapValues { (_, apps) -> apps.mapValues { (it.value + 500) / 1000 }.filterValues { it > 0 } }
     }

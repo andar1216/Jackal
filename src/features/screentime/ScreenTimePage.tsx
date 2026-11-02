@@ -12,6 +12,7 @@ import type { Integration } from '../../types'
 import ConnectorsButton from '../connections/ConnectorsButton'
 import { MAX_DAYS, MAX_ITEMS, amountOf, useAmount } from './amount'
 import AmountSelect from './AmountSelect'
+import DayTimeline from './DayTimeline'
 import DevicesPanel from './DevicesPanel'
 import DeviceViewsBar from './DeviceViewsBar'
 import { devicesIn, resolveView } from './deviceViews'
@@ -258,6 +259,7 @@ export default function ScreenTimePage() {
         <Panel id="calendar" title="Calendar" size="full">
           <MetricCalendar
             metrics={metrics}
+            dayDetails={(day) => <DayTimeline key={day} day={day} view={view} />}
             // Each day with numbers shows how long it was: the total of whichever of computer and phone are switched on.
             dayLabel={(day, shown) => {
               const seconds = shown.filter((m) => m.id === 'computer' || m.id === 'phone').reduce((sum, m) => sum + (m.byDay[day] ?? 0), 0)

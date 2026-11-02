@@ -29,6 +29,8 @@ object Sync {
         /** Unlocks per day, and notifications per app label, for the days the phone could count exactly. */
         val unlocks: Map<LocalDate, Int> = emptyMap(),
         val notifications: Map<LocalDate, Map<String, Int>> = emptyMap(),
+        /** When each app label was on screen, by quarter hour (quarter to seconds), for the days the phone knows it exactly. */
+        val slots: Map<LocalDate, Map<String, Map<Int, Long>>> = emptyMap(),
     )
 
     fun readByLabel(context: Context, days: Int, history: Boolean = false): Reading {
@@ -55,7 +57,16 @@ object Sync {
             }
             named as Map<String, Long>
         }
-        return Reading(byDay, packageOf, note, usage.counts.mapValues { it.value.unlocks }, notifications)
+        val slots = usage.slots.mapValues { (_, apps) ->
+            val named = HashMap<String, HashMap<Int, Long>>()
+            for ((pkg, quarters) in apps) {
+                val label = labels.getOrPut(pkg) { UsageReader.label(context, pkg) } ?: continue
+                val merged = named.getOrPut(label) { HashMap() }
+                for ((q, seconds) in quarters) merged[q] = minOf(UsageMath.QUARTER_SECONDS, (merged[q] ?: 0L) + seconds)
+            }
+            named as Map<String, Map<Int, Long>>
+        }
+        return Reading(byDay, packageOf, note, usage.counts.mapValues { it.value.unlocks }, notifications, slots)
     }
 
     private val lock = Any()
@@ -89,6 +100,15 @@ object Sync {
                         val notified = JSONArray()
                         for ((name, count) in reading.notifications[day] ?: emptyMap()) notified.put(JSONObject().put("app", name).put("count", count))
                         entry.put("unlocks", unlocks).put("notifications", notified)
+                    }
+                    reading.slots[day]?.let { byLabel ->
+                        val timed = JSONArray()
+                        for ((name, quarters) in byLabel) {
+                            val q = JSONArray()
+                            for ((quarter, seconds) in quarters.toSortedMap()) q.put(JSONArray().put(quarter).put(seconds))
+                            timed.put(JSONObject().put("app", name).put("q", q))
+                        }
+                        entry.put("slots", timed)
                     }
                     days.put(entry)
                 }

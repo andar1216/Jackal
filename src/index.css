@@ -743,6 +743,82 @@ button.link {
   margin-top: 12px;
 }
 
+/* An hour by hour view of a day: four 15 minute squares in each hour, shaded by how much of it a screen was on. */
+.tl {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.tl h4 {
+  margin: 0;
+}
+.tl-halves {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 4px 20px;
+}
+.tl-hour {
+  display: grid;
+  grid-template-columns: 48px repeat(4, 1fr);
+  gap: 3px;
+  align-items: center;
+  margin-bottom: 3px;
+}
+.tl-hour-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.tl-hour.full .tl-hour-label {
+  color: var(--accent);
+  font-weight: 700;
+}
+.tl-cell {
+  height: 22px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+}
+.tl-cell.l1 {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.tl-cell.l2 {
+  background: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+.tl-cell.l3 {
+  background: color-mix(in srgb, var(--accent) 75%, transparent);
+}
+.tl-cell.l4 {
+  background: var(--accent);
+}
+.tl-cell.selected {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+.tl-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tl-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+}
+.tl-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tl-picked {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
 /* The steps for connecting Crunch from its own tab. */
 .crunch-setup {
   margin-top: 8px;

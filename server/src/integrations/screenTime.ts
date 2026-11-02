@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import { currentUserId } from '../auth/middleware.js'
 import { z } from 'zod'
-import { AppCategory, PhoneDay, PhoneIcon, ScreenTimeSite, ScreenTimeUsage } from '../models.js'
+import { AppCategory, PhoneDay, PhoneIcon, ScreenTimeSite, ScreenTimeSlot, ScreenTimeUsage } from '../models.js'
+import { dateString } from '../validation.js'
 import { iconSources } from './icons.js'
 
 /** What the Screen Time page reads. The numbers come from ActivityWatch (see activityWatch.ts). */
@@ -28,6 +29,22 @@ export async function screenTimeData(userId: string, days = HISTORY_DAYS) {
     phoneDays: phoneDays.map((p) => ({ device: p.device, day: p.day, unlocks: p.unlocks, notifications: p.notifications.map((n: { app: string; count: number }) => ({ app: n.app, count: n.count })) })),
   }
 }
+
+/** When each app and website was on screen on one day, by quarter hour (see lib/slots.ts), on every device. */
+export async function slotsForDay(userId: string, day: string) {
+  const rows = await ScreenTimeSlot.find({ userId, day }).limit(5000).lean()
+  return rows.map((r) => ({
+    device: r.device,
+    kind: r.source === 'phone' ? 'phone' : 'computer',
+    type: r.type,
+    name: r.name,
+    slots: r.slots.map((s: { q: number; seconds: number }) => ({ q: s.q, seconds: s.seconds })),
+  }))
+}
+
+screenTimeRouter.get('/slots', async (req, res) => {
+  res.json(await slotsForDay(currentUserId(req), dateString.parse(req.query.day)))
+})
 
 screenTimeRouter.get('/data', async (req, res) => {
   res.json(await screenTimeData(currentUserId(req)))

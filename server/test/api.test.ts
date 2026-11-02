@@ -806,6 +806,9 @@ describe('activitywatch', () => {
             { duration: 100, data: { url: 'not a url' } },
           ]
         : [],
+    // The same, but as events with the time they began, for working out which quarter hours they fell in.
+    timedApps: (_i: number, _last: number): unknown[] => [],
+    timedWeb: (_i: number, _last: number): unknown[] => [],
   }
   before(async () => {
     const { setActivityWatchGateway } = await import('../src/integrations/activityWatch.js')
@@ -821,7 +824,8 @@ describe('activitywatch', () => {
         fake.calls.push({ timeperiods, query })
         const last = timeperiods.length - 1
         const isWeb = query.some((l) => l.includes('web = '))
-        return timeperiods.map((_p, i) => (isWeb ? fake.web(i, last) : fake.apps(i, last)))
+        const timed = query.some((l) => l.includes('sort_by_timestamp'))
+        return timeperiods.map((_p, i) => (timed ? (isWeb ? fake.timedWeb(i, last) : fake.timedApps(i, last)) : isWeb ? fake.web(i, last) : fake.apps(i, last)))
       },
     })
   })
@@ -880,6 +884,47 @@ describe('activitywatch', () => {
     assert.deepEqual(body.usage.map((u: { app: string; seconds: number }) => [u.app, u.seconds]), [['chrome', 600]])
   })
 
+  it('keeps when each app and site was on screen, by quarter hour, and forgets it with the rest', async () => {
+    const now = new Date()
+    const at = (h: number, m: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m).toISOString()
+    const today = now.toLocaleDateString('en-CA')
+    fake.timedApps = (i, last) =>
+      i === last
+        ? [
+            { timestamp: at(9, 10), duration: 1800, data: { app: 'chrome.exe', title: 'never kept' } }, // 9:10 to 9:40
+            { timestamp: at(9, 45), duration: 60, data: { app: 'Code.exe' } },
+            { duration: 50, data: { app: 'no-time.exe' } }, // no start time: left out
+          ]
+        : []
+    fake.timedWeb = (i, last) => (i === last ? [{ timestamp: at(9, 20), duration: 300, data: { url: 'https://www.youtube.com/watch?v=1' } }] : [])
+    assert.equal((await call('POST', '/integrations/activitywatch/sync')).status, 200)
+
+    const { body } = await call('GET', `/integrations/screen-time/slots?day=${today}`)
+    const find = (type: string, name: string) => body.find((r: { type: string; name: string }) => r.type === type && r.name === name)
+    assert.deepEqual(find('app', 'chrome').slots, [
+      { q: 36, seconds: 300 }, // 9:00 to 9:15, on from 9:10
+      { q: 37, seconds: 900 }, // 9:15 to 9:30, all of it
+      { q: 38, seconds: 600 }, // 9:30 to 9:40
+    ])
+    assert.deepEqual(find('app', 'Code').slots, [{ q: 39, seconds: 60 }])
+    assert.deepEqual(find('site', 'youtube.com').slots, [{ q: 37, seconds: 300 }])
+    assert.equal(find('app', 'no-time'), undefined)
+    assert.equal(find('app', 'chrome').kind, 'computer')
+    assert.equal(JSON.stringify(body).includes('never kept'), false, 'window titles are never kept')
+    assert.equal((await call('GET', '/integrations/screen-time/slots?day=nope')).status, 400)
+    assert.equal((await makeClient()('GET', `/integrations/screen-time/slots?day=${today}`)).status, 401)
+
+    // Syncing again replaces the day rather than adding to it.
+    fake.timedApps = () => []
+    fake.timedWeb = () => []
+    await call('POST', '/integrations/activitywatch/sync')
+    assert.deepEqual((await call('GET', `/integrations/screen-time/slots?day=${today}`)).body, [])
+
+    fake.timedApps = (i, last) => (i === last ? [{ timestamp: at(8, 0), duration: 60, data: { app: 'chrome.exe' } }] : [])
+    await call('POST', '/integrations/activitywatch/sync')
+    assert.equal((await call('GET', `/integrations/screen-time/slots?day=${today}`)).body.length, 1)
+  })
+
   it('gives a picture for a site or app in your own totals, and only those', async () => {
     const { setIconSources } = await import('../src/integrations/icons.js')
     const asked: string[] = []
@@ -927,6 +972,7 @@ describe('activitywatch', () => {
     assert.equal((await call('DELETE', '/integrations/activitywatch/connection')).status, 204)
     const { body } = await call('GET', '/integrations/screen-time/data')
     assert.deepEqual(body, { usage: [], sites: [], phoneDays: [], categories: [] })
+    assert.deepEqual((await call('GET', `/integrations/screen-time/slots?day=${new Date().toLocaleDateString('en-CA')}`)).body, [])
     assert.equal((await call('GET', '/integrations/activitywatch')).body.connected, false)
   })
 })
@@ -1370,6 +1416,26 @@ describe('phone', () => {
 
     const device = (await call('GET', '/integrations/phone')).body.devices[0]
     assert.ok(device.lastSyncedAt)
+  })
+
+  it('keeps when each phone app was on screen, by quarter hour, and replaces only the days it is sent', async () => {
+    const send = (slots?: unknown) => asPhone('POST', '/sync', { days: [{ day, apps: [{ app: 'YouTube', seconds: 1500 }], ...(slots ? { slots } : {}) }] })
+    const read = async () => (await call('GET', `/integrations/screen-time/slots?day=${day}`)).body
+
+    assert.equal((await send([{ app: 'YouTube', q: [[36, 600], [37, 900]] }, { app: 'YouTube', q: [[37, 100]] }])).status, 200)
+    assert.deepEqual(await read(), [
+      { device: 'Galaxy S23', kind: 'phone', type: 'app', name: 'YouTube', slots: [{ q: 36, seconds: 600 }, { q: 37, seconds: 900 }] },
+    ])
+    assert.deepEqual((await asPhone('GET', `/app/screen-time/slots?day=${day}`)).body, await read(), 'the phone sees the same')
+
+    await send() // a day sent without quarter hours keeps what it had
+    assert.equal((await read())[0].slots.length, 2)
+    await send([{ app: 'YouTube', q: [[40, 60]] }])
+    assert.deepEqual((await read())[0].slots, [{ q: 40, seconds: 60 }], 'replaced, not added to')
+
+    assert.equal((await send([{ app: 'YouTube', q: [[96, 60]] }])).status, 400, 'a day has quarters 0 to 95')
+    assert.equal((await send([{ app: 'YouTube', q: [[3, 901]] }])).status, 400, 'a quarter hour has 900 seconds')
+    assert.equal((await asPhone('GET', `/app/screen-time/slots?day=${day}`, undefined, 'wrong')).status, 401)
   })
 
   it("keeps the pictures the phone sends, and only real pictures of apps it reported", async () => {

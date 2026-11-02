@@ -312,6 +312,21 @@ const screenTimeUsageSchema = ownedSchema({
 screenTimeUsageSchema.index({ userId: 1, device: 1, source: 1, day: 1, app: 1 }, { unique: true })
 export const ScreenTimeUsage = mongoose.model('ScreenTimeUsage', screenTimeUsageSchema)
 
+/** When an app or website was on screen on one day: the seconds in each quarter hour (see lib/slots.ts). */
+const screenTimeSlotSchema = ownedSchema({
+  device: { type: String, required: true },
+  source: { type: String, default: '' }, // 'activitywatch' (the computer) or 'phone'
+  type: { type: String, enum: ['app', 'site'], required: true },
+  day,
+  name: { type: String, required: true },
+  slots: {
+    type: [new mongoose.Schema({ q: { type: Number, required: true, min: 0, max: 95 }, seconds: { type: Number, required: true, min: 1, max: 900 } }, { _id: false })],
+    default: [],
+  },
+})
+screenTimeSlotSchema.index({ userId: 1, device: 1, source: 1, type: 1, day: 1, name: 1 }, { unique: true })
+export const ScreenTimeSlot = mongoose.model('ScreenTimeSlot', screenTimeSlotSchema)
+
 /** Seconds on one website on one day, read from ActivityWatch. Only the site's name is kept, never the page. */
 const screenTimeSiteSchema = ownedSchema({
   device: { type: String, required: true },
@@ -436,7 +451,7 @@ const boardLayoutSchema = ownedSchema({
 boardLayoutSchema.index({ userId: 1, page: 1 }, { unique: true })
 export const BoardLayout = mongoose.model('BoardLayout', boardLayoutSchema)
 
-export const ownedModels = [Goal, Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment, ScreenTimeUsage, ScreenTimeSite, PhoneDevice, PhonePairing, PhoneIcon, PhoneDay, AppCategory, DeviceGroup]
+export const ownedModels = [ScreenTimeSlot, Goal, Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment, ScreenTimeUsage, ScreenTimeSite, PhoneDevice, PhonePairing, PhoneIcon, PhoneDay, AppCategory, DeviceGroup]
 
 /**
  * Data created before accounts existed has no owner. The first account to be created inherits it.
