@@ -3,7 +3,7 @@ import { Activity, CircleGauge, Landmark, Smartphone, Soup } from 'lucide-react'
 import { subDays } from 'date-fns'
 import { CgPerformance } from 'react-icons/cg'
 import { useBoardLayout } from './components/useBoardLayout'
-import TopBar, { type Theme } from './components/TopBar'
+import AccountMenu, { type Theme } from './components/AccountMenu'
 import CalendarPage from './features/calendar/CalendarPage'
 import PlaidOAuthReturn from './features/connections/PlaidOAuthReturn'
 import { PLAID_OAUTH_PATH } from './features/connections/plaidImport'
@@ -165,16 +165,10 @@ function Shell({ user, theme, onThemeChange }: ShellProps) {
             {p.label}
           </button>
         ))}
+        <AccountMenu theme={theme} onThemeChange={onThemeChange} user={user} onNameChange={updateName} onSignOut={signOut} />
       </nav>
 
       <div className="main-col">
-        <TopBar
-          theme={theme}
-          onThemeChange={onThemeChange}
-          user={user}
-          onNameChange={updateName}
-          onSignOut={signOut}
-        />
         <main className="content">
           <div {...show('dashboard')}>
             <DashboardPage pageLabels={Object.fromEntries(PAGES.map((p) => [p.id, p.label]))} />

@@ -13,6 +13,7 @@ import MetricCalendar from '../../components/MetricCalendar'
 import PanelFilter from '../../components/PanelFilter'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
+import LiftingPanel from './LiftingPanel'
 import { CheckInHistoryPanel, CheckInProgressPanel, ClassHistoryPanel, PaymentHistoryPanel } from './CrunchPanels'
 import { useCrunch } from './useCrunch'
 
@@ -165,6 +166,10 @@ export default function FitnessPage({ meals }: { meals: DayEntries<Meal, NewMeal
               </ul>
             )}
           </section>
+        </Panel>
+
+        <Panel id="lifting" title="Strong and phone workouts" size="full">
+          <LiftingPanel workouts={log.items} onImported={log.reload} />
         </Panel>
 
         <Panel id="crunch-progress" title="Club Check-In Progress" size="half">

@@ -63,9 +63,18 @@ class Store(context: Context) {
         get() = prefs.getStringSet("layoutsUnsent", emptySet()) ?: emptySet()
         set(value) = prefs.edit().putStringSet("layoutsUnsent", value).apply()
 
+    /** Who the phone belongs to, for the profile at the bottom of the menu. Read from the server when the app opens. */
+    var profileName: String
+        get() = prefs.getString("profileName", "") ?: ""
+        set(value) = prefs.edit().putString("profileName", value).apply()
+
+    var profileEmail: String
+        get() = prefs.getString("profileEmail", "") ?: ""
+        set(value) = prefs.edit().putString("profileEmail", value).apply()
+
     val paired get() = !token.isNullOrBlank()
 
     fun forgetPairing() {
-        prefs.edit().remove("token").remove("lastSyncMs").remove("lastMessage").remove("historyDone").remove("historyMessage").apply()
+        prefs.edit().remove("token").remove("lastSyncMs").remove("lastMessage").remove("historyDone").remove("historyMessage").remove("profileName").remove("profileEmail").apply()
     }
 }

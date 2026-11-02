@@ -8,7 +8,7 @@ Valkyrie is a personal "track anything in life" app. It combines streak tracking
 
 ## Features
 
-The app has a **top bar** with a **Settings** menu (theme: system/light/dark, display name) and a **profile** menu at the top right. The profile menu shows your account and lets you sign out.
+Your profile (picture, name and email) sits at the **bottom of the left sidebar**. Click it and a menu opens upward with **Settings** (theme: system/light/dark, display name) and **Log out**. On a narrow window the sidebar becomes a top strip and the menu drops down from the right.
 
 | Screen | What it does today (UI) | Planned |
 | --- | --- | --- |
@@ -117,11 +117,11 @@ Valkyrie/
 │   └── favicon.svg
 ├── src/
 │   ├── main.tsx                      # Entry point (imports react-calendar CSS before index.css)
-│   ├── App.tsx                       # Sidebar, top bar, screen switching, theme, shared tracker/event state
+│   ├── App.tsx                       # Sidebar, screen switching, theme, shared tracker/event state
 │   ├── index.css                     # Theme, layout, shared components, react-calendar overrides
 │   ├── types.ts                      # Shared TypeScript types
 │   ├── components/
-│   │   └── TopBar.tsx                # Settings and profile menus (top right)
+│   │   └── AccountMenu.tsx           # Profile at the bottom of the sidebar: Settings and Log out menu
 │   ├── lib/
 │   │   ├── dates.ts                  # Date, money and duration helpers
 │   │   ├── api.ts                    # fetch wrapper and skills API calls
@@ -220,6 +220,12 @@ The Dashboard's **Connect** button lists the outside services we want to pull da
 | Android phone screen time | Unofficial (Android has no outside API). The Valkyrie app in `android/` reads it on the phone and sends daily totals to this server over your Wi-Fi. Pair it from the Screen Time page | Built (see below) |
 | ActivityWatch | Free open-source tracker on this PC. Valkyrie reads its daily per-app and per-website totals from its local API (`localhost:5600`) and keeps only names and seconds. Connect from the Screen Time page | Built |
 
+### Strong workouts (CSV import and Health Connect)
+
+Android won't let one app read another's data, so Strong's workouts come in two ways, both ending up as ordinary workouts in the Fitness page and calendar:
+
+- **Strong's export.** Strong > Profile > Settings > Export Strong Data makes a CSV with one row per set. Pick it on the website's Fitness page (**Strong and phone workouts**) or in the phone app's Fitness screen. Each workout keeps its exercises, sets, reps and weights (in the unit the export used). The reader is `server/src/integrations/strong.ts` (it copes with comma and semicolon files, units in the headings and different duration styles). Importing the same file again changes nothing, and calories typed in by hand stay.
+- **Health Connect (phone app only).** With the exercise permission allowed (Fitness screen > Read workouts from Health Connect, or Health Connect's own settings) the app sends each exercise session (name, day, minutes, which app wrote it) to `/api/phone/app/workouts/health`. It reads the last 30 days. For Strong to write to Health Connect, allow it in Strong's settings. A Health Connect copy of a Strong workout is dropped when the export already has that day, and replaced if the export arrives later.
 ### Phone screen time (the Android app)
 
 `android/` is a small Kotlin app (no libraries beyond WorkManager and the drawer menu). Android only lets an app on the phone read screen time, with the **Usage access** permission the person switches on in Settings.
@@ -248,7 +254,7 @@ How it works:
 - It also sends a small icon for each app, which the Most used apps panel shows. Only app names, icons and seconds ever leave the phone.
 - Traffic is plain `http` on your home network (the key is not protected from someone else on your Wi-Fi). Away from home the phone can't reach the server, so it catches up on the next sync at home, up to a week back.
 - The numbers are stored with the computer's, marked `source: 'phone'` and filed under the phone's name. The sync logic and tests are in `server/src/integrations/phone.ts`; the reading logic and its unit tests are in `android/app/src/main/java/app/valkyrie/phone/UsageMath.kt`.
-- The app is more than the sender: a left menu opens **Dashboard**, **Habits** (add, tick off any of the last five weeks, streaks, best streak, days on and off, rename, archive, delete), **Diet** and **Fitness** (today's calories against the 2200 goal, add and remove meals and workouts, the last 7 days; Fitness also lists the fitness connectors and shows Crunch's check-in progress, check-in, class and payment history, with a Sync now button) (habits with streaks and the last seven days, tap a day to put it on or off, plus today's habits, screen time and this month's spending), **Screen Time** (apps and websites from the phone and computer in one Most used list, with categories you can change by tapping, time by category, unlocks, notifications and each day, for today, 7 or 30 days, and one device or all) and **Finances** (net worth, accounts, a month's income and spending with month buttons that stay pinned at the top while you scroll, where it went, latest transactions). On every screen, **hold a card and drag it** to move it; it lands where you let go and stays there (saved on the phone and sent to your account as pages named phone-*, so it survives a reinstall and the website's own layouts are untouched; Settings has a button to put every board back). **Settings** switches the theme between System, Light and Dark (System follows the phone) and holds the usage access, pairing and sync buttons. These read from the server through the phone's own key (/api/phone/app/*, in server/src/integrations/phoneData.ts), so they show exactly what the website shows. Categories picked on the phone are the same ones the website uses. The sums behind them are in PhoneMath.kt; the website's category guesses are copied into Guesses.kt (regenerate it when categories.ts changes).
+- The app is more than the sender: a left menu opens **Dashboard**, **Habits** (add, tick off any of the last five weeks, streaks, best streak, days on and off, rename, archive, delete), **Diet** and **Fitness** (today's calories against the 2200 goal, add and remove meals and workouts, the last 7 days; Fitness also lists the fitness connectors and shows Crunch's check-in progress, check-in, class and payment history, with a Sync now button; and a Strong panel: pick a Strong export (Strong's Settings > Export Strong Data) to bring in every workout with its exercises and sets, or read the workouts other apps saved to Health Connect, which Strong does when you allow it in Strong's settings, giving the day and length but not the sets. Health Connect is read again each time the app opens once it is allowed. The same Strong export can be imported on the website's Fitness page, and a workout is never added twice) (habits with streaks and the last seven days, tap a day to put it on or off, plus today's habits, screen time and this month's spending), **Screen Time** (apps and websites from the phone and computer in one Most used list, with categories you can change by tapping, time by category, unlocks, notifications and each day, for today, 7 or 30 days, and one device or all) and **Finances** (net worth, accounts, a month's income and spending with month buttons that stay pinned at the top while you scroll, where it went, latest transactions). On every screen, **hold a card and drag it** to move it; it lands where you let go and stays there (saved on the phone and sent to your account as pages named phone-*, so it survives a reinstall and the website's own layouts are untouched; Settings has a button to put every board back). The left menu ends with your profile (picture, name and email, read from `/api/phone/app/me`); tapping it opens **Settings**, a list in the style of the website's account menu: Color mode (System, Light, Dark; System follows the phone), Boards, Usage access, Valkyrie connection (pairing and sync buttons) and a red Log out, which unpairs the phone. Each row opens its own view with a back arrow, and the back button steps out of it. These read from the server through the phone's own key (/api/phone/app/*, in server/src/integrations/phoneData.ts), so they show exactly what the website shows. Categories picked on the phone are the same ones the website uses. The sums behind them are in PhoneMath.kt; the website's category guesses are copied into Guesses.kt (regenerate it when categories.ts changes).
 - Samsung phones may pause apps you don't open. If syncs stop, set Valkyrie's battery use to Unrestricted (the app has a button for that).
 
 ### Plaid (bank accounts)

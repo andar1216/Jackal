@@ -16,7 +16,22 @@ object LogData {
     }
 
     fun workouts(list: JSONArray): List<WorkoutEntry> = (0 until list.length()).map { list.getJSONObject(it) }.map {
-        WorkoutEntry(it.getString("id"), it.getString("type"), it.optInt("durationMin"), it.optInt("caloriesBurned"), it.getString("date"))
+        val unit = it.optString("unit")
+        val exercises = it.optJSONArray("exercises")
+        val details = if (exercises == null) emptyList() else (0 until exercises.length()).map { i -> exercises.getJSONObject(i) }.map { e ->
+            val sets = e.optJSONArray("sets")
+            val text = if (sets == null) "" else (0 until sets.length()).map { s -> sets.getJSONObject(s) }.joinToString(", ") { set ->
+                WorkoutMath.setText(
+                    if (set.has("weight")) set.optDouble("weight") else null,
+                    if (set.has("reps")) set.optInt("reps") else null,
+                    if (set.has("seconds")) set.optInt("seconds") else null,
+                    if (set.has("distance")) set.optDouble("distance") else null,
+                    unit,
+                )
+            }
+            "${e.optString("name")}: $text"
+        }
+        WorkoutEntry(it.getString("id"), it.getString("type"), it.optInt("durationMin"), it.optInt("caloriesBurned"), it.getString("date"), details, it.optString("source", "manual"))
     }
 }
 

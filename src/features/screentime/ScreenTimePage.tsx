@@ -125,7 +125,6 @@ export default function ScreenTimePage() {
       <header className="page-header row between">
         <div>
           <h1>Screen Time</h1>
-          <p>Time on your computer and your phone. Connect ActivityWatch for this computer and pair the Valkyrie app for your phone.</p>
         </div>
         <div className="row">
           <PanelFilter page="screentime" />

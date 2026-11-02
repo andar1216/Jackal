@@ -2,6 +2,7 @@ import { Router, type Request } from 'express'
 import { auth } from './auth/routes.js'
 import { currentUserId, requireAuth } from './auth/middleware.js'
 import { integrations } from './integrations/routes.js'
+import { importStrongFile } from './integrations/workoutImport.js'
 import { addDays, catchUp, daysFrom, mergeDays, toggleLog } from './lib/autoMark.js'
 import { crudRouter, requireId } from './lib/crud.js'
 import { HttpError } from './lib/errors.js'
@@ -190,6 +191,11 @@ api.use(
     sort: { date: -1, createdAt: 1 },
   }),
 )
+
+// A Strong export (Settings > Export Strong Data), read in the browser and sent as text.
+api.post('/workouts/import/strong', async (req, res) => {
+  res.json(await importStrongFile(currentUserId(req), req.body))
+})
 
 api.use(
   '/workouts',

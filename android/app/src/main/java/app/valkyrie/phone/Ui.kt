@@ -51,6 +51,9 @@ abstract class Screen(val activity: Activity, val store: Store) {
         addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
     }
 
+    /** Pressing back: a screen with views inside it steps out of one and says true. Otherwise false, and the app does its usual. */
+    open fun back(): Boolean = false
+
     /** Called each time the screen comes into view, or the app is opened again. Reload what it shows. */
     abstract fun show()
 
@@ -369,4 +372,21 @@ object Palette {
     }
 
     init { use(false) }
+}
+
+/** A person's picture: their initials in a coloured circle, like the website's. */
+fun avatarView(activity: android.app.Activity, name: String, sizeDp: Int): TextView {
+    val size = (sizeDp * activity.resources.displayMetrics.density).toInt()
+    return TextView(activity).apply {
+        text = ProfileMath.initials(name)
+        setTextColor(Color.WHITE)
+        textSize = sizeDp * 0.36f
+        setTypeface(typeface, android.graphics.Typeface.BOLD)
+        gravity = android.view.Gravity.CENTER
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Palette.accent)
+        }
+        layoutParams = LinearLayout.LayoutParams(size, size)
+    }
 }

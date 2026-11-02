@@ -25,6 +25,7 @@ class MainActivity : Activity() {
     private lateinit var holder: FrameLayout
     private lateinit var heading: TextView
     private lateinit var menuItems: List<TextView>
+    private lateinit var profileRow: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // The colours are chosen before anything is built. Changing the theme in Settings opens the window again.
@@ -62,11 +63,45 @@ class MainActivity : Activity() {
         if (store.paired && UsageReader.hasAccess(this)) settings.syncInBackground()
         // Boards moved on another phone (or the website's account) arrive here.
         Boards(store).refresh { runOnUiThread { current.show() } }
+        loadProfile()
+        HealthSync.syncInBackground(this, store)
     }
 
-    @Deprecated("Back closes the menu first")
+    @Deprecated("The file picker and Health Connect's permission screen answer here")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        screens.filterIsInstance<FitnessScreen>().firstOrNull()?.onResult(requestCode, resultCode, data)
+    }
+
+    @Deprecated("Back closes the menu first, then steps out of a view inside the screen")
     override fun onBackPressed() {
-        if (drawer.isDrawerOpen(Gravity.START)) drawer.closeDrawer(Gravity.START) else super.onBackPressed()
+        when {
+            drawer.isDrawerOpen(Gravity.START) -> drawer.closeDrawer(Gravity.START)
+            current.back() -> Unit
+            else -> super.onBackPressed()
+        }
+    }
+
+    /** Asks the server whose account this phone belongs to, for the profile at the bottom of the menu. */
+    private fun loadProfile() {
+        val token = store.token
+        if (token.isNullOrBlank()) {
+            drawProfile()
+            return
+        }
+        Thread {
+            try {
+                val me = Api.me(store.server, token)
+                store.profileName = me.optString("name")
+                store.profileEmail = me.optString("email")
+            } catch (_: Exception) {
+                // Offline: what was remembered stays.
+            }
+            runOnUiThread {
+                drawProfile()
+                if (current === settings) current.show()
+            }
+        }.start()
     }
 
     /* ---------- The window: a top bar, the screen, and the menu on the left ---------- */
@@ -100,6 +135,18 @@ class MainActivity : Activity() {
             addView(holder, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         }
 
+        profileRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            setOnClickListener {
+                drawer.closeDrawer(Gravity.START)
+                settings.openList()
+                open(settings)
+            }
+        }
+        drawProfile()
+
         menuItems = screens.map { screen ->
             TextView(this).apply {
                 text = screen.title
@@ -125,14 +172,14 @@ class MainActivity : Activity() {
                 setTypeface(typeface, android.graphics.Typeface.BOLD)
                 setPadding(dp(20), dp(8), dp(20), dp(16))
             })
-            menuItems.forEachIndexed { index, item ->
-                // Settings sits apart from the places that mirror the website.
-                if (screens[index] === settings) addView(View(context).apply {
-                    setBackgroundColor(Palette.line)
-                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)).apply { setMargins(dp(20), dp(8), dp(20), dp(8)) }
-                })
-                addView(item)
-            }
+            // Settings is not in this list: it opens from the profile at the bottom.
+            menuItems.forEachIndexed { index, item -> if (screens[index] !== settings) addView(item) }
+            addView(View(context), LinearLayout.LayoutParams(1, 0, 1f)) // pushes the profile to the bottom
+            addView(View(context).apply {
+                setBackgroundColor(Palette.line)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1))
+            })
+            addView(profileRow)
         }
 
         drawer = DrawerLayout(this).apply {
@@ -151,8 +198,15 @@ class MainActivity : Activity() {
         screen.show()
     }
 
+    /** Just the person's picture at the bottom of the menu; tapping it opens Settings. */
+    private fun drawProfile() {
+        val name = store.profileName.ifBlank { if (store.paired) store.deviceName.ifBlank { "Valkyrie" } else "Valkyrie" }
+        profileRow.removeAllViews()
+        profileRow.addView(avatarView(this, name, 40))
+    }
     /** Marks the screen you are on. */
     private fun drawMenu() {
+        profileRow.setBackgroundColor(if (current === settings) Palette.selected else Color.TRANSPARENT)
         screens.forEachIndexed { index, screen ->
             val selected = screen === current
             menuItems[index].apply {

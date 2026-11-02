@@ -1429,6 +1429,71 @@ describe('phone', () => {
     assert.equal((await asPhone('GET', '/app/finance?month=nope')).status, 400)
   })
 
+  it('imports a Strong export from the website or the phone without ever duplicating, and files Health Connect sessions', async () => {
+    const csv = [
+      'Date,Workout Name,Duration,Exercise Name,Set Order,Weight (lb),Reps,Distance,Seconds,Notes,Workout Notes,RPE',
+      '2032-01-05 18:00:00,Push Day,1h 5m,Bench Press,1,135,8,0,0,,,',
+      '2032-01-05 18:00:00,Push Day,1h 5m,Bench Press,2,145,6,0,0,,,',
+      '2032-01-07 09:00:00,Pull Day,50m,Row,1,100,10,0,0,,,',
+    ].join('\n')
+
+    // From the website
+    const first = await call('POST', '/workouts/import/strong', { csv })
+    assert.deepEqual(first.body, { added: 2, updated: 0, skipped: 0 })
+    const push = (await call('GET', '/workouts?from=2032-01-05&to=2032-01-05')).body[0]
+    assert.equal(push.type, 'Push Day')
+    assert.equal(push.durationMin, 65)
+    assert.equal(push.source, 'strong')
+    assert.equal(push.unit, 'lb')
+    assert.deepEqual(push.exercises, [{ name: 'Bench Press', sets: [{ weight: 135, reps: 8 }, { weight: 145, reps: 6 }] }])
+
+    // The same file again changes nothing
+    assert.deepEqual((await call('POST', '/workouts/import/strong', { csv })).body, { added: 0, updated: 2, skipped: 0 })
+    assert.equal((await call('GET', '/workouts?from=2032-01-05&to=2032-01-07')).body.length, 2)
+
+    // Calories typed in by hand stay through a re-import
+    await call('PATCH', `/workouts/${push.id}`, { caloriesBurned: 300 })
+    await call('POST', '/workouts/import/strong', { csv })
+    assert.equal((await call('GET', '/workouts?from=2032-01-05&to=2032-01-05')).body[0].caloriesBurned, 300)
+
+    // Not a Strong export
+    assert.equal((await call('POST', '/workouts/import/strong', { csv: 'a,b\n1,2' })).status, 400)
+    assert.equal((await call('POST', '/workouts/import/strong', {})).status, 400)
+
+    // From the phone: the same, and the website sees it
+    assert.deepEqual((await asPhone('POST', '/app/workouts/import-strong', { csv })).body, { added: 0, updated: 2, skipped: 0 })
+    assert.equal((await asPhone('POST', '/app/workouts/import-strong', { csv: 'nonsense' })).status, 400)
+
+    // Health Connect sessions: filed once, and Strong's own twin of a workout already imported from its export is left out
+    const sessions = [
+      { id: 'hc-1', type: 'Running', date: '2032-01-06', durationMin: 30, app: 'com.google.android.apps.fitness' },
+      { id: 'hc-2', type: 'Strength training', date: '2032-01-05', durationMin: 64, app: 'io.strongapp.strong' },
+      { id: 'hc-3', type: 'Strength training', date: '2032-01-08', durationMin: 40, app: 'io.strongapp.strong' },
+    ]
+    assert.deepEqual((await asPhone('POST', '/app/workouts/health', { sessions })).body, { added: 2, updated: 0, skipped: 1 })
+    assert.deepEqual((await asPhone('POST', '/app/workouts/health', { sessions })).body, { added: 0, updated: 2, skipped: 1 })
+    const days = (await call('GET', '/workouts?from=2032-01-05&to=2032-01-08')).body
+    assert.deepEqual(days.map((w: { date: string; source: string }) => `${w.date} ${w.source}`).sort(), [
+      '2032-01-05 strong',
+      '2032-01-06 health-connect',
+      '2032-01-07 strong',
+      '2032-01-08 health-connect',
+    ])
+    assert.equal((await asPhone('POST', '/app/workouts/health', { sessions: [{ id: 'x', type: 'Run', date: 'soon', durationMin: 5 }] })).status, 400)
+
+    // Importing the export afterwards replaces a Strong session on a day it covers
+    const later = [csv, '2032-01-08 07:00:00,Legs,40m,Squat,1,185,5,0,0,,,'].join('\n')
+    assert.deepEqual((await call('POST', '/workouts/import/strong', { csv: later })).body, { added: 1, updated: 2, skipped: 0 })
+    const after = (await call('GET', '/workouts?from=2032-01-08&to=2032-01-08')).body
+    assert.deepEqual(after.map((w: { source: string }) => w.source), ['strong'])
+  })
+  it("tells the phone whose account it belongs to", async () => {
+    const me = (await asPhone('GET', '/app/me')).body
+    assert.deepEqual(Object.keys(me).sort(), ['email', 'name'], 'only the name and email, never anything private')
+    assert.equal(typeof me.name, 'string')
+    assert.equal((await asPhone('GET', '/app/me', undefined, 'wrong')).status, 401)
+  })
+
   it('lets the phone add, put away and delete habits, and log meals and workouts the website shows', async () => {
     // Habits
     const made = await asPhone('POST', '/app/habits?today=2026-10-31', { name: 'Stretch', kind: 'performing' })

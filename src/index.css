@@ -200,32 +200,12 @@ button.link {
 }
 
 .content {
-  padding: 8px 28px 28px;
+  padding: 28px;
   max-width: 1400px;
   width: 100%;
 }
 
-/* ---------- Top bar (settings + profile) ---------- */
-
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  justify-content: flex-end;
-  padding: 12px 28px;
-  background: var(--bg);
-}
-
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.menu-wrap {
-  position: relative;
-}
+/* ---------- The person, at the bottom of the left menu ---------- */
 
 .icon-btn {
   width: 40px;
@@ -237,17 +217,9 @@ button.link {
   font-size: 1.1rem;
 }
 
-.profile-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px 4px 4px;
-  border-radius: 999px;
-}
-
 .avatar {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   flex: none;
   border-radius: 50%;
   display: grid;
@@ -258,30 +230,120 @@ button.link {
   font-weight: 700;
 }
 
-.popover {
+.account {
+  position: relative;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.account-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: none;
+  background: none;
+  border-radius: 10px;
+  text-align: left;
+}
+
+.account-btn:hover,
+.account-btn[aria-expanded='true'] {
+  background: var(--accent-soft);
+}
+
+.account-text {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.account-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere; /* a long name wraps rather than being cut off */
+}
+
+
+.account-chevron {
+  flex: none;
+  color: var(--muted);
+}
+
+/* Opens upward from the person, since they sit at the bottom. */
+.account-menu {
   position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  width: 260px;
+  left: 0;
+  right: 0; /* as wide as the sidebar, so it never reaches over the boards */
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  box-sizing: border-box;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px;
+  padding: 12px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.25);
 }
 
-.popover h3 {
-  font-size: 1rem;
+.account-menu .segmented button {
+  padding: 6px 4px;
+  font-size: 0.8rem;
 }
 
-.popover button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.account-menu input {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
+.account-email {
+  font-size: 0.85rem;
+  color: var(--muted);
+  padding: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.account-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.account-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 8px 4px;
+  border-radius: 8px;
+}
+
+.account-item:hover {
+  background: var(--accent-soft);
+}
 .field {
   display: flex;
   flex-direction: column;
@@ -1212,19 +1274,6 @@ button:disabled {
     grid-column: 1 / -1;
   }
 
-  .topbar {
-    padding: 8px 16px;
-    position: static;
-  }
-
-  .profile-name {
-    display: none;
-  }
-
-  .profile-btn {
-    padding: 4px;
-  }
-
   .app {
     grid-template-columns: 1fr;
   }
@@ -1242,6 +1291,29 @@ button:disabled {
   .brand {
     padding: 0 12px 0 4px;
     align-self: center;
+  }
+
+  .account {
+    margin-top: 0;
+    margin-left: auto;
+    padding: 0 0 0 8px;
+    border-top: none;
+    flex: none;
+  }
+
+  .account-text,
+  .account-chevron {
+    display: none;
+  }
+
+  /* The bar scrolls sideways, which would clip a menu hanging off it, so the menu is placed on the screen itself. */
+  .account-menu {
+    position: fixed;
+    bottom: auto;
+    top: 60px;
+    left: auto;
+    right: 12px;
+    width: 260px;
   }
 
   .nav-item {

@@ -151,7 +151,41 @@ const val CALORIE_GOAL = 2200
 
 class MealEntry(val id: String, val name: String, val calories: Int, val protein: Int, val carbs: Int, val fat: Int, val day: String)
 
-class WorkoutEntry(val id: String, val type: String, val minutes: Int, val burned: Int, val day: String)
+/** A workout. `details` has a line for each exercise of a Strong workout ("Bench Press: 135 lb x 8, 145 lb x 6"). */
+class WorkoutEntry(
+    val id: String,
+    val type: String,
+    val minutes: Int,
+    val burned: Int,
+    val day: String,
+    val details: List<String> = emptyList(),
+    val source: String = "manual",
+)
+
+/** Words for what comes from Strong and Health Connect. */
+object WorkoutMath {
+    /** One set the way a log writes it: "135 lb x 8", "30 s", "5000 m". */
+    fun setText(weight: Double?, reps: Int?, seconds: Int?, distance: Double?, unit: String?): String {
+        fun plain(n: Double) = if (n == Math.floor(n)) n.toLong().toString() else n.toString()
+        val parts = mutableListOf<String>()
+        val heavy = weight?.let { plain(it) + (if (unit.isNullOrBlank()) "" else " $unit") }
+        if (heavy != null && reps != null) parts += "$heavy x $reps"
+        else if (reps != null) parts += "$reps reps"
+        else if (heavy != null) parts += heavy
+        if (distance != null) parts += plain(distance) + " m"
+        if (seconds != null) parts += "$seconds s"
+        return if (parts.isEmpty()) "done" else parts.joinToString(", ")
+    }
+
+    /** What to call a Health Connect session with no title of its own: "strength_training" becomes "Strength training". */
+    fun typeName(raw: String?): String {
+        val words = (raw ?: "").replace('_', ' ').trim().lowercase()
+        return if (words.isEmpty() || words == "other workout") "Workout" else words.replaceFirstChar { it.uppercase() }
+    }
+
+    /** A session's minutes, never less than one. */
+    fun minutes(seconds: Long): Int = maxOf(1L, (seconds + 30) / 60).toInt()
+}
 
 object DietMath {
     fun eaten(meals: List<MealEntry>, day: String) = meals.filter { it.day == day }.sumOf { it.calories }
@@ -212,4 +246,10 @@ object BoardMath {
         val list = org.json.JSONArray(json ?: "[]")
         List(list.length()) { list.getString(it) }
     }.getOrDefault(emptyList())
+}
+
+/** The person's picture is their initials in a circle, like on the website. */
+object ProfileMath {
+    fun initials(name: String): String =
+        name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2).joinToString("") { it.first().uppercase() }.ifEmpty { "?" }
 }

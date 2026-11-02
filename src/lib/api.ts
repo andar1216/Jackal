@@ -114,6 +114,8 @@ export const workoutsApi = {
   list: () => request<Workout[]>('GET', '/workouts'),
   create: (w: NewWorkout) => request<Workout>('POST', '/workouts', w),
   remove: (id: string) => request<void>('DELETE', `/workouts/${id}`),
+  /** The text of a file from Strong's Settings > Export Strong Data. */
+  importStrong: (csv: string) => request<{ added: number; updated: number; skipped: number }>('POST', '/workouts/import/strong', { csv }),
 }
 
 export const subscriptionsApi = {

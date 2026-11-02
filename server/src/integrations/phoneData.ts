@@ -3,12 +3,13 @@ import { z } from 'zod'
 import { catchUp, toggleLog } from '../lib/autoMark.js'
 import { requireId } from '../lib/crud.js'
 import { HttpError } from '../lib/errors.js'
-import { BoardLayout, ManualAccount, Meal, PhoneDevice, Skill, Transaction, Workout } from '../models.js'
+import { BoardLayout, ManualAccount, Meal, PhoneDevice, Skill, Transaction, User, Workout } from '../models.js'
 import { dateString, layoutBody, layoutPageParam, mealSchema, skillSchema, workoutSchema } from '../validation.js'
 import { crunchData, syncCrunch } from './crunch.js'
 import { integrationList } from './list.js'
 import { plaidAccounts } from './plaid.js'
 import { saveCategory, screenTimeData } from './screenTime.js'
+import { importHealth, importStrongFile } from './workoutImport.js'
 
 /**
  * What the Android app shows besides sending screen time: the habits, Screen Time and Finances screens. It is mounted
@@ -20,6 +21,15 @@ const ownerOf = (res: { locals: Record<string, unknown> }) => String((res.locals
 
 const today = z.object({ today: dateString.optional() })
 const todayOf = (query: unknown) => today.parse(query).today ?? new Date().toLocaleDateString('en-CA')
+
+/* ---------- Who it is ---------- */
+
+// The name and email of the account this phone belongs to, for the profile at the bottom of the phone's menu.
+phoneDataRouter.get('/me', async (_req, res) => {
+  const user = await User.findById(ownerOf(res)).select('name email').lean()
+  if (!user) throw new HttpError(404, 'Not found')
+  res.json({ name: user.name, email: user.email })
+})
 
 /* ---------- Habits ---------- */
 
@@ -96,6 +106,15 @@ phoneDataRouter.get('/workouts', async (req, res) => {
 
 phoneDataRouter.post('/workouts', async (req, res) => {
   res.status(201).json(await Workout.create({ ...workoutSchema.parse(req.body), userId: ownerOf(res) }))
+})
+
+// A Strong export (the CSV the phone picked), and the exercise sessions the phone read from Health Connect.
+phoneDataRouter.post('/workouts/import-strong', async (req, res) => {
+  res.json(await importStrongFile(ownerOf(res), req.body))
+})
+
+phoneDataRouter.post('/workouts/health', async (req, res) => {
+  res.json(await importHealth(ownerOf(res), req.body))
 })
 
 phoneDataRouter.delete('/workouts/:id', async (req, res) => {

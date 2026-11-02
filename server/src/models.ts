@@ -121,15 +121,35 @@ export const Meal = mongoose.model(
   }),
 )
 
-export const Workout = mongoose.model(
-  'Workout',
-  ownedSchema({
-    type: { type: String, required: true, trim: true },
-    durationMin: { type: Number, required: true, min: 1 },
-    caloriesBurned: { type: Number, default: 0, min: 0 },
-    date: { ...day, default: today },
-  }),
-)
+const workoutSchema = ownedSchema({
+  type: { type: String, required: true, trim: true },
+  durationMin: { type: Number, required: true, min: 1 },
+  caloriesBurned: { type: Number, default: 0, min: 0 },
+  date: { ...day, default: today },
+  // Where it came from. Imported ones carry an id of their own, so importing twice never duplicates.
+  source: { type: String, enum: ['manual', 'strong', 'health-connect'], default: 'manual' },
+  externalId: String,
+  app: String, // for Health Connect: the app that wrote it (its package name)
+  unit: { type: String, enum: ['kg', 'lb'] }, // what the weights of the sets are in
+  // From a Strong export: what was done, exercise by exercise, set by set.
+  exercises: {
+    type: [
+      new mongoose.Schema(
+        {
+          name: { type: String, required: true },
+          sets: {
+            type: [new mongoose.Schema({ weight: Number, reps: Number, seconds: Number, distance: Number }, { _id: false })],
+            default: [],
+          },
+        },
+        { _id: false },
+      ),
+    ],
+    default: undefined, // a workout with no detail has no list, instead of an empty one
+  },
+})
+workoutSchema.index({ userId: 1, source: 1, externalId: 1 }, { unique: true, partialFilterExpression: { externalId: { $type: 'string' } } })
+export const Workout = mongoose.model('Workout', workoutSchema)
 
 export const TimeEntry = mongoose.model(
   'TimeEntry',

@@ -86,6 +86,9 @@ object Api {
         call(server, "DELETE", "/me", token)
     }
 
+    /** The name and email of the account this phone belongs to. */
+    fun me(server: String, token: String): JSONObject = JSONObject(request(server, "GET", "/app/me", token))
+
     /* ---------- The phone's own screens: habits, Screen Time, Finances ---------- */
 
     /** The habits with the days each was done. `today` is this phone's date, so "today" means the same here and there. */
@@ -138,6 +141,14 @@ object Api {
     fun deleteWorkout(server: String, token: String, id: String) {
         request(server, "DELETE", "/app/workouts/$id", token)
     }
+
+    /** The text of a Strong export (Settings > Export Strong Data). Years of sets can be a few megabytes. */
+    fun importStrong(server: String, token: String, csv: String): JSONObject =
+        JSONObject(request(server, "POST", "/app/workouts/import-strong", token, JSONObject().put("csv", csv), readTimeoutMs = 120_000))
+
+    /** Exercise sessions read from Health Connect. Each is a JSON object with id, type, date, durationMin and app. */
+    fun healthSessions(server: String, token: String, sessions: JSONArray): JSONObject =
+        JSONObject(request(server, "POST", "/app/workouts/health", token, JSONObject().put("sessions", sessions), readTimeoutMs = 60_000))
 
     /** The fitness connectors (Crunch and so on) with whether each is connected, and Crunch's data. */
     fun fitness(server: String, token: String): JSONObject = JSONObject(request(server, "GET", "/app/fitness", token))

@@ -165,4 +165,31 @@ class PhoneMathTest {
     fun anUnreadableSavedOrderIsNoOrder() {
         assertEquals(emptyList<String>(), BoardMath.parse(null))
     }
+
+    @Test
+    fun setsAreWrittenTheWayALogWritesThem() {
+        assertEquals("135 lb x 8", WorkoutMath.setText(135.0, 8, null, null, "lb"))
+        assertEquals("62.5 kg x 6", WorkoutMath.setText(62.5, 6, null, null, "kg"))
+        assertEquals("135 x 8", WorkoutMath.setText(135.0, 8, null, null, null))
+        assertEquals("12 reps", WorkoutMath.setText(null, 12, null, null, "lb"))
+        assertEquals("5000 m, 1500 s", WorkoutMath.setText(null, null, 1500, 5000.0, null))
+        assertEquals("done", WorkoutMath.setText(null, null, null, null, null))
+    }
+
+    @Test
+    fun healthConnectSessionsGetReadableNamesAndWholeMinutes() {
+        assertEquals("Strength training", WorkoutMath.typeName("strength_training"))
+        assertEquals("Workout", WorkoutMath.typeName(null))
+        assertEquals("Workout", WorkoutMath.typeName("other_workout"))
+        assertEquals(1, WorkoutMath.minutes(10))
+        assertEquals(45, WorkoutMath.minutes(2700))
+        assertEquals("half a minute rounds up", 46, WorkoutMath.minutes(2730))
+    }
+
+    @Test
+    fun `a picture is the first letters of the first two words of the name`() {
+        assertEquals("AL", ProfileMath.initials("ada lovelace"))
+        assertEquals("G", ProfileMath.initials("  Grace "))
+        assertEquals("?", ProfileMath.initials(""))
+    }
 }

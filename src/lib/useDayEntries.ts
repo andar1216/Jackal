@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.')
 
@@ -9,6 +9,8 @@ export type DayEntries<T, New> = {
   error: string | null
   add: (entry: New) => Promise<boolean>
   remove: (id: string) => Promise<void>
+  /** Loads the list again, for entries that arrived another way (an import). */
+  reload: () => Promise<void>
 }
 
 /** A list of entries that each belong to a day (meals, workouts), kept on the server. */
@@ -64,5 +66,14 @@ export function useDayEntries<T extends { id: string }, New>(api: {
     [api],
   )
 
-  return { items, loaded, error, add, remove }
+  const reload = useCallback(async () => {
+    try {
+      setItems(await api.list())
+      setError(null)
+    } catch (err) {
+      setError(errorText(err))
+    }
+  }, [api])
+
+  return { items, loaded, error, add, remove, reload }
 }

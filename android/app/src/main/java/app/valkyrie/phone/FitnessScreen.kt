@@ -1,6 +1,7 @@
 package app.valkyrie.phone
 
 import android.app.Activity
+import android.content.Intent
 import android.text.InputType
 import android.text.format.DateUtils
 import android.view.View
@@ -27,6 +28,7 @@ class FitnessScreen(activity: Activity, store: Store) : Screen(activity, store) 
     private var loaded = false
     private var syncing = false
     private val expanded = mutableSetOf<String>() // the lists opened up to show everything
+    private var importNote: String? = null // what the last import or Health Connect read did
 
     private val type: EditText = field("Type (Run, Lift...)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES)
     private val minutes: EditText = field("Minutes", InputType.TYPE_CLASS_NUMBER)
@@ -104,6 +106,7 @@ class FitnessScreen(activity: Activity, store: Store) : Screen(activity, store) 
             ),
         )
 
+        content.addView(strongPanel())
         if (crunch != null) crunchPanels(crunch, checkIns, today)
         content.addView(connectorsPanel())
         arrange("phone-fitness", content)
@@ -212,6 +215,102 @@ class FitnessScreen(activity: Activity, store: Store) : Screen(activity, store) 
         return (shown + button).toTypedArray()
     }
 
+    /* ---------- Strong and Health Connect ---------- */
+
+    /** The lifts from Strong, then the two ways of bringing workouts in. */
+    private fun strongPanel(): View {
+        val lifts = workouts.filter { it.details.isNotEmpty() }.take(5)
+        val shown = lifts.flatMap { w ->
+            listOf<View>(line(w.type, "${w.minutes} min", LocalDate.parse(w.day).format(dayFormat))) +
+                w.details.map { text(it, 12f, color = MUTED).apply { setPadding(dp(8), 0, 0, dp(2)) } }
+        }
+        val note = importNote
+        return panel(
+            "Strong and phone workouts",
+            *shown.toTypedArray(),
+            *(if (note != null) arrayOf<View>(text(note, 13f, color = MUTED).apply { setPadding(0, dp(6), 0, 0) }) else emptyArray()),
+            space(6),
+            button("Import a Strong export (CSV)", primary = true) { pickStrongFile() },
+            space(6),
+            button("Read workouts from Health Connect") { readHealthConnect() },
+            space(6),
+            button("Health Connect settings") { openHealthSettings() },
+            text(
+                "In Strong: Profile, Settings, Export Strong Data, then pick the file here to bring in every workout with its sets. " +
+                    "For workouts without a file, allow Strong to write workouts to Health Connect (Strong's Settings), then read them here. " +
+                    "That gives the day and how long, not the sets.",
+                12f,
+                color = MUTED,
+            ).apply { setPadding(0, dp(6), 0, 0) },
+        )
+    }
+
+    private fun say(text: String) {
+        importNote = text
+        draw()
+    }
+
+    private fun pickStrongFile() {
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*" // the CSV is not always called text/csv
+        }
+        activity.startActivityForResult(pick, REQUEST_STRONG_FILE)
+    }
+
+    private fun openHealthSettings() {
+        try {
+            activity.startActivity(HealthSync.settingsIntent(activity))
+        } catch (e: Exception) {
+            say("Couldn't open Health Connect. Look for it under Settings, Security and privacy.")
+        }
+    }
+
+    private fun readHealthConnect() {
+        when (HealthSync.status(activity)) {
+            HealthSync.Status.UNAVAILABLE -> say("Health Connect isn't available on this phone.")
+            HealthSync.Status.NEEDS_APP -> say("Health Connect needs an update from Google Play first.")
+            HealthSync.Status.READY -> load({ _, _ -> HealthSync.hasPermission(activity) }) { result ->
+                result.onSuccess { has ->
+                    if (has) sendHealth() else activity.startActivityForResult(HealthSync.permissionIntent(activity), REQUEST_HEALTH)
+                }.onFailure { say(it.message ?: "Couldn't reach Health Connect.") }
+            }
+        }
+    }
+
+    private fun sendHealth() {
+        say("Reading Health Connect...")
+        load({ server, token -> HealthSync.send(activity, server, token) }) { result ->
+            result.onSuccess { added ->
+                importNote = if (added == 0) "Nothing new in Health Connect." else "Added $added workout${if (added == 1) "" else "s"} from Health Connect."
+                show()
+            }.onFailure { say(it.message ?: "Couldn't read Health Connect.") }
+        }
+    }
+
+    /** MainActivity hands over what the file picker and Health Connect's permission screen answered. */
+    fun onResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        when (requestCode) {
+            REQUEST_STRONG_FILE -> {
+                val uri = data?.data
+                if (resultCode != Activity.RESULT_OK || uri == null) return
+                say("Reading the file...")
+                load({ server, token ->
+                    val csv = activity.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: throw ApiException(0, "Couldn't open that file.")
+                    Api.importStrong(server, token, csv)
+                }) { result ->
+                    result.onSuccess {
+                        val added = it.optInt("added")
+                        val had = it.optInt("updated")
+                        importNote = "Read ${added + had} workouts: $added new, $had already here."
+                        show()
+                    }.onFailure { say(it.message ?: "Couldn't read that file.") }
+                }
+            }
+            REQUEST_HEALTH -> if (HealthSync.allowed(resultCode, data)) sendHealth() else say("Health Connect didn't give Valkyrie access yet. If no question came up, press Health Connect settings, open App permissions, choose Valkyrie and allow Exercise. Then open this screen again.")
+        }
+    }
+
     /* ---------- Connectors ---------- */
 
     private fun connectorsPanel(): View {
@@ -267,4 +366,9 @@ class FitnessScreen(activity: Activity, store: Store) : Screen(activity, store) 
             }
         },
     )
+
+    companion object {
+        private const val REQUEST_STRONG_FILE = 7101
+        private const val REQUEST_HEALTH = 7102
+    }
 }

@@ -30,10 +30,13 @@ export function createApp() {
   )
 
   // The phone app (see the android folder) is not a browser: no cookie, no Origin. It proves itself with its own key.
+  // A Strong export can be a few megabytes: years of sets, one row each.
+  app.use('/api/phone/app/workouts/import-strong', express.json({ limit: '6mb' }))
   app.use('/api/phone', express.json({ limit: '1mb' }), phoneAppRouter)
 
   // `credentials: true` lets the browser send the session cookie. Only our own frontend is allowed.
   app.use(cors({ origin: config.clientOrigin, credentials: true }))
+  app.use('/api/workouts/import/strong', express.json({ limit: '6mb' }))
   app.use(express.json({ limit: '100kb' }))
 
   app.get('/api/health', (_req, res) => {

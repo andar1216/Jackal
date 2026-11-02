@@ -173,6 +173,14 @@ export type Workout = {
   durationMin: number
   caloriesBurned: number
   date: string // YYYY-MM-DD
+  /** Where it came from. Typed in here when absent. */
+  source?: 'manual' | 'strong' | 'health-connect'
+  /** For Health Connect: the app that wrote it. */
+  app?: string
+  /** What the sets' weights are in. */
+  unit?: 'kg' | 'lb'
+  /** From a Strong export: what was done, set by set. */
+  exercises?: { name: string; sets: { weight?: number; reps?: number; seconds?: number; distance?: number }[] }[]
 }
 
 export type TimeEntry = {
