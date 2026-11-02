@@ -6,6 +6,7 @@ import { createAttemptLimiter, currentUserId } from '../auth/middleware.js'
 import { config } from '../config.js'
 import { HttpError } from '../lib/errors.js'
 import { requireId } from '../lib/crud.js'
+import { phoneDataRouter } from './phoneData.js'
 import { AppCategory, Connection, PhoneDay, PhoneDevice, PhoneIcon, PhonePairing, ScreenTimeUsage } from '../models.js'
 import { dateString } from '../validation.js'
 
@@ -170,6 +171,9 @@ const requirePhone: RequestHandler = async (req, res, next) => {
 }
 
 const deviceOf = (res: { locals: Record<string, unknown> }) => res.locals.device as InstanceType<typeof PhoneDevice>
+
+// What the phone app's own screens show (habits, Screen Time, Finances).
+phoneAppRouter.use('/app', requirePhone, phoneDataRouter)
 
 phoneAppRouter.get('/status', requirePhone, (_req, res) => {
   res.json({ name: deviceOf(res).name })

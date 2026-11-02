@@ -1370,6 +1370,58 @@ describe('phone', () => {
     assert.deepEqual((await other('GET', '/integrations/screen-time/data')).body.categories, [], "someone else's categories are not yours")
   })
 
+  it("gives the phone app's own screens the habits, screen time and finances, only with its key", async () => {
+    for (const path of ['/app/habits', '/app/screen-time', '/app/finance']) {
+      assert.equal((await asPhone('GET', path, undefined, 'wrong')).status, 401, `${path} needs the phone's key`)
+      assert.equal((await phone('GET', `/phone${path}`)).status, 401)
+    }
+
+    // Habits: listed, and a day can be put on and off from the phone.
+    const habit = (await call('POST', '/skills', { name: 'Read', startDate: '2026-10-25' })).body
+    const listed = await asPhone('GET', '/app/habits?today=2026-10-31')
+    assert.equal(listed.status, 200)
+    assert.deepEqual(listed.body.filter((h: { id: string }) => h.id === habit.id).map((h: { name: string }) => h.name), ['Read'])
+    const on = await asPhone('POST', `/app/habits/${habit.id}/toggle/2026-10-30`)
+    assert.deepEqual(on.body.logs, ['2026-10-30'])
+    assert.deepEqual((await asPhone('POST', `/app/habits/${habit.id}/toggle/2026-10-30`)).body.logs, [], 'tapping again takes it off')
+    assert.equal((await asPhone('POST', `/app/habits/${habit.id}/toggle/not-a-day`)).status, 400)
+    assert.equal((await asPhone('POST', '/app/habits/000000000000000000000000/toggle/2026-10-30')).status, 404)
+
+    // Screen time: the same numbers as the website.
+    await asPhone('POST', '/sync', { days: [{ day: new Date().toLocaleDateString('en-CA'), apps: [{ app: 'YouTube', seconds: 120 }] }] })
+    const screen = (await asPhone('GET', '/app/screen-time')).body
+    assert.deepEqual(Object.keys(screen).sort(), ['categories', 'phoneDays', 'sites', 'usage'])
+    assert.ok(screen.usage.some((u: { app: string; kind: string }) => u.app === 'YouTube' && u.kind === 'phone'))
+
+    assert.equal((await asPhone('PUT', '/app/screen-time/category', { kind: 'app', name: 'YouTube', category: 'Fun' })).status, 204)
+    const filed = (await asPhone('GET', '/app/screen-time')).body.categories.find((c: { name: string }) => c.name === 'YouTube')
+    assert.equal(filed.mine, 'Fun', 'a category chosen on the phone is the same one the website shows')
+    assert.equal((await asPhone('PUT', '/app/screen-time/category', { kind: 'app', name: 'YouTube', category: null })).status, 204)
+    assert.equal((await asPhone('PUT', '/app/screen-time/category', { kind: 'app', name: 'YouTube', category: '' })).status, 400)
+
+    // Finances: net worth, the month's totals and the latest transactions.
+    const owned = (await asPhone('GET', '/app/finance')).body
+    await call('POST', '/accounts', { name: 'Checking', kind: 'bank', balanceCents: 100000 })
+    await call('POST', '/accounts', { name: 'Visa', kind: 'credit', balanceCents: 25000 })
+    const add = (type: string, amountCents: number, category: string, date: string) => call('POST', '/transactions', { type, amountCents, category, date })
+    await add('expense', 4000, 'Food', '2031-03-03')
+    await add('expense', 3000, 'Food', '2031-03-10')
+    await add('expense', 1000, 'Fun', '2031-03-12')
+    const models = await import('../src/models.js')
+    await models.Transaction.create({ userId: (await models.PhoneDevice.findById(deviceId))?.userId, type: 'expense', amountCents: 500, category: 'Fun', date: '2031-03-13', isRefund: true, source: 'plaid', externalId: 'phone-app-refund' })
+    await add('income', 200000, 'Pay', '2031-03-15')
+    await add('expense', 9999, 'Food', '2031-02-28')
+    const money = (await asPhone('GET', '/app/finance?month=2031-03')).body
+    assert.equal(money.netCents - owned.netCents, 75000, 'what you own minus what you owe')
+    assert.deepEqual([money.assetsCents - owned.assetsCents, money.debtsCents - owned.debtsCents], [100000, 25000])
+    assert.equal(money.incomeCents, 200000)
+    assert.equal(money.spentCents, 7500, 'a refund lowers spending')
+    assert.deepEqual(money.categories, [{ category: 'Food', cents: 7000 }, { category: 'Fun', cents: 500 }])
+    assert.ok(money.recent.length >= 6)
+    assert.equal(money.recent[0].date >= money.recent[1].date, true, 'newest first')
+    assert.equal((await asPhone('GET', '/app/finance?month=nope')).status, 400)
+  })
+
   it("does not show one person's phone to another", async () => {
     const other = makeClient()
     assert.equal((await other('POST', '/auth/register', { email: 'phone-other@example.com', name: 'Other', password: PASSWORD })).status, 201)

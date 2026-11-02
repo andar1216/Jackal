@@ -284,18 +284,21 @@ plaidRouter.post('/sync', async (req, res) => {
 })
 
 // Every account Valkyrie knows about, so the Finances screen can list them even with no activity this month.
-plaidRouter.get('/accounts', async (req, res) => {
-  const items = await PlaidItem.find({ userId: currentUserId(req) }).sort({ createdAt: 1 })
-  res.json(
-    items.flatMap((item) =>
-      item.accounts.map((a: AccountInfo) => ({
-        label: accountLabel(item.institutionName, a),
-        institution: item.institutionName,
-        type: a.type ?? undefined,
-        balanceCents: a.balanceCents ?? undefined,
-      })),
-    ),
+/** Every bank and card account from Plaid for this user, with its latest balance. */
+export async function plaidAccounts(userId: string) {
+  const items = await PlaidItem.find({ userId }).sort({ createdAt: 1 })
+  return items.flatMap((item) =>
+    item.accounts.map((a: AccountInfo) => ({
+      label: accountLabel(item.institutionName, a),
+      institution: item.institutionName,
+      type: a.type ?? undefined,
+      balanceCents: a.balanceCents ?? undefined,
+    })),
   )
+}
+
+plaidRouter.get('/accounts', async (req, res) => {
+  res.json(await plaidAccounts(currentUserId(req)))
 })
 
 /** Disconnect every bank: revoke access at Plaid, then remove our records and what was imported. */

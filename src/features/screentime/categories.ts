@@ -24,8 +24,8 @@ export const CATEGORIES = [
 export const UNCATEGORIZED = 'Uncategorized'
 
 // Guesses for common apps (by lower-case name) and websites (by domain), for what nobody has filed yet.
-const APPS: Record<string, string> = {}
-const SITES: Record<string, string> = {}
+export const APPS: Record<string, string> = {}
+export const SITES: Record<string, string> = {}
 const add = (into: Record<string, string>, category: string, names: string[]) => names.forEach((n) => (into[n] = category))
 
 add(APPS, 'Browsers', ['chrome', 'msedge', 'edge', 'firefox', 'brave', 'opera', 'safari', 'samsung internet', 'vivaldi'])

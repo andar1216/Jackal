@@ -2,7 +2,7 @@ import { Router, type Request } from 'express'
 import { auth } from './auth/routes.js'
 import { currentUserId, requireAuth } from './auth/middleware.js'
 import { integrations } from './integrations/routes.js'
-import { addDays, catchUp, daysFrom, mergeDays } from './lib/autoMark.js'
+import { addDays, catchUp, daysFrom, mergeDays, toggleLog } from './lib/autoMark.js'
 import { crudRouter, requireId } from './lib/crud.js'
 import { HttpError } from './lib/errors.js'
 import { detectRecurring, markId, merchantKey, type Charge, type Mark } from './lib/recurring.js'
@@ -98,13 +98,7 @@ skills.post('/:id/logs/:date/toggle', async (req, res) => {
   const skill = await Skill.findOne({ _id: requireId(req.params.id), userId: currentUserId(req) })
   if (!skill) throw new HttpError(404, 'Not found')
 
-  if (skill.logs.includes(date)) {
-    skill.logs = skill.logs.filter((d: string) => d !== date)
-  } else {
-    skill.logs.push(date)
-    skill.logs.sort()
-    if (date < skill.startDate) skill.startDate = date
-  }
+  toggleLog(skill, date)
   await skill.save()
   res.json(skill)
 })

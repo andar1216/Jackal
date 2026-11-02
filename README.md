@@ -222,7 +222,7 @@ The Dashboard's **Connect** button lists the outside services we want to pull da
 
 ### Phone screen time (the Android app)
 
-`android/` is a small Kotlin app (no libraries beyond WorkManager). Android only lets an app on the phone read screen time, with the **Usage access** permission the person switches on in Settings.
+`android/` is a small Kotlin app (no libraries beyond WorkManager and the drawer menu). Android only lets an app on the phone read screen time, with the **Usage access** permission the person switches on in Settings.
 
 Build and install (needs Android Studio's SDK and JDK 17, both already on this machine):
 
@@ -248,6 +248,7 @@ How it works:
 - It also sends a small icon for each app, which the Most used apps panel shows. Only app names, icons and seconds ever leave the phone.
 - Traffic is plain `http` on your home network (the key is not protected from someone else on your Wi-Fi). Away from home the phone can't reach the server, so it catches up on the next sync at home, up to a week back.
 - The numbers are stored with the computer's, marked `source: 'phone'` and filed under the phone's name. The sync logic and tests are in `server/src/integrations/phone.ts`; the reading logic and its unit tests are in `android/app/src/main/java/app/valkyrie/phone/UsageMath.kt`.
+- The app is more than the sender: a left menu opens **Dashboard** (habits with streaks and the last seven days, tap a day to put it on or off, plus today's habits, screen time and this month's spending), **Screen Time** (apps and websites from the phone and computer in one Most used list, with categories you can change by tapping, time by category, unlocks, notifications and each day, for today, 7 or 30 days, and one device or all) and **Finances** (net worth, accounts, a month's income and spending with month buttons, where it went, latest transactions). **This phone** holds the pairing and sync buttons. These read from the server through the phone's own key (/api/phone/app/*, in server/src/integrations/phoneData.ts), so they show exactly what the website shows. Categories picked on the phone are the same ones the website uses. The sums behind them are in PhoneMath.kt; the website's category guesses are copied into Guesses.kt (regenerate it when categories.ts changes).
 - Samsung phones may pause apps you don't open. If syncs stop, set Valkyrie's battery use to Unrestricted (the app has a button for that).
 
 ### Plaid (bank accounts)

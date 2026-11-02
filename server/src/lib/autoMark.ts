@@ -39,3 +39,15 @@ export function catchUp(doc: unknown, today: string): boolean {
   habit.autoThrough = upto
   return true
 }
+
+/** Puts one day on or off. A day before the habit's start moves the start back to it. */
+export function toggleLog(doc: unknown, date: string) {
+  const habit = doc as { logs: string[]; startDate: string }
+  if (habit.logs.includes(date)) {
+    habit.logs = habit.logs.filter((d) => d !== date)
+  } else {
+    habit.logs.push(date)
+    habit.logs.sort()
+    if (date < habit.startDate) habit.startDate = date
+  }
+}

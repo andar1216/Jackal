@@ -27,6 +27,12 @@ object Api {
     }
 
     private fun call(server: String, method: String, path: String, token: String?, body: JSONObject? = null): JSONObject? {
+        val text = request(server, method, path, token, body)
+        return if (text.isBlank()) null else JSONObject(text)
+    }
+
+    /** The raw answer, since some screens are lists rather than one object. */
+    private fun request(server: String, method: String, path: String, token: String?, body: JSONObject? = null): String {
         val connection = URL("$server/api/phone$path").openConnection() as HttpURLConnection
         try {
             connection.requestMethod = method
@@ -47,7 +53,7 @@ object Api {
                 val said = runCatching { JSONObject(text).optString("error") }.getOrNull().orEmpty()
                 throw ApiException(code, said.ifBlank { "The server answered $code." })
             }
-            return if (text.isBlank()) null else JSONObject(text)
+            return text
         } catch (e: IOException) {
             throw ApiException(0, "Can't reach $server. Is Valkyrie running (and ngrok, if you use it), and can this phone reach it?")
         } finally {
@@ -61,8 +67,8 @@ object Api {
         return r.getString("token") to r.getString("name")
     }
 
-    /** Sends the days. Returns the names of apps the server wants a picture of. */
-    /** `categories` maps an app's name to what Android calls it ("Social"), for the apps it has one for. */
+    /** Sends the days. Returns the names of apps the server wants a picture of.
+     *  `categories` maps an app's name to what Android calls it ("Social"), for the apps it has one for. */
     fun sync(server: String, token: String, days: JSONArray, categories: Map<String, String> = emptyMap()): List<String> {
         val body = JSONObject().put("days", days)
         if (categories.isNotEmpty()) body.put("categories", JSONObject(categories))
@@ -79,4 +85,26 @@ object Api {
     fun unpair(server: String, token: String) {
         call(server, "DELETE", "/me", token)
     }
-}
+
+    /* ---------- The phone's own screens: habits, Screen Time, Finances ---------- */
+
+    /** The habits with the days each was done. `today` is this phone's date, so "today" means the same here and there. */
+    fun habits(server: String, token: String, today: String): JSONArray =
+        JSONArray(request(server, "GET", "/app/habits?today=$today", token))
+
+    /** Puts a day on or off for a habit. */
+    fun toggleHabit(server: String, token: String, id: String, date: String) {
+        request(server, "POST", "/app/habits/$id/toggle/$date", token, JSONObject())
+    }
+
+    fun screenTime(server: String, token: String): JSONObject = JSONObject(request(server, "GET", "/app/screen-time", token))
+
+    /** Files an app or website under `category`, or back to automatic with null. */
+    fun setCategory(server: String, token: String, kind: String, name: String, category: String?) {
+        val body = JSONObject().put("kind", kind).put("name", name).put("category", category ?: JSONObject.NULL)
+        request(server, "PUT", "/app/screen-time/category", token, body)
+    }
+
+    /** `month` is like "2026-11". */
+    fun finance(server: String, token: String, month: String): JSONObject =
+        JSONObject(request(server, "GET", "/app/finance?month=$month", token))}

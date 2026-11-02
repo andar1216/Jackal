@@ -1,0 +1,122 @@
+package app.valkyrie.phone
+
+import java.time.LocalDate
+
+/** The sums behind the phone's own screens. Plain Kotlin, so they are tested without a phone. */
+
+object HabitMath {
+    /** Consecutive days done, ending today (or yesterday, if today isn't done yet). Same rule as the website. */
+    fun streak(done: Set<String>, today: LocalDate): Int {
+        var day = if (today.toString() in done) today else today.minusDays(1)
+        var count = 0
+        while (day.toString() in done) {
+            count++
+            day = day.minusDays(1)
+        }
+        return count
+    }
+
+    /** The last `n` days, oldest first, ending today. */
+    fun lastDays(today: LocalDate, n: Int = 7): List<LocalDate> = (n - 1 downTo 0).map { today.minusDays(it.toLong()) }
+}
+
+/** One day of one app or website on one device. */
+class Use(val device: String, val phone: Boolean, val day: String, val name: String, val site: Boolean, val seconds: Long)
+
+/** What is known about how an app or website is filed: the person's choice, and what Android calls it. */
+class Filing(val site: Boolean, val name: String, val mine: String?, val phone: String?)
+
+/** How an app or website got its category. */
+enum class Source { MINE, GUESS, PHONE, NONE }
+
+class Categorized(val category: String, val source: Source)
+
+/** One line of "Most used": an app or a website, with its time over the chosen days. */
+class Ranked(val name: String, val site: Boolean, val phone: Boolean, val seconds: Long, val category: String, val source: Source)
+
+object ScreenMath {
+    const val UNCATEGORIZED = "Uncategorized"
+
+    /** The person's choice first, then a guess from the name, then what Android says. Same order as the website. */
+    fun categorizer(filings: List<Filing>): (Boolean, String) -> Categorized {
+        val byKey = filings.associateBy { (if (it.site) "site:" else "app:") + it.name }
+        return { site, name ->
+            val entry = byKey[(if (site) "site:" else "app:") + name]
+            val guess = if (site) Guesses.site(name) else Guesses.app(name)
+            when {
+                entry?.mine != null -> Categorized(entry.mine, Source.MINE)
+                guess != null -> Categorized(guess, Source.GUESS)
+                entry?.phone != null -> Categorized(entry.phone, Source.PHONE)
+                else -> Categorized(UNCATEGORIZED, Source.NONE)
+            }
+        }
+    }
+
+    /** The days to show, as the first day (inclusive): "today", "week" (7 days) or "month" (30 days). */
+    fun firstDay(range: String, today: LocalDate): LocalDate = when (range) {
+        "today" -> today
+        "month" -> today.minusDays(29)
+        else -> today.minusDays(6)
+    }
+
+    /** Apps and websites together, on one device or all of them, busiest first. */
+    fun mostUsed(uses: List<Use>, device: String?, from: LocalDate, categorize: (Boolean, String) -> Categorized): List<Ranked> {
+        val first = from.toString()
+        return uses
+            .filter { it.day >= first && (device == null || it.device == device) }
+            .groupBy { Triple(it.site, it.name, it.phone) }
+            .map { (key, rows) ->
+                val c = categorize(key.first, key.second)
+                Ranked(key.second, key.first, key.third, rows.sumOf { it.seconds }, c.category, c.source)
+            }
+            .filter { it.seconds > 0 }
+            .sortedByDescending { it.seconds }
+    }
+
+    /**
+     * Time by category. A browser on a computer shows up as an app and again as every website in it, so its own time is
+     * left out while there are websites (otherwise it counts twice).
+     */
+    fun byCategory(rows: List<Ranked>): List<Pair<String, Long>> {
+        val hasSites = rows.any { it.site }
+        return rows
+            .filter { !(hasSites && !it.site && !it.phone && it.category == "Browsers") }
+            .groupBy { it.category }
+            .map { (category, list) -> category to list.sumOf { it.seconds } }
+            .sortedByDescending { it.second }
+    }
+
+    /** Time per day for the chosen days (oldest first), counting apps only on phones and everything else once. */
+    fun perDay(uses: List<Use>, device: String?, from: LocalDate, today: LocalDate): List<Pair<LocalDate, Long>> {
+        val rows = uses.filter { device == null || it.device == device }
+        // Browsers on a computer are also counted as websites; count the apps, not the sites, so nothing is doubled.
+        val byDay = rows.filter { !it.site }.groupBy { it.day }.mapValues { (_, list) -> list.sumOf { it.seconds } }
+        val days = generateSequence(from) { it.plusDays(1) }.takeWhile { !it.isAfter(today) }.toList()
+        return days.map { it to (byDay[it.toString()] ?: 0L) }
+    }
+}
+
+object FinanceMath {
+    /** "$1,234.56", or "-$12.00". */
+    fun money(cents: Long): String {
+        val sign = if (cents < 0) "-" else ""
+        val abs = Math.abs(cents)
+        val dollars = abs / 100
+        val grouped = dollars.toString().reversed().chunked(3).joinToString(",").reversed()
+        return "$sign$$grouped.${(abs % 100).toString().padStart(2, '0')}"
+    }
+
+    /** The month before or after "2026-11", as "2026-10". */
+    fun shift(month: String, by: Int): String {
+        val (y, m) = month.split('-').map { it.toInt() }
+        val total = y * 12 + (m - 1) + by
+        return "%04d-%02d".format(total / 12, total % 12 + 1)
+    }
+
+    /** "November 2026". */
+    fun monthName(month: String): String {
+        val (y, m) = month.split('-').map { it.toInt() }
+        val name = java.time.Month.of(m).getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.US)
+        return "$name $y"
+    }
+}

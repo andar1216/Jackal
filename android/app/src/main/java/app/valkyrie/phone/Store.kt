@@ -38,6 +38,16 @@ class Store(context: Context) {
         get() = prefs.getString("historyMessage", "") ?: ""
         set(value) = prefs.edit().putString("historyMessage", value).apply()
 
+    /** Which stretch the Screen Time screen shows: today, week or month. */
+    var screenRange: String
+        get() = prefs.getString("screenRange", "week") ?: "week"
+        set(value) = prefs.edit().putString("screenRange", value).apply()
+
+    /** Which device the Screen Time screen shows: "all" or a device's name. */
+    var screenDevice: String
+        get() = prefs.getString("screenDevice", "all") ?: "all"
+        set(value) = prefs.edit().putString("screenDevice", value).apply()
+
     val paired get() = !token.isNullOrBlank()
 
     fun forgetPairing() {
