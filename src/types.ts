@@ -62,7 +62,10 @@ export type ActivityWatchStatus = {
   lastSyncedAt: string | null
 }
 
-export type ScreenTimeData = { usage: ScreenTimeUsage[]; sites: ScreenTimeSite[] }
+/** How many times a phone was unlocked on one day, and how many notifications each app sent. */
+export type PhoneDayCounts = { device: string; day: string; unlocks: number; notifications: { app: string; count: number }[] }
+
+export type ScreenTimeData = { usage: ScreenTimeUsage[]; sites: ScreenTimeSite[]; phoneDays: PhoneDayCounts[] }
 
 export type Integration = {
   id: string

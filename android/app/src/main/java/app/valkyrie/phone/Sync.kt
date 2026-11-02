@@ -22,13 +22,30 @@ object Sync {
     private const val EVERY_MINUTES = 30L
 
     /** Packages are called by their labels everywhere else, so two apps with one label are one line. */
-    class Reading(val days: Map<LocalDate, Map<String, Long>>, val packageOf: Map<String, String>, val note: String = "")
+    class Reading(
+        val days: Map<LocalDate, Map<String, Long>>,
+        val packageOf: Map<String, String>,
+        val note: String = "",
+        /** Unlocks per day, and notifications per app label, for the days the phone could count exactly. */
+        val unlocks: Map<LocalDate, Int> = emptyMap(),
+        val notifications: Map<LocalDate, Map<String, Int>> = emptyMap(),
+    )
 
     fun readByLabel(context: Context, days: Int, history: Boolean = false): Reading {
         val labels = HashMap<String, String?>()
         val packageOf = HashMap<String, String>()
-        var note = ""
-        val read = if (history) UsageReader.readHistory(context, days).also { note = it.note }.days else UsageReader.read(context, days)
+        val usage = if (history) UsageReader.readHistory(context, days) else UsageReader.read(context, days)
+        val note = usage.note
+        val read = usage.days
+        val notifications = usage.counts.mapValues { (_, c) ->
+            val named = HashMap<String, Int>()
+            for ((pkg, n) in c.notifications) {
+                val label = labels.getOrPut(pkg) { UsageReader.label(context, pkg) } ?: continue
+                packageOf.putIfAbsent(label, pkg)
+                named[label] = (named[label] ?: 0) + n
+            }
+            named as Map<String, Int>
+        }
         val byDay = read.mapValues { (_, apps) ->
             val named = HashMap<String, Long>()
             for ((pkg, seconds) in apps) {
@@ -38,7 +55,7 @@ object Sync {
             }
             named as Map<String, Long>
         }
-        return Reading(byDay, packageOf, note)
+        return Reading(byDay, packageOf, note, usage.counts.mapValues { it.value.unlocks }, notifications)
     }
 
     private val lock = Any()
@@ -65,7 +82,13 @@ object Sync {
                     val list = JSONArray()
                     for ((name, seconds) in byApp) list.put(JSONObject().put("app", name).put("seconds", seconds))
                     apps += byApp.size
-                    days.put(JSONObject().put("day", day.toString()).put("apps", list))
+                    val entry = JSONObject().put("day", day.toString()).put("apps", list)
+                    reading.unlocks[day]?.let { unlocks ->
+                        val notified = JSONArray()
+                        for ((name, count) in reading.notifications[day] ?: emptyMap()) notified.put(JSONObject().put("app", name).put("count", count))
+                        entry.put("unlocks", unlocks).put("notifications", notified)
+                    }
+                    days.put(entry)
                 }
                 sent.addAll(Api.sync(store.server, token, days))
             }

@@ -137,8 +137,11 @@ class MainActivity : Activity() {
                 val reading = Sync.readByLabel(this, 1)
                 val today = reading.days[LocalDate.now()] ?: emptyMap()
                 val total = today.values.sum()
-                if (total == 0L) "Nothing counted yet today." else
-                    "Total: ${duration(total)}\n" + today.entries.sortedByDescending { it.value }.take(6).joinToString("\n") { "${it.key}  ${duration(it.value)}" }
+                val unlocks = reading.unlocks[LocalDate.now()] ?: 0
+                val notifications = reading.notifications[LocalDate.now()]?.values?.sum() ?: 0
+                val counts = "Unlocks: $unlocks   Notifications: $notifications"
+                if (total == 0L) "Nothing counted yet today.\n$counts" else
+                    "Total: ${duration(total)}\n$counts\n" + today.entries.sortedByDescending { it.value }.take(6).joinToString("\n") { "${it.key}  ${duration(it.value)}" }
             } catch (e: Exception) {
                 "Couldn't read usage: ${e.message}"
             }

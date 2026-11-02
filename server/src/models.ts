@@ -288,6 +288,16 @@ export const PhonePairing = mongoose.model(
   }),
 )
 
+/** How many times the phone was unlocked, and how many notifications each app sent, on one day. Sent by the phone app. */
+const phoneDaySchema = ownedSchema({
+  device: { type: String, required: true },
+  day,
+  unlocks: { type: Number, required: true, min: 0 },
+  notifications: [{ _id: false, app: { type: String, required: true }, count: { type: Number, required: true, min: 1 } }],
+})
+phoneDaySchema.index({ userId: 1, device: 1, day: 1 }, { unique: true })
+export const PhoneDay = mongoose.model('PhoneDay', phoneDaySchema)
+
 /** The small picture of an app on the phone, sent by the phone itself (the computer's own icons come from Windows). */
 const phoneIconSchema = ownedSchema({
   app: { type: String, required: true },
@@ -357,7 +367,7 @@ const boardLayoutSchema = ownedSchema({
 boardLayoutSchema.index({ userId: 1, page: 1 }, { unique: true })
 export const BoardLayout = mongoose.model('BoardLayout', boardLayoutSchema)
 
-export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment, ScreenTimeUsage, ScreenTimeSite, PhoneDevice, PhonePairing, PhoneIcon, DeviceGroup]
+export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment, ScreenTimeUsage, ScreenTimeSite, PhoneDevice, PhonePairing, PhoneIcon, PhoneDay, DeviceGroup]
 
 /**
  * Data created before accounts existed has no owner. The first account to be created inherits it.

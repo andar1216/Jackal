@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { currentUserId } from '../auth/middleware.js'
 import { z } from 'zod'
-import { PhoneIcon, ScreenTimeSite, ScreenTimeUsage } from '../models.js'
+import { PhoneDay, PhoneIcon, ScreenTimeSite, ScreenTimeUsage } from '../models.js'
 import { iconSources } from './icons.js'
 
 /** What the Screen Time page reads. The numbers come from ActivityWatch (see activityWatch.ts). */
@@ -13,13 +13,16 @@ const HISTORY_DAYS = 1100
 screenTimeRouter.get('/data', async (req, res) => {
   const userId = currentUserId(req)
   const since = new Date(Date.now() - HISTORY_DAYS * 24 * 3600 * 1000).toLocaleDateString('en-CA')
-  const [usage, sites] = await Promise.all([
+  const [usage, sites, phoneDays] = await Promise.all([
     ScreenTimeUsage.find({ userId, day: { $gte: since } }).sort({ day: -1 }).limit(200000),
     ScreenTimeSite.find({ userId, day: { $gte: since } }).sort({ day: -1 }).limit(200000),
+    PhoneDay.find({ userId, day: { $gte: since } }).sort({ day: -1 }).limit(5000),
   ])
   res.json({
     usage: usage.map((u) => ({ device: u.device, kind: u.source === 'phone' ? 'phone' : 'computer', day: u.day, app: u.app, seconds: u.seconds })),
     sites: sites.map((s) => ({ device: s.device, kind: 'computer', day: s.day, site: s.site, seconds: s.seconds })),
+    // Phone unlocks and the notifications each app sent, one entry per phone and day.
+    phoneDays: phoneDays.map((p) => ({ device: p.device, day: p.day, unlocks: p.unlocks, notifications: p.notifications.map((n: { app: string; count: number }) => ({ app: n.app, count: n.count })) })),
   })
 })
 

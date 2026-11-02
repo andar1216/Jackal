@@ -1,5 +1,5 @@
 import { format, parseISO, subDays } from 'date-fns'
-import type { ScreenTimeSite, ScreenTimeUsage } from '../../types'
+import type { PhoneDayCounts, ScreenTimeSite, ScreenTimeUsage } from '../../types'
 
 /** "2h 5m", "45m", or "<1m" for a little. */
 export function formatSeconds(seconds: number) {
@@ -52,6 +52,28 @@ export function topSites(sites: ScreenTimeSite[], days: number, today: Date = ne
     bySite.set(s.site, (bySite.get(s.site) ?? 0) + s.seconds)
   }
   return [...bySite.entries()].map(([site, seconds]) => ({ site, seconds })).sort((a, b) => b.seconds - a.seconds)
+}
+
+/** Unlocks and notifications on each day, added up over every phone in the list. */
+export function countsByDay(phoneDays: PhoneDayCounts[]) {
+  const byDay: Record<string, { unlocks: number; notifications: number }> = {}
+  for (const p of phoneDays) {
+    const line = (byDay[p.day] ??= { unlocks: 0, notifications: 0 })
+    line.unlocks += p.unlocks
+    line.notifications += p.notifications.reduce((sum, n) => sum + n.count, 0)
+  }
+  return byDay
+}
+
+/** The apps that sent the most notifications in the last `days` days (1 means today only), most first. */
+export function topNotifiers(phoneDays: PhoneDayCounts[], days: number, today: Date = new Date()) {
+  const since = format(subDays(today, days - 1), 'yyyy-MM-dd')
+  const byApp = new Map<string, number>()
+  for (const p of phoneDays) {
+    if (p.day < since) continue
+    for (const n of p.notifications) byApp.set(n.app, (byApp.get(n.app) ?? 0) + n.count)
+  }
+  return [...byApp.entries()].map(([app, count]) => ({ app, count })).sort((a, b) => b.count - a.count)
 }
 
 // The program's own name, tidied up for reading.

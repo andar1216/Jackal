@@ -111,6 +111,28 @@ class UsageMathTest {
     }
 
     @Test
+    fun countsUnlocksAndEachAppsNotificationsPerDay() {
+        val result = UsageMath.counts(
+            listOf(
+                Ev(at(day1, 8), UsageMath.UNLOCK, "android"),
+                Ev(at(day1, 9), UsageMath.UNLOCK, "android"),
+                Ev(at(day1, 9, 5), UsageMath.NOTIFICATION, "msgs"),
+                Ev(at(day1, 9, 6), UsageMath.NOTIFICATION, "msgs"),
+                Ev(at(day1, 9, 7), UsageMath.NOTIFICATION, "mail"),
+                Ev(at(day1, 9, 8), UsageMath.NOTIFICATION, "android"), // the system's own: ignored
+                Ev(at(day2, 7), UsageMath.NOTIFICATION, "msgs"),
+                Ev(at(day1, 9), UsageMath.RESUMED, "msgs"), // not a count
+                Ev(start - 1000, UsageMath.UNLOCK, "android"), // before the range
+            ),
+            start, end, zone, setOf("android"),
+        )
+        assertEquals(2, result[day1]!!.unlocks)
+        assertEquals(mapOf("msgs" to 2, "mail" to 1), result[day1]!!.notifications)
+        assertEquals(0, result[day2]!!.unlocks)
+        assertEquals(mapOf("msgs" to 1), result[day2]!!.notifications)
+    }
+
+    @Test
     fun olderDaysComeFromAndroidsDailyTotalsAndStopWhereTheLogBegins() {
         val old = LocalDate.of(2026, 9, 1)
         val result = UsageMath.older(

@@ -16,7 +16,7 @@ import DevicesPanel from './DevicesPanel'
 import DeviceViewsBar from './DeviceViewsBar'
 import { devicesIn, resolveView } from './deviceViews'
 import ItemIcon from './ItemIcon'
-import { appName, formatCompact, formatSeconds, ofKind, recentDays, topApps, topSites, totalsByDay } from './screenTimeStats'
+import { appName, countsByDay, formatCompact, formatSeconds, ofKind, recentDays, topApps, topNotifiers, topSites, totalsByDay } from './screenTimeStats'
 import { useDeviceGroups, useDeviceView } from './useDeviceViews'
 import { useScreenTime } from './useScreenTime'
 
@@ -24,6 +24,8 @@ const isScreenTimeConnector = (i: Integration) => i.category === 'screen-time'
 
 const COMPUTER_COLOR = '#16a34a'
 const PHONE_COLOR = '#4f46e5'
+const UNLOCKS_COLOR = '#f59e0b'
+const NOTIFICATIONS_COLOR = '#e11d48'
 
 // What the drop-downs offer. "Custom" is added to each by the control itself.
 const COUNTS = [
@@ -56,6 +58,8 @@ export default function ScreenTimePage() {
   const [siteCount, setSiteCount] = useAmount('sites-count', '10', COUNTS, { start: 15, max: MAX_ITEMS })
   const [sitePeriod, setSitePeriod] = useAmount('sites-period', '1', PERIODS, { start: 14, max: MAX_DAYS })
   const [historyRange, setHistoryRange] = useAmount('history', '14', HISTORY_RANGES, { start: 21, max: MAX_DAYS })
+  const [notifyCount, setNotifyCount] = useAmount('notifications-count', '10', COUNTS, { start: 15, max: MAX_ITEMS })
+  const [notifyPeriod, setNotifyPeriod] = useAmount('notifications-period', '1', PERIODS, { start: 14, max: MAX_DAYS })
 
   // What the page shows: all devices, one, or a group, as chosen in the bar at the top.
   const [error, setError] = useState<string | null>(null)
@@ -67,6 +71,8 @@ export default function ScreenTimePage() {
   const view = resolveView(viewChoice, devices, groups)
   const usage = sentUsage.filter((u) => view.includes(u.device))
   const siteRows = sentSites.filter((s) => view.includes(s.device))
+  const phoneDays = (screenTime.data?.phoneDays ?? []).filter((p) => view.includes(p.device))
+  const countsByDayMap = countsByDay(phoneDays)
   const neverSent = sentUsage.length === 0 && sentSites.length === 0
   const computerByDay = totalsByDay(ofKind(usage, 'computer'))
   const phoneByDay = totalsByDay(ofKind(usage, 'phone'))
@@ -84,6 +90,10 @@ export default function ScreenTimePage() {
   const appsTotal = apps.reduce((s, a) => s + a.seconds, 0)
   const history = recentDays(byDay, amountOf(historyRange))
   const busiest = Math.max(1, ...history.map((h) => h.seconds))
+  const notifiers = topNotifiers(phoneDays, amountOf(notifyPeriod)).slice(0, amountOf(notifyCount))
+  const notifiersTotal = notifiers.reduce((s, n) => s + n.count, 0)
+  const unlocksToday = countsByDayMap[today]?.unlocks
+  const notificationsToday = countsByDayMap[today]?.notifications
 
   const metrics = [
     buildMetric(
@@ -95,6 +105,16 @@ export default function ScreenTimePage() {
       { id: 'phone', label: 'Phone screen time', color: PHONE_COLOR, format: formatSeconds },
       Object.entries(phoneByDay),
       ([day, seconds]) => ({ day, amount: seconds, line: `Phone · ${formatSeconds(seconds)}` }),
+    ),
+    buildMetric(
+      { id: 'unlocks', label: 'Phone unlocks', color: UNLOCKS_COLOR, format: (n) => `${n} unlock${n === 1 ? '' : 's'}`, off: true },
+      Object.entries(countsByDayMap),
+      ([day, c]) => (c.unlocks > 0 ? { day, amount: c.unlocks, line: `Phone unlocked ${c.unlocks} time${c.unlocks === 1 ? '' : 's'}` } : undefined),
+    ),
+    buildMetric(
+      { id: 'notifications', label: 'Phone notifications', color: NOTIFICATIONS_COLOR, format: (n) => `${n} notification${n === 1 ? '' : 's'}`, off: true },
+      Object.entries(countsByDayMap),
+      ([day, c]) => (c.notifications > 0 ? { day, amount: c.notifications, line: `${c.notifications} notification${c.notifications === 1 ? '' : 's'}` } : undefined),
     ),
   ]
 
@@ -151,6 +171,22 @@ export default function ScreenTimePage() {
             <div className="stat-label">Total today</div>
             <div className="stat-value">{hasAny ? formatSeconds(computerToday + phoneToday) : '--'}</div>
             <p className="stat-label">{hasAny ? (view.label ?? 'All synced devices') : 'No data yet'}</p>
+          </div>
+        </Panel>
+
+        <Panel id="unlocks-today" title="Phone unlocks today" size="half">
+          <div className="card">
+            <div className="stat-label">Phone unlocks today</div>
+            <div className="stat-value">{unlocksToday === undefined ? '--' : unlocksToday}</div>
+            <p className="stat-label">{unlocksToday === undefined ? 'No data yet' : 'Times the lock screen was opened'}</p>
+          </div>
+        </Panel>
+
+        <Panel id="notifications-today" title="Phone notifications today" size="half">
+          <div className="card">
+            <div className="stat-label">Phone notifications today</div>
+            <div className="stat-value">{notificationsToday === undefined ? '--' : notificationsToday}</div>
+            <p className="stat-label">{notificationsToday === undefined ? 'No data yet' : 'Notifications that reached you'}</p>
           </div>
         </Panel>
 
@@ -232,6 +268,11 @@ export default function ScreenTimePage() {
                   <li key={h.key}>
                     <span style={{ flex: 1, minWidth: 0 }}>
                       {format(h.date, 'EEE, MMM d')}
+                      {countsByDayMap[h.key] && (
+                        <span className="stat-label" style={{ marginLeft: 8 }}>
+                          {countsByDayMap[h.key].unlocks} unlocks · {countsByDayMap[h.key].notifications} notifications
+                        </span>
+                      )}
                       <div className="bar">
                         <span style={{ width: `${(h.seconds / busiest) * 100}%` }} />
                       </div>
@@ -244,11 +285,44 @@ export default function ScreenTimePage() {
           </section>
         </Panel>
 
+        <Panel id="notifiers" title="Notifications by app" size="half">
+          <section className="card">
+            <div className="row between">
+              <h2>Notifications by app</h2>
+              <span className="row">
+                <AmountSelect label="Apps to show" options={COUNTS} amount={notifyCount} onChange={setNotifyCount} unit="apps" max={MAX_ITEMS} />
+                <AmountSelect label="Period" options={PERIODS} amount={notifyPeriod} onChange={setNotifyPeriod} unit="days" max={MAX_DAYS} />
+              </span>
+            </div>
+            {notifiers.length === 0 ? (
+              <p className="empty">{phoneDays.length === 0 ? 'Update the Valkyrie phone app and sync to see which apps notify you.' : 'No notifications for this period yet.'}</p>
+            ) : (
+              <ul className="list">
+                {notifiers.map((n) => (
+                  <li key={n.app}>
+                    <ItemIcon kind="app" name={n.app} label={n.app} source="phone" />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      {n.app}
+                      <div className="bar">
+                        <span style={{ width: `${(n.count / notifiersTotal) * 100}%` }} />
+                      </div>
+                    </span>
+                    <strong>{n.count}</strong>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </Panel>
+
         <Panel id="calendar" title="Calendar" size="full">
           <MetricCalendar
             metrics={metrics}
             // Each day with numbers shows how long it was: the total of whichever of computer and phone are switched on.
-            dayLabel={(day, shown) => formatCompact(shown.reduce((sum, m) => sum + (m.byDay[day] ?? 0), 0))}
+            dayLabel={(day, shown) => {
+              const seconds = shown.filter((m) => m.id === 'computer' || m.id === 'phone').reduce((sum, m) => sum + (m.byDay[day] ?? 0), 0)
+              return seconds > 0 ? formatCompact(seconds) : undefined
+            }}
           />
         </Panel>
       </Board>

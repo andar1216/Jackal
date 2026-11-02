@@ -20,6 +20,8 @@ object UsageMath {
     const val PAUSED = 2
     const val SCREEN_OFF = 16
     const val SHUTDOWN = 26
+    const val NOTIFICATION = 12 // UsageEvents.Event.NOTIFICATION_INTERRUPTION: an app's notification got the person's attention
+    const val UNLOCK = 18 // UsageEvents.Event.KEYGUARD_HIDDEN: the lock screen went away
 
     /**
      * Seconds each app was on screen, per day, for the time from `from` to `to` (milliseconds). Days are the phone's own days.
@@ -64,6 +66,27 @@ object UsageMath {
         close(to) // still on screen right now
 
         return millis.mapValues { (_, apps) -> apps.mapValues { (it.value + 500) / 1000 }.filterValues { it > 0 } }
+    }
+
+    /** How many times the phone was unlocked in a day, and how many notifications each app (by package) sent. */
+    class DayCounts(val unlocks: Int, val notifications: Map<String, Int>)
+
+    /** Unlocks and notifications per day for the time from `from` to `to`. Only days with something are in the result. */
+    fun counts(events: List<Ev>, from: Long, to: Long, zone: ZoneId, ignore: Set<String>): Map<LocalDate, DayCounts> {
+        val unlocks = HashMap<LocalDate, Int>()
+        val notifications = HashMap<LocalDate, HashMap<String, Int>>()
+        for (e in events) {
+            if (e.time < from || e.time >= to) continue
+            val day = Instant.ofEpochMilli(e.time).atZone(zone).toLocalDate()
+            when (e.type) {
+                UNLOCK -> unlocks[day] = (unlocks[day] ?: 0) + 1
+                NOTIFICATION -> if (e.pkg !in ignore && e.pkg.isNotEmpty()) {
+                    val byApp = notifications.getOrPut(day) { HashMap() }
+                    byApp[e.pkg] = (byApp[e.pkg] ?: 0) + 1
+                }
+            }
+        }
+        return (unlocks.keys + notifications.keys).associateWith { DayCounts(unlocks[it] ?: 0, notifications[it] ?: emptyMap()) }
     }
 
     /**

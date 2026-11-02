@@ -6,7 +6,7 @@ import { createAttemptLimiter, currentUserId } from '../auth/middleware.js'
 import { config } from '../config.js'
 import { HttpError } from '../lib/errors.js'
 import { requireId } from '../lib/crud.js'
-import { Connection, PhoneDevice, PhoneIcon, PhonePairing, ScreenTimeUsage } from '../models.js'
+import { Connection, PhoneDay, PhoneDevice, PhoneIcon, PhonePairing, ScreenTimeUsage } from '../models.js'
 import { dateString } from '../validation.js'
 
 /**
@@ -73,6 +73,7 @@ async function removeDevices(userId: unknown, filter: { _id?: unknown } = {}) {
   await Promise.all([
     PhoneDevice.deleteMany({ _id: { $in: gone.map((d) => d._id) } }),
     ScreenTimeUsage.deleteMany({ userId, source: PHONE_SOURCE, device: { $in: gone.map((d) => d.name) } }),
+    PhoneDay.deleteMany({ userId, device: { $in: gone.map((d) => d.name) } }),
   ])
   // Nothing left on the phone side: forget the connection, the code and the pictures too.
   if (!(await PhoneDevice.exists({ userId }))) {
@@ -178,6 +179,9 @@ const syncSchema = z.strictObject({
       z.strictObject({
         day: dateString,
         apps: z.array(z.strictObject({ app: z.string().trim().min(1).max(120), seconds: z.number().min(1).max(MAX_DAY_SECONDS) })).max(500),
+        // Only days the phone could count exactly have these; for older days they are left out, and what is kept stays.
+        unlocks: z.number().int().min(0).max(100_000).optional(),
+        notifications: z.array(z.strictObject({ app: z.string().trim().min(1).max(120), count: z.number().int().min(1).max(100_000) })).max(500).optional(),
       }),
     )
     .min(1)
@@ -200,6 +204,24 @@ phoneAppRouter.post('/sync', requirePhone, async (req, res) => {
 
   await ScreenTimeUsage.deleteMany({ userId, source: PHONE_SOURCE, device: device.name, day: { $in: [...new Set(days.map((d) => d.day))] } })
   if (rows.length) await ScreenTimeUsage.insertMany(rows)
+
+  const counted = days.filter((d) => d.unlocks !== undefined)
+  if (counted.length) {
+    await PhoneDay.bulkWrite(
+      counted.map((d) => {
+        const byApp = new Map<string, number>() // two apps with one name are one line
+        for (const n of d.notifications ?? []) byApp.set(n.app, (byApp.get(n.app) ?? 0) + n.count)
+        const notifications = [...byApp].map(([app, count]) => ({ app, count }))
+        return {
+          updateOne: {
+            filter: { userId, device: device.name, day: d.day },
+            update: { $set: { unlocks: d.unlocks, notifications } },
+            upsert: true,
+          },
+        }
+      }),
+    )
+  }
 
   const now = new Date()
   await Promise.all([

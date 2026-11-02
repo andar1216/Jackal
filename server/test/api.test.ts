@@ -853,7 +853,7 @@ describe('activitywatch', () => {
   it('forgets what it read when disconnected', async () => {
     assert.equal((await call('DELETE', '/integrations/activitywatch/connection')).status, 204)
     const { body } = await call('GET', '/integrations/screen-time/data')
-    assert.deepEqual(body, { usage: [], sites: [] })
+    assert.deepEqual(body, { usage: [], sites: [], phoneDays: [] })
     assert.equal((await call('GET', '/integrations/activitywatch')).body.connected, false)
   })
 })
@@ -1318,11 +1318,36 @@ describe('phone', () => {
     assert.deepEqual(after, ['Maps'], 'it only asks again for what it still has no picture of')
   })
 
+  it('keeps the unlocks and notifications the phone sends, replaces a day, and leaves days it sent none for', async () => {
+    const phoneDays = async () => (await call('GET', '/integrations/screen-time/data')).body.phoneDays
+    const sent = await asPhone('POST', '/sync', {
+      days: [{ day, apps: [{ app: 'YouTube', seconds: 60 }], unlocks: 40, notifications: [{ app: 'Messages', count: 12 }, { app: 'Messages', count: 3 }, { app: 'Mail', count: 5 }] }],
+    })
+    assert.equal(sent.status, 200)
+    const [first] = await phoneDays()
+    assert.equal(first.device, 'Galaxy S23')
+    assert.equal(first.day, day)
+    assert.equal(first.unlocks, 40)
+    assert.deepEqual([...first.notifications].sort((a: { app: string }, b: { app: string }) => a.app.localeCompare(b.app)), [{ app: 'Mail', count: 5 }, { app: 'Messages', count: 15 }], 'two lines with one name are one line')
+
+    await asPhone('POST', '/sync', { days: [{ day, apps: [], unlocks: 41, notifications: [] }] })
+    const again = await phoneDays()
+    assert.equal(again.length, 1, 'replaced, not added')
+    assert.deepEqual([again[0].unlocks, again[0].notifications], [41, []])
+
+    await asPhone('POST', '/sync', { days: [{ day, apps: [{ app: 'YouTube', seconds: 90 }] }] })
+    assert.equal((await phoneDays())[0].unlocks, 41, 'a sync with no counts keeps what was counted')
+
+    assert.equal((await asPhone('POST', '/sync', { days: [{ day, apps: [], unlocks: -1 }] })).status, 400)
+    assert.equal((await asPhone('POST', '/sync', { days: [{ day, apps: [], unlocks: 1, notifications: [{ app: 'X', count: 0 }] }] })).status, 400)
+  })
+
   it("does not show one person's phone to another", async () => {
     const other = makeClient()
     assert.equal((await other('POST', '/auth/register', { email: 'phone-other@example.com', name: 'Other', password: PASSWORD })).status, 201)
     assert.deepEqual((await other('GET', '/integrations/phone')).body.devices, [])
     assert.deepEqual((await other('GET', '/integrations/screen-time/data')).body.usage, [])
+    assert.deepEqual((await other('GET', '/integrations/screen-time/data')).body.phoneDays, [])
     assert.equal((await other('GET', '/integrations/screen-time/icon?kind=app&source=phone&name=YouTube')).status, 404)
     await other('DELETE', `/integrations/phone/${deviceId}`)
     assert.equal((await asPhone('GET', '/status')).status, 200, "someone else cannot unpair your phone")
@@ -1335,6 +1360,7 @@ describe('phone', () => {
     assert.equal((await asPhone('GET', '/status')).status, 401, 'its key stops working')
     const usage = (await call('GET', '/integrations/screen-time/data')).body.usage
     assert.deepEqual(usage.map((u: { app: string }) => u.app), ['chrome'], "the computer's numbers stay")
+    assert.deepEqual((await call('GET', '/integrations/screen-time/data')).body.phoneDays, [], 'its unlocks and notifications go too')
     assert.deepEqual((await call('GET', '/integrations/phone')).body.devices, [])
     const entry = (await call('GET', '/integrations')).body.find((i: { id: string }) => i.id === 'samsung-screen-time')
     assert.equal(entry.status, 'not_connected')

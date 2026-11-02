@@ -37,25 +37,34 @@ object UsageReader {
     }
 
     /** Seconds per app (by package name) for each of the last `days` days, today included. Every day is there, even if empty. */
-    fun read(context: Context, days: Int): Map<LocalDate, Map<String, Long>> {
+    fun read(context: Context, days: Int): Usage {
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         val from = today.minusDays((days - 1).toLong()).atStartOfDay(zone).toInstant().toEpochMilli()
         val now = System.currentTimeMillis()
 
-        val byDay = UsageMath.totals(events(context, from, now), from, now, zone, ignored(context))
-        return (0 until days).associate { i ->
-            val day = today.minusDays((days - 1 - i).toLong())
-            day to (byDay[day] ?: emptyMap())
-        }
+        val ignore = ignored(context)
+        val events = events(context, from, now)
+        val byDay = UsageMath.totals(events, from, now, zone, ignore)
+        val counted = UsageMath.counts(events, from, now, zone, ignore)
+        val firstLogged = events.minOfOrNull { it.time }?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
+        val all = (0 until days).map { today.minusDays((days - 1 - it).toLong()) }
+        return Usage(
+            days = all.associateWith { byDay[it] ?: emptyMap() },
+            // A day the log only half covers (its first day) would show too few, so it gets no counts.
+            counts = all.filter { firstLogged != null && it > firstLogged }.associateWith { counted[it] ?: UsageMath.DayCounts(0, emptyMap()) },
+        )
     }
+
+    /** Seconds per app per day, and the unlocks and notifications for the days the log fully covers. */
+    class Usage(val days: Map<LocalDate, Map<String, Long>>, val counts: Map<LocalDate, UsageMath.DayCounts>, val note: String = "")
 
     /**
      * Everything the phone still has, up to `days` days back. The recent days come from the detailed log, which is exact
      * but only goes back a week or so, then Android's real daily totals (about 10 days). Nothing is estimated: days Android
      * has no daily numbers for are left out. Only days that have something are in the result.
      */
-    fun readHistory(context: Context, days: Int): History {
+    fun readHistory(context: Context, days: Int): Usage {
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         val first = today.minusDays((days - 1).toLong())
@@ -81,11 +90,10 @@ object UsageReader {
         val real = older + recent
         val note = "Android has real days from ${real.keys.minOrNull() ?: "nowhere"} (${real.size} days). " +
             "It gave ${stats.size} daily totals, and the log starts ${firstLogged ?: "nowhere"}."
-        return History(real, note)
+        val counted = UsageMath.counts(events, from, now, zone, ignore)
+        val counts = recent.keys.associateWith { counted[it] ?: UsageMath.DayCounts(0, emptyMap()) }
+        return Usage(real, counts, note)
     }
-
-    /** What `readHistory` found, and a line about where it came from, to show when something looks short. */
-    class History(val days: Map<LocalDate, Map<String, Long>>, val note: String)
 
     // The home screen and the system's own screens are not time "in an app".
     private fun ignored(context: Context): Set<String> {
