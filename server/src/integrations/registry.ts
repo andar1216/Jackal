@@ -70,13 +70,14 @@ export const providers: Provider[] = [
     note: 'No public API. Would likely need a small companion app on the phone.',
   },
   {
-    id: 'windows-screen-time',
-    name: 'Windows screen time',
-    description: 'Track time spent in apps on this PC.',
+    id: 'activitywatch',
+    name: 'ActivityWatch',
+    description: 'Time in each app and on each website, read from ActivityWatch, a free open-source tracker on this PC.',
     category: 'screen-time',
-    api: 'unofficial',
+    api: 'official',
+    url: 'https://activitywatch.net/downloads/',
     implemented: true,
-    note: 'Windows has no API for this. A small agent on the PC (agent/valkyrie-agent.mjs) reads which app is in front and sends the daily totals. Set it up on the Screen Time page.',
+    note: 'Install and run ActivityWatch on this computer (add its browser extension for websites), then connect it on the Screen Time page. Only app and site names and seconds are kept here.',
   },
 ]
 

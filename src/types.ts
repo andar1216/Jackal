@@ -43,10 +43,21 @@ export type CrunchData = {
 
 /** Active seconds in one app on one day, from one device. */
 export type ScreenTimeUsage = { device: string; day: string; app: string; seconds: number }
-export type ScreenTimeDevice = { name: string; kind: 'computer' | 'phone'; lastSeenAt: string | null }
-/** The computer agent on the machine Valkyrie runs on. */
-export type AgentStatus = { supported: boolean; running: boolean; startup: boolean }
-export type ScreenTimeData = { devices: ScreenTimeDevice[]; usage: ScreenTimeUsage[] }
+/** Active seconds on one website on one day (from the Chrome extension). */
+export type ScreenTimeSite = { device: string; day: string; site: string; seconds: number }
+/** ActivityWatch on the machine Valkyrie runs on, and whether Valkyrie reads from it. */
+export type ActivityWatchStatus = {
+  running: boolean
+  version: string | null
+  hostname: string | null
+  /** What it is recording on this computer. Null when it is not running. */
+  watchers: { window: boolean; afk: boolean; web: number } | null
+  installed: boolean
+  connected: boolean
+  lastSyncedAt: string | null
+}
+
+export type ScreenTimeData = { usage: ScreenTimeUsage[]; sites: ScreenTimeSite[] }
 
 export type Integration = {
   id: string

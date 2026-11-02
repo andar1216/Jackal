@@ -4,11 +4,9 @@ import type { ScreenTimeData } from '../../types'
 
 const REFRESH_MS = 60_000
 
-/** What the devices have sent, kept fresh: the agents report about once a minute. */
+/** What ActivityWatch has recorded, kept fresh: Valkyrie reads it every few minutes. */
 export function useScreenTime() {
   const [data, setData] = useState<ScreenTimeData | null>(null)
-  // When the data was fetched, so whether a computer is still reporting is judged by that and not by the page's own age.
-  const [fetchedAt, setFetchedAt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -17,7 +15,6 @@ export function useScreenTime() {
         (d) => {
           if (cancelled) return
           setData(d)
-          setFetchedAt(Date.now())
         },
         () => undefined, // the panels just stay as they were
       )
@@ -39,14 +36,13 @@ export function useScreenTime() {
     try {
       const d = await screenTimeApi.data()
       setData(d)
-      setFetchedAt(Date.now())
       return d
     } catch {
       return undefined
     }
   }, [])
 
-  return { data, fetchedAt, reload }
+  return { data, reload }
 }
 
 export type ScreenTime = ReturnType<typeof useScreenTime>

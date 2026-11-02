@@ -2,7 +2,8 @@ import { createApp } from './app.js'
 import { config } from './config.js'
 import { connectDb, disconnectDb } from './db.js'
 import { plaidGateway } from './integrations/plaidGateway.js'
-import { migrateStreakFlags, renameOldHabitKinds, syncAllIndexes } from './models.js'
+import { startActivityWatchTimer } from './integrations/activityWatch.js'
+import { migrateStreakFlags, removeOldScreenTimeData, renameOldHabitKinds, syncAllIndexes } from './models.js'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -55,6 +56,7 @@ function warnAboutRedirect() {
 async function main() {
   await connectWithRetry()
   console.log('Connected to MongoDB')
+  await removeOldScreenTimeData()
   await syncAllIndexes()
   await renameOldHabitKinds()
   await migrateStreakFlags()
@@ -65,6 +67,7 @@ async function main() {
     console.log(`Plaid: ${config.plaid.env} (${plaidGateway().isConfigured() ? 'keys found' : 'NOT set up'})`)
     warnAboutRedirect()
   })
+  startActivityWatchTimer()
 
   const shutdown = () => {
     server.close(() => void disconnectDb().then(() => process.exit(0)))

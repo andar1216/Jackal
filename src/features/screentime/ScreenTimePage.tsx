@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react'
 import { format, formatDistanceToNow, parseISO } from 'date-fns'
-import { Monitor, Smartphone } from 'lucide-react'
+import { Activity, Smartphone } from 'lucide-react'
 import Board, { Panel } from '../../components/Board'
 import MetricCalendar from '../../components/MetricCalendar'
 import PanelFilter from '../../components/PanelFilter'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
-import { screenTimeApi } from '../../lib/api'
+import { activityWatchApi, integrationsApi } from '../../lib/api'
 import { buildMetric } from '../../lib/calendarMetrics'
 import { todayKey } from '../../lib/dates'
-import type { AgentStatus, Integration } from '../../types'
+import type { ActivityWatchStatus, Integration } from '../../types'
 import ConnectorsButton from '../connections/ConnectorsButton'
-import { appName, formatSeconds, recentDays, topApps, totalsByDay } from './screenTimeStats'
+import ItemIcon from './ItemIcon'
+import { appName, formatSeconds, recentDays, topApps, topSites, totalsByDay } from './screenTimeStats'
 import { useScreenTime, type ScreenTime } from './useScreenTime'
 
 const isScreenTimeConnector = (i: Integration) => i.category === 'screen-time'
@@ -21,96 +22,21 @@ const COMPUTER_COLOR = '#16a34a'
 const PHONE_COLOR = '#4f46e5'
 const HISTORY_DAYS = 14
 
-/** The agent reports about once a minute, so a computer that has been quiet for longer than this is not running it. */
-const ONLINE_MS = 3 * 60 * 1000
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.')
 
-function ComputerSetup({ screenTime, onDone }: { screenTime: ScreenTime; onDone: () => void }) {
-  const [token, setToken] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  const known = screenTime.data?.devices.length ?? 0
-  const [startedWith] = useState(known)
-
-  useEffect(() => {
-    let cancelled = false
-    screenTimeApi.token().then(
-      (r) => !cancelled && setToken(r.token),
-      (err) => !cancelled && setError(errorText(err)),
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  // Wait for the new agent's first report.
-  const { reload } = screenTime
-  useEffect(() => {
-    if (!token) return
-    const timer = setInterval(() => void reload(), 4000)
-    return () => clearInterval(timer)
-  }, [token, reload])
-
-  const command = token ? `node agent/valkyrie-agent.mjs --server ${window.location.origin} --token ${token}` : ''
-  const arrived = known > startedWith
-
-  return (
-    <div className="device-steps">
-      {error && (
-        <div className="banner error" role="alert">
-          <span>{error}</span>
-        </div>
-      )}
-      <ol>
-        <li>Install Node.js on the computer if it isn't there yet (nodejs.org). The agent works on Windows.</li>
-        <li>Open a terminal in the Valkyrie folder and run this. It only needs to be run once:</li>
-      </ol>
-      <pre className="device-command">{token ? command : 'Making your secret...'}</pre>
-      <div className="row">
-        <button
-          disabled={!token}
-          onClick={() => {
-            void navigator.clipboard?.writeText(command)
-            setCopied(true)
-          }}
-        >
-          {copied ? 'Copied' : 'Copy command'}
-        </button>
-        <span className="stat-label">
-          {arrived ? 'Connected. This computer has started reporting.' : token ? 'Waiting for the computer to report...' : ''}
-        </span>
-      </div>
-      <ol start={3}>
-        <li>
-          To start it by itself whenever you sign in to Windows, run <code>node agent/valkyrie-agent.mjs --install</code> once.
-        </li>
-      </ol>
-      <p className="stat-label">
-        The agent records only the name of the program in front (like "chrome") while you are using the keyboard or mouse. It never
-        reads window titles, what is on screen, or what you type. The secret above is shown once; setting up again makes a new one and
-        the old install stops being accepted.
-      </p>
-      <button className="link" onClick={onDone}>
-        Close
-      </button>
-    </div>
-  )
-}
-
-function ComputerCard({ screenTime }: { screenTime: ScreenTime }) {
-  const [byCommand, setByCommand] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+function ActivityWatchCard({ screenTime }: { screenTime: ScreenTime }) {
+  const [status, setStatus] = useState<ActivityWatchStatus | null>(null)
   const [busy, setBusy] = useState(false)
-  const [agent, setAgent] = useState<AgentStatus | null>(null)
-  const devices = (screenTime.data?.devices ?? []).filter((d) => d.kind === 'computer')
+  const [error, setError] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
 
-  // Whether the agent is running right now, checked now and every few seconds.
+  // Whether ActivityWatch is running and connected, checked now and every few seconds.
   useEffect(() => {
     let cancelled = false
     const look = () =>
-      screenTimeApi.agent().then(
-        (a) => !cancelled && setAgent(a),
+      activityWatchApi.status().then(
+        (s) => !cancelled && setStatus(s),
         () => undefined,
       )
     void look()
@@ -121,12 +47,20 @@ function ComputerCard({ screenTime }: { screenTime: ScreenTime }) {
     }
   }, [])
 
-  const act = async (job: () => Promise<AgentStatus>) => {
+  const { reload } = screenTime
+  const act = async (job: () => Promise<{ status: ActivityWatchStatus; apps: number; sites: number } | ActivityWatchStatus>, done?: (apps: number, sites: number) => string) => {
     setBusy(true)
     setError(null)
+    setNote(null)
     try {
-      setAgent(await job())
-      await screenTime.reload()
+      const r = await job()
+      if ('status' in r) {
+        setStatus(r.status)
+        if (done) setNote(done(r.apps, r.sites))
+      } else {
+        setStatus(r)
+      }
+      await reload()
     } catch (err) {
       setError(errorText(err))
     } finally {
@@ -134,84 +68,113 @@ function ComputerCard({ screenTime }: { screenTime: ScreenTime }) {
     }
   }
 
-  const remove = async (name: string) => {
-    if (!window.confirm(`Stop tracking ${name}? What it sent to Valkyrie is deleted too.`)) return
+  const disconnect = async () => {
+    if (!window.confirm('Disconnect ActivityWatch? The numbers Valkyrie read from it are removed here (ActivityWatch keeps its own).')) return
+    setBusy(true)
     try {
-      await screenTimeApi.removeDevice(name)
-      setError(null)
+      await integrationsApi.disconnect('activitywatch')
+      setStatus(await activityWatchApi.status())
+      await reload()
     } catch (err) {
       setError(errorText(err))
+    } finally {
+      setBusy(false)
     }
   }
 
-  const running = agent?.running ?? false
+  const read = (apps: number, sites: number) => `Read ${apps} app totals and ${sites} website totals.`
+  const pill = !status ? null : status.connected ? (
+    <span className="pill good-pill">Connected</span>
+  ) : status.running ? (
+    <span className="pill">Running</span>
+  ) : (
+    <span className="pill">{status.installed ? 'Not running' : 'Not installed'}</span>
+  )
+
   return (
     <div className="device">
       <div className="row between">
         <span className="row">
-          <Monitor size={ICON} aria-hidden />
-          <strong>Computer</strong>
-          {running ? <span className="pill good-pill">Agent running</span> : <span className="pill">{devices.length === 0 ? 'Not synced' : 'Agent stopped'}</span>}
+          <Activity size={ICON} aria-hidden />
+          <strong>ActivityWatch</strong>
+          <span className="pill api-official">Recommended</span>
+          {pill}
         </span>
-        {agent?.supported !== false && (
-          <button
-            className={running ? undefined : 'primary'}
-            disabled={busy || !agent}
-            onClick={() => void act(running ? screenTimeApi.stopAgent : screenTimeApi.startAgent)}
-          >
-            {busy ? 'Working...' : running ? 'Stop agent' : 'Run agent'}
-          </button>
-        )}
+        <span className="row">
+          {status?.connected && (
+            <>
+              <button disabled={busy} onClick={() => void act(activityWatchApi.sync, read)}>
+                {busy ? 'Working...' : 'Sync now'}
+              </button>
+              <button className="link" disabled={busy} onClick={() => void disconnect()}>
+                Disconnect
+              </button>
+            </>
+          )}
+          {status && !status.connected && status.running && (
+            <button className="primary" disabled={busy} onClick={() => void act(activityWatchApi.connect, read)}>
+              {busy ? 'Reading...' : 'Connect ActivityWatch'}
+            </button>
+          )}
+          {status && !status.running && status.installed && (
+            <button className="primary" disabled={busy} onClick={() => void act(activityWatchApi.start)}>
+              {busy ? 'Starting...' : 'Start ActivityWatch'}
+            </button>
+          )}
+          {status && !status.running && !status.installed && (
+            <a className="button-link primary" href="https://activitywatch.net/downloads/" target="_blank" rel="noopener noreferrer">
+              Download ActivityWatch ↗
+            </a>
+          )}
+        </span>
       </div>
       <p className="stat-label">
-        Time in each app while you are using the computer. "Run agent" starts a small background program on this computer; nothing to type.
+        A free, open-source tracker that runs on this computer: time in each app, and on each website with its browser extension. Valkyrie
+        reads its daily totals and keeps only app and site names and seconds.
       </p>
-      {agent?.supported === false && <p className="stat-label">The agent only works on Windows for now.</p>}
+      {status && !status.running && !status.installed && (
+        <p className="stat-label">Install it, make sure it is running (it lives in the system tray), then come back here. This page notices by itself.</p>
+      )}
+      {status?.connected && (
+        <p className="stat-label">
+          {status.lastSyncedAt ? `Synced ${formatDistanceToNow(parseISO(status.lastSyncedAt), { addSuffix: true })}. ` : ''}
+          Updates by itself every few minutes while Valkyrie is running.
+        </p>
+      )}
+      {status?.running && status.watchers && (
+        <ul className="list">
+          <li>
+            <span>Apps</span>
+            <span className="pill">{status.watchers.window ? 'Recording' : 'No data yet'}</span>
+          </li>
+          <li>
+            <span>Away from keyboard detection</span>
+            <span className="pill">{status.watchers.afk ? 'On' : 'Off: idle time will be counted'}</span>
+          </li>
+          <li>
+            <span>Websites</span>
+            <span className="pill">
+              {status.watchers.web > 0 ? 'Recording' : 'No browser extension yet'}
+            </span>
+            {status.watchers.web === 0 && (
+              <a
+                className="link"
+                href="https://chromewebstore.google.com/search/ActivityWatch%20Web%20Watcher"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Add the Chrome extension ↗
+              </a>
+            )}
+          </li>
+        </ul>
+      )}
+      {note && <p className="stat-label">{note}</p>}
       {error && (
         <div className="banner error" role="alert">
           <span>{error}</span>
         </div>
       )}
-      {agent?.supported !== false && (devices.length > 0 || running) && (
-        <label className="row" style={{ gap: 6 }}>
-          <input
-            type="checkbox"
-            checked={agent?.startup ?? false}
-            disabled={busy || !agent}
-            onChange={(e) => void act(() => screenTimeApi.setStartup(e.target.checked))}
-          />
-          <span>Start the agent when I sign in to Windows</span>
-        </label>
-      )}
-      {devices.length > 0 && (
-        <ul className="list">
-          {devices.map((d) => {
-            const seen = d.lastSeenAt ? Date.parse(d.lastSeenAt) : 0
-            const online = screenTime.fetchedAt - seen < ONLINE_MS
-            return (
-              <li key={d.name}>
-                <span>
-                  {d.name}
-                  <br />
-                  <span className="stat-label">
-                    {d.lastSeenAt ? `Synced ${formatDistanceToNow(parseISO(d.lastSeenAt), { addSuffix: true })}` : 'No report yet'}
-                  </span>
-                </span>
-                <span className="row">
-                  <span className={`pill ${online ? 'good-pill' : ''}`}>{online ? 'Reporting' : 'Quiet'}</span>
-                  <button className="link" aria-label={`Stop tracking ${d.name}`} onClick={() => void remove(d.name)}>
-                    ✕
-                  </button>
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-      <button className="link" onClick={() => setByCommand(!byCommand)} aria-expanded={byCommand}>
-        {byCommand ? 'Hide the command' : "Valkyrie runs on another computer? Set up with a command"}
-      </button>
-      {byCommand && <ComputerSetup screenTime={screenTime} onDone={() => setByCommand(false)} />}
     </div>
   )
 }
@@ -253,13 +216,16 @@ export default function ScreenTimePage() {
   const layout = useLayoutEditing()
   const screenTime = useScreenTime()
   const [appDays, setAppDays] = useState(1)
+  const [siteDays, setSiteDays] = useState(1)
 
   const usage = screenTime.data?.usage ?? []
   const byDay = totalsByDay(usage)
   const today = todayKey()
   const computerToday = byDay[today] ?? 0
-  const hasComputer = (screenTime.data?.devices.length ?? 0) > 0
+  const hasComputer = usage.length > 0 || (screenTime.data?.sites.length ?? 0) > 0
 
+  const sites = topSites(screenTime.data?.sites ?? [], siteDays).slice(0, 10)
+  const sitesTotal = sites.reduce((s, a) => s + a.seconds, 0)
   const apps = topApps(usage, appDays).slice(0, 10)
   const appsTotal = apps.reduce((s, a) => s + a.seconds, 0)
   const history = recentDays(byDay, HISTORY_DAYS)
@@ -282,7 +248,7 @@ export default function ScreenTimePage() {
       <header className="page-header row between">
         <div>
           <h1>Screen Time</h1>
-          <p>Time on your computer and your phone. Sync a device to start tracking.</p>
+          <p>Time on your computer and your phone. Connect ActivityWatch to start tracking this computer.</p>
         </div>
         <div className="row">
           <PanelFilter page="screentime" />
@@ -320,7 +286,7 @@ export default function ScreenTimePage() {
           <section className="card">
             <h2>Devices</h2>
             <div className="device-list">
-              <ComputerCard screenTime={screenTime} />
+              <ActivityWatchCard screenTime={screenTime} />
               <PhoneCard />
             </div>
           </section>
@@ -337,11 +303,12 @@ export default function ScreenTimePage() {
               </select>
             </div>
             {apps.length === 0 ? (
-              <p className="empty">{hasComputer ? 'Nothing counted for this period yet.' : 'Sync a device to see which apps take your time.'}</p>
+              <p className="empty">{hasComputer ? 'Nothing counted for this period yet.' : 'Connect ActivityWatch to see which apps take your time.'}</p>
             ) : (
               <ul className="list">
                 {apps.map((a) => (
                   <li key={a.app}>
+                    <ItemIcon kind="app" name={a.app} label={appName(a.app)} />
                     <span style={{ flex: 1, minWidth: 0 }}>
                       {appName(a.app)}
                       <div className="bar">
@@ -356,11 +323,41 @@ export default function ScreenTimePage() {
           </section>
         </Panel>
 
+        <Panel id="websites" title="Websites" size="half">
+          <section className="card">
+            <div className="row between">
+              <h2>Websites</h2>
+              <select aria-label="Period" value={siteDays} onChange={(e) => setSiteDays(Number(e.target.value))}>
+                <option value={1}>Today</option>
+                <option value={7}>Last 7 days</option>
+                <option value={30}>Last 30 days</option>
+              </select>
+            </div>
+            {sites.length === 0 ? (
+              <p className="empty">Connect ActivityWatch and add its browser extension to see which websites take your time.</p>
+            ) : (
+              <ul className="list">
+                {sites.map((s) => (
+                  <li key={s.site}>
+                    <ItemIcon kind="site" name={s.site} label={s.site} />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      {s.site}
+                      <div className="bar">
+                        <span style={{ width: `${(s.seconds / sitesTotal) * 100}%` }} />
+                      </div>
+                    </span>
+                    <strong>{formatSeconds(s.seconds)}</strong>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </Panel>
         <Panel id="history" title="Daily history" size="half">
           <section className="card">
             <h2>Daily history</h2>
             {!hasComputer ? (
-              <p className="empty">Sync a device to see your day-by-day totals.</p>
+              <p className="empty">Connect ActivityWatch to see your day-by-day totals.</p>
             ) : (
               <ul className="list">
                 {history.map((h) => (

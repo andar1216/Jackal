@@ -1,4 +1,4 @@
-import type { AccountView, AgentStatus, BankAccount, CrunchData, Integration, ManualAccount, Meal, PanelState, ScreenTimeData, Skill, SubscriptionData, Transaction, User, Workout } from '../types'
+import type { AccountView, ActivityWatchStatus, BankAccount, CrunchData, Integration, ManualAccount, Meal, PanelState, ScreenTimeData, Skill, SubscriptionData, Transaction, User, Workout } from '../types'
 import { todayKey } from './dates'
 
 // Dev: Vite proxies /api to the backend. For a separate API host, set VITE_API_URL.
@@ -82,7 +82,7 @@ export const integrationsApi = {
     await request<void>('DELETE', `/integrations/${id}/connection`)
     if (id === 'plaid') notifyTransactionsChanged()
     if (id === 'crunch') notifyCrunchChanged()
-    if (id === 'windows-screen-time') window.dispatchEvent(new Event(SCREEN_TIME_CHANGED))
+    if (id === 'activitywatch') window.dispatchEvent(new Event(SCREEN_TIME_CHANGED))
   },
 }
 
@@ -191,16 +191,27 @@ export const SCREEN_TIME_CHANGED = 'valkyrie:screen-time-changed'
 
 export const screenTimeApi = {
   data: () => request<ScreenTimeData>('GET', '/integrations/screen-time/data'),
-  /** The secret the computer agent is started with. Getting a new one makes the old install stop being accepted. */
-  token: () => request<{ token: string }>('POST', '/integrations/screen-time/token'),
-  /** The agent on the computer Valkyrie itself runs on. */
-  agent: () => request<AgentStatus>('GET', '/integrations/screen-time/agent'),
-  startAgent: () => request<AgentStatus>('POST', '/integrations/screen-time/agent/start'),
-  stopAgent: () => request<AgentStatus>('POST', '/integrations/screen-time/agent/stop'),
-  setStartup: (enabled: boolean) => request<AgentStatus>('PUT', '/integrations/screen-time/agent/startup', { enabled }),
-  removeDevice: async (name: string) => {
-    await request<void>('DELETE', `/integrations/screen-time/devices/${encodeURIComponent(name)}`)
-    window.dispatchEvent(new Event(SCREEN_TIME_CHANGED))
+  /** Where the picture for a website or app comes from (an <img> can't send headers, so this is a plain address). */
+  iconUrl: (kind: 'site' | 'app', name: string) => `${BASE}/integrations/screen-time/icon?kind=${kind}&name=${encodeURIComponent(name)}`,
+}
+
+const notifyScreenTimeChanged = () => window.dispatchEvent(new Event(SCREEN_TIME_CHANGED))
+
+type AwResult = { days: number; apps: number; sites: number; status: ActivityWatchStatus }
+
+/** ActivityWatch, read through Valkyrie's server (which runs on the same computer). */
+export const activityWatchApi = {
+  status: () => request<ActivityWatchStatus>('GET', '/integrations/activitywatch'),
+  start: () => request<ActivityWatchStatus>('POST', '/integrations/activitywatch/start'),
+  connect: async () => {
+    const r = await request<AwResult>('POST', '/integrations/activitywatch/connect')
+    notifyScreenTimeChanged()
+    return r
+  },
+  sync: async () => {
+    const r = await request<AwResult>('POST', '/integrations/activitywatch/sync')
+    notifyScreenTimeChanged()
+    return r
   },
 }
 

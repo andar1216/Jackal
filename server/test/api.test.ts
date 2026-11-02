@@ -38,8 +38,9 @@ const makeClient = () => {
     const res = await fetch(base + path, { method, headers, body: body ? JSON.stringify(body) : undefined })
     const set = res.headers.getSetCookie().find((c) => c.startsWith('valkyrie_sid='))
     if (set) cookie = set.startsWith('valkyrie_sid=;') ? '' : set.split(';')[0]
-    const text = await res.text()
-    return { status: res.status, body: text ? JSON.parse(text) : null, setCookie: set }
+    const bytes = Buffer.from(await res.arrayBuffer())
+    const isJson = (res.headers.get('content-type') ?? '').includes('json')
+    return { status: res.status, body: isJson && bytes.length ? JSON.parse(bytes.toString('utf8')) : null, setCookie: set, headers: res.headers, bytes }
   }
 }
 
@@ -443,16 +444,16 @@ describe('meals and time entries', () => {
 })
 
 describe('integrations', () => {
-  it('lists every planned integration as not connected, and only Crunch and the computer agent (which need no keys) as available', async () => {
+  it('lists every planned integration as not connected, and only Crunch and ActivityWatch (which need no keys) as available', async () => {
     const { status, body } = await call('GET', '/integrations')
     assert.equal(status, 200)
     assert.deepEqual(
       body.map((i: { id: string }) => i.id),
-      ['google-calendar', 'plaid', 'myfitnesspal', 'crunch', 'samsung-screen-time', 'windows-screen-time'],
+      ['google-calendar', 'plaid', 'myfitnesspal', 'crunch', 'samsung-screen-time', 'activitywatch'],
     )
     for (const item of body) {
       assert.equal(item.status, 'not_connected')
-      assert.equal(item.available, item.id === 'crunch' || item.id === 'windows-screen-time')
+      assert.equal(item.available, item.id === 'crunch' || item.id === 'activitywatch')
     }
   })
 
@@ -465,7 +466,7 @@ describe('integrations', () => {
       myfitnesspal: 'official',
       crunch: 'unofficial',
       'samsung-screen-time': 'unofficial',
-      'windows-screen-time': 'unofficial',
+      activitywatch: 'official',
     })
     const crunch = body.find((i: { id: string }) => i.id === 'crunch')
     assert.equal(crunch.category, 'fitness')
@@ -691,142 +692,146 @@ describe('crunch bookmark (data sent from the browser)', () => {
   })
 })
 
-describe('screen time (computer agent)', () => {
-  const report = (token: string | undefined, body: unknown) =>
-    fetch(`${base}/screen-time/agent/usage`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify(body),
-    })
-  const day = '2026-11-01'
-  const sent = (apps: { app: string; seconds: number }[], device = 'DESKTOP-1') => ({ device, days: [{ day, apps }] })
-  let token = ''
-
-  // A pretend agent, so the tests never start a real program.
-  const fake = { running: false, startup: false, started: [] as { server: string; token: string; device: string }[] }
+describe('activitywatch', () => {
+  type Call = { timeperiods: string[]; query: string[] }
+  const fake = {
+    running: true,
+    calls: [] as Call[],
+    // What "ActivityWatch" answers for the app query and the website query, by day index (the last day is today).
+    apps: (i: number, last: number) =>
+      i === last ? [{ duration: 3600.4, data: { app: 'chrome.exe' } }, { duration: 1200, data: { app: 'Code.exe' } }, { duration: 0.2, data: { app: 'tiny.exe' } }] : [],
+    web: (i: number, last: number) =>
+      i === last
+        ? [
+            { duration: 1800, data: { url: 'https://www.YouTube.com/watch?v=1' } },
+            { duration: 600, data: { url: 'https://youtube.com/feed' } },
+            { duration: 300, data: { url: 'chrome://extensions/' } },
+            { duration: 100, data: { url: 'not a url' } },
+          ]
+        : [],
+  }
   before(async () => {
-    const { setAgentControl } = await import('../src/integrations/localAgent.js')
-    setAgentControl({
-      status: () => ({ supported: true, running: fake.running, startup: fake.startup }),
-      start: async (o) => {
-        fake.started.push(o)
-        fake.running = true
-      },
-      stop: async () => {
-        fake.running = false
-      },
-      setStartup: (on) => {
-        fake.startup = on
+    const { setActivityWatchGateway } = await import('../src/integrations/activityWatch.js')
+    setActivityWatchGateway({
+      info: async () => (fake.running ? { hostname: 'DESKTOP-AW', version: 'v0.13.2' } : null),
+      buckets: async () => [
+        { id: 'aw-watcher-window_DESKTOP-AW', type: 'currentwindow', client: 'aw-watcher-window', hostname: 'DESKTOP-AW' },
+        { id: 'aw-watcher-afk_DESKTOP-AW', type: 'afkstatus', client: 'aw-watcher-afk', hostname: 'DESKTOP-AW' },
+        { id: 'aw-watcher-web-chrome_DESKTOP-AW', type: 'web.tab.current', client: 'aw-client-web', hostname: 'DESKTOP-AW' },
+        { id: 'aw-watcher-window_OTHER-PC', type: 'currentwindow', client: 'aw-watcher-window', hostname: 'OTHER-PC' },
+      ],
+      query: async (timeperiods, query) => {
+        fake.calls.push({ timeperiods, query })
+        const last = timeperiods.length - 1
+        const isWeb = query.some((l) => l.includes('web = '))
+        return timeperiods.map((_p, i) => (isWeb ? fake.web(i, last) : fake.apps(i, last)))
       },
     })
   })
 
-  it('runs and stops the agent from the page, handing it a working secret directly', async () => {
-    assert.equal((await makeClient()('POST', '/integrations/screen-time/agent/start')).status, 401)
-    assert.deepEqual((await call('GET', '/integrations/screen-time/agent')).body, { supported: true, running: false, startup: false })
-
-    const started = await call('POST', '/integrations/screen-time/agent/start')
-    assert.equal(started.status, 200)
-    assert.equal(started.body.running, true)
-    const { server, token: secret, device } = fake.started[0]
-    assert.match(server, /^http:\/\/127\.0\.0\.1:\d+$/)
-    assert.ok(device.length > 0)
-    // The secret it was given is accepted by the agent route.
-    assert.equal((await report(secret, sent([{ app: 'chrome', seconds: 5 }], 'RUN-TEST'))).status, 200)
-
-    assert.equal((await call('PUT', '/integrations/screen-time/agent/startup', { enabled: true })).body.startup, true)
-    assert.equal((await call('PUT', '/integrations/screen-time/agent/startup', { enabled: 'yes' })).status, 400)
-    assert.equal((await call('POST', '/integrations/screen-time/agent/stop')).body.running, false)
-
-    await call('DELETE', '/integrations/screen-time/devices/RUN-TEST')
-    fake.startup = false
+  it('says it is not running, and refuses to connect until it is', async () => {
+    fake.running = false
+    const s = await call('GET', '/integrations/activitywatch')
+    assert.equal(s.status, 200)
+    assert.equal(s.body.running, false)
+    assert.equal(s.body.connected, false)
+    assert.equal((await call('POST', '/integrations/activitywatch/connect')).status, 409)
+    assert.equal((await call('POST', '/integrations/activitywatch/sync')).status, 409, 'not connected yet')
+    fake.running = true
   })
 
-  it('only gives the agent secret to a signed-in person, and keeps just a hash', async () => {
-    assert.equal((await makeClient()('POST', '/integrations/screen-time/token')).status, 401)
-    const r = await call('POST', '/integrations/screen-time/token')
-    assert.equal(r.status, 201)
-    token = r.body.token
-    const { ScreenTimeToken } = await import('../src/models.js')
-    assert.equal(await ScreenTimeToken.countDocuments({ tokenHash: token }), 0)
+  it("finds this computer's watchers", async () => {
+    const s = await call('GET', '/integrations/activitywatch')
+    assert.equal(s.body.running, true)
+    assert.equal(s.body.hostname, 'DESKTOP-AW')
+    assert.deepEqual(s.body.watchers, { window: true, afk: true, web: 1 })
   })
 
-  it('takes totals from the agent without a sign-in cookie, and lists the computer as connected', async () => {
-    const res = await report(token, sent([{ app: 'chrome', seconds: 600 }, { app: 'Code', seconds: 300 }]))
-    assert.equal(res.status, 200)
+  it('connects, reads a month, and keeps only app names, site names and seconds', async () => {
+    fake.calls = []
+    const r = await call('POST', '/integrations/activitywatch/connect')
+    assert.equal(r.status, 200)
+    assert.equal(r.body.days, 30)
+    assert.equal(r.body.apps, 2, 'a fraction of a second is dropped')
+    assert.equal(r.body.sites, 1, 'chrome:// pages and junk are not websites, and youtube.com adds up')
+    assert.equal(r.body.status.connected, true)
+
+    // It asked for this computer's buckets only, in 30 whole days.
+    const [appCall] = fake.calls
+    assert.equal(appCall.timeperiods.length, 30)
+    assert.ok(appCall.query.some((l) => l.includes('aw-watcher-window_DESKTOP-AW')))
+    assert.ok(appCall.query.some((l) => l.includes('aw-watcher-afk_DESKTOP-AW')))
+    assert.ok(!appCall.query.some((l) => l.includes('OTHER-PC')))
+    assert.ok(fake.calls[1].query.some((l) => l.includes('aw-watcher-web-chrome_DESKTOP-AW')))
+
     const { body } = await call('GET', '/integrations/screen-time/data')
-    assert.equal(body.devices.length, 1)
-    assert.equal(body.devices[0].name, 'DESKTOP-1')
     assert.deepEqual(
       body.usage.map((u: { app: string; seconds: number }) => [u.app, u.seconds]).sort(),
-      [['Code', 300], ['chrome', 600]],
+      [['Code', 1200], ['chrome', 3600]],
     )
+    assert.deepEqual(body.sites.map((s: { site: string; seconds: number }) => [s.site, s.seconds]), [['youtube.com', 2400]])
     const list = await call('GET', '/integrations')
-    assert.equal(list.body.find((i: { id: string }) => i.id === 'windows-screen-time').status, 'connected')
+    assert.equal(list.body.find((i: { id: string }) => i.id === 'activitywatch').status, 'connected')
   })
 
-  it('keeps the larger total when a report is repeated or arrives late', async () => {
-    await report(token, sent([{ app: 'chrome', seconds: 900 }]))
-    await report(token, sent([{ app: 'chrome', seconds: 100 }]))
+  it('replaces the days it reads instead of adding to them', async () => {
+    fake.apps = (i, last) => (i === last ? [{ duration: 600, data: { app: 'chrome.exe' } }] : [])
+    const r = await call('POST', '/integrations/activitywatch/sync')
+    assert.equal(r.status, 200)
+    assert.equal(r.body.days, 3)
     const { body } = await call('GET', '/integrations/screen-time/data')
-    const chrome = body.usage.filter((u: { app: string }) => u.app === 'chrome')
-    assert.equal(chrome.length, 1)
-    assert.equal(chrome[0].seconds, 900)
+    assert.deepEqual(body.usage.map((u: { app: string; seconds: number }) => [u.app, u.seconds]), [['chrome', 600]])
   })
 
-  it('refuses a missing or wrong secret and nonsense totals', async () => {
-    assert.equal((await report(undefined, sent([]))).status, 401)
-    assert.equal((await report('nope', sent([]))).status, 401)
-    assert.equal((await report(token, sent([{ app: 'x', seconds: 999999 }]))).status, 400)
-    assert.equal((await report(token, { device: 'PC', days: [{ day: 'today', apps: [] }] })).status, 400)
+  it('gives a picture for a site or app in your own totals, and only those', async () => {
+    const { setIconSources } = await import('../src/integrations/icons.js')
+    const asked: string[] = []
+    const png = Buffer.from('89504e470d0a1a0a', 'hex')
+    setIconSources({
+      site: async (d) => (asked.push(`site:${d}`), d === 'youtube.com' ? { type: 'image/png', data: png } : null),
+      app: async (n) => (asked.push(`app:${n}`), n === 'chrome' ? { type: 'image/png', data: png } : null),
+    })
+    const get = (q: string) => call('GET', `/integrations/screen-time/icon?${q}`)
+
+    const site = await get('kind=site&name=youtube.com')
+    assert.equal(site.status, 200)
+    assert.equal(site.headers.get('content-type'), 'image/png')
+    assert.match(site.headers.get('content-security-policy') ?? '', /sandbox/)
+    assert.deepEqual(site.bytes, png)
+    assert.equal((await get('kind=app&name=chrome')).status, 200)
+
+    // Not in your totals: never looked up. In your totals but no picture found: 404, and the page shows a letter.
+    assert.equal((await get('kind=site&name=internal.example')).status, 404)
+    assert.equal((await get('kind=site&name=localhost')).status, 404)
+    assert.equal((await get('kind=app&name=Code')).status, 404)
+    assert.equal((await get('kind=nope&name=x')).status, 404)
+    assert.ok(!asked.includes('site:internal.example') && !asked.includes('site:localhost'))
+    assert.equal((await makeClient()('GET', '/integrations/screen-time/icon?kind=site&name=youtube.com')).status, 401, 'needs a sign-in')
   })
 
-  it('takes website totals from the Chrome extension with its own secret, separate from the agent', async () => {
-    const mk = await call('POST', '/integrations/screen-time/token', { purpose: 'extension' })
-    assert.equal(mk.status, 201)
-    const ext = mk.body.token
-    assert.ok(mk.body.device.length > 0)
-    const web = (secret: string | undefined, body: unknown) =>
-      fetch(`${base}/screen-time/agent/web`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...(secret ? { authorization: `Bearer ${secret}` } : {}) },
-        body: JSON.stringify(body),
-      })
-    const sites = (list: { site: string; seconds: number }[]) => ({ device: 'DESKTOP-1', days: [{ day, sites: list }] })
+  it("clears out what Valkyrie's old agent sent, and leaves what came from ActivityWatch", async () => {
+    const { ScreenTimeUsage, removeOldScreenTimeData } = await import('../src/models.js')
+    const { default: mongoose } = await import('mongoose')
+    const userId = new mongoose.Types.ObjectId()
+    const row = { userId, device: 'PC', day: '2026-11-01', seconds: 60 }
+    await ScreenTimeUsage.collection.insertMany([
+      { ...row, app: 'old-agent' }, // from before `source` existed
+      { ...row, app: 'old-agent-2', source: '' },
+      { ...row, app: 'kept', source: 'activitywatch' },
+    ])
+    await removeOldScreenTimeData()
+    const left = await ScreenTimeUsage.collection.find({ userId }).toArray()
+    assert.deepEqual(left.map((r) => r.app), ['kept'])
+    await ScreenTimeUsage.collection.deleteMany({ userId })
+  })
 
-    assert.equal((await web(ext, sites([{ site: 'YouTube.com', seconds: 300 }, { site: 'github.com', seconds: 120 }]))).status, 200)
-    await web(ext, sites([{ site: 'youtube.com', seconds: 200 }])) // smaller: ignored
+  it('forgets what it read when disconnected', async () => {
+    assert.equal((await call('DELETE', '/integrations/activitywatch/connection')).status, 204)
     const { body } = await call('GET', '/integrations/screen-time/data')
-    assert.deepEqual(
-      body.sites.map((s: { site: string; seconds: number }) => [s.site, s.seconds]).sort(),
-      [['github.com', 120], ['youtube.com', 300]],
-    )
-    assert.ok(body.devices.find((d: { name: string }) => d.name === 'DESKTOP-1').webSeenAt)
-
-    // Each kind of secret only works on its own route, and making one does not break the other.
-    assert.equal((await web(token, sites([]))).status, 401, 'the agent secret is not the extension secret')
-    assert.equal((await report(ext, sent([]))).status, 401)
-    assert.equal((await report(token, sent([{ app: 'chrome', seconds: 1 }]))).status, 200, 'the agent still works')
-    assert.equal((await web(undefined, sites([]))).status, 401)
-    assert.equal((await web(ext, { device: 'PC', days: [{ day, sites: [{ site: '', seconds: 1 }] }] })).status, 400)
-  })
-  it("keeps people's screen time apart", async () => {
-    const other = makeClient()
-    await other('POST', '/auth/register', { email: 'screen-other@example.com', name: 'Other', password: PASSWORD })
-    const seen = await other('GET', '/integrations/screen-time/data')
-    assert.deepEqual(seen.body, { devices: [], usage: [], sites: [] })
-  })
-
-  it('forgets a computer, and everything stops once the connector is disconnected', async () => {
-    assert.equal((await call('DELETE', '/integrations/screen-time/devices/DESKTOP-1')).status, 204)
-    assert.deepEqual((await call('GET', '/integrations/screen-time/data')).body, { devices: [], usage: [], sites: [] })
-    await report(token, sent([{ app: 'chrome', seconds: 60 }]))
-    assert.equal((await call('DELETE', '/integrations/windows-screen-time/connection')).status, 204)
-    assert.equal((await report(token, sent([{ app: 'chrome', seconds: 60 }]))).status, 401)
-    assert.deepEqual((await call('GET', '/integrations/screen-time/data')).body, { devices: [], usage: [], sites: [] })
+    assert.deepEqual(body, { usage: [], sites: [] })
+    assert.equal((await call('GET', '/integrations/activitywatch')).body.connected, false)
   })
 })
-
 describe('accounts', () => {
   it('gave the first account the data saved before accounts existed', async () => {
     const { body } = await call('GET', '/skills')
@@ -1170,5 +1175,29 @@ describe('general', () => {
       body: '{bad json',
     })
     assert.equal(res.status, 400)
+  })
+})
+
+describe('icon helpers', () => {
+  it('only ever looks up real public website names', async () => {
+    const { isPublicDomain } = await import('../src/integrations/icons.js')
+    for (const ok of ['youtube.com', 'docs.google.com', 'a-b.co.uk']) assert.ok(isPublicDomain(ok), ok)
+    for (const bad of ['localhost', '127.0.0.1', '10.0.0.5', '[::1]', 'printer.local', 'nas.lan', 'x', 'a b.com', 'evil.com/path', 'user@evil.com', 'evil.com:8080', ''])
+      assert.ok(!isPublicDomain(bad), bad)
+  })
+
+  it('finds the icon a page names, and only a usable one', async () => {
+    const { iconLink } = await import('../src/integrations/icons.js')
+    const page = `<head><link rel="stylesheet" href="/a.css"><link rel="shortcut icon" href="/img/fav.png"></head>`
+    assert.equal(iconLink(page, 'https://example.com/'), 'https://example.com/img/fav.png')
+    assert.equal(iconLink(`<link href='//cdn.example.com/i.ico' rel='icon'>`, 'https://example.com/'), 'https://cdn.example.com/i.ico')
+    assert.equal(iconLink('<link rel="icon" href="data:image/png;base64,AAAA">', 'https://example.com/'), undefined)
+    assert.equal(iconLink('<p>nothing</p>', 'https://example.com/'), undefined)
+  })
+
+  it('refuses app names that could do anything but name a program', async () => {
+    const { isAppName } = await import('../src/integrations/icons.js')
+    for (const ok of ['chrome', 'Cursor', 'Spotify', 'Discord']) assert.ok(isAppName(ok), ok)
+    for (const bad of ['', '..\\x', 'a/b', 'a;b', '$(x)', 'x'.repeat(200)]) assert.ok(!isAppName(bad), bad)
   })
 })

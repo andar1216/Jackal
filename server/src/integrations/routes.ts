@@ -4,7 +4,8 @@ import { HttpError } from '../lib/errors.js'
 import { Connection } from '../models.js'
 import { crunchRouter, disconnectCrunch } from './crunch.js'
 import { disconnectPlaid, plaidRouter, plaidStatus } from './plaid.js'
-import { COMPUTER_PROVIDER, disconnectScreenTime, screenTimeRouter } from './screenTime.js'
+import { ACTIVITYWATCH_PROVIDER, activityWatchRouter, disconnectActivityWatch } from './activityWatch.js'
+import { screenTimeRouter } from './screenTime.js'
 import { findProvider, providers } from './registry.js'
 
 export const integrations = Router()
@@ -19,6 +20,7 @@ const requireProvider = (id: string) => {
 integrations.use('/plaid', plaidRouter)
 integrations.use('/crunch', crunchRouter)
 integrations.use('/screen-time', screenTimeRouter)
+integrations.use('/activitywatch', activityWatchRouter)
 
 // List every integration with this user's connection state.
 integrations.get('/', async (req, res) => {
@@ -54,7 +56,7 @@ integrations.post('/:id/connect', (req) => {
   const provider = requireProvider(req.params.id)
   if (provider.id === 'plaid') throw new HttpError(400, 'Plaid connects through Plaid Link. See /integrations/plaid/link-token.')
   if (provider.id === 'crunch') throw new HttpError(400, 'Crunch connects with your member email and password. See /integrations/crunch/connect.')
-  if (provider.id === COMPUTER_PROVIDER) throw new HttpError(400, 'The computer agent is set up on the Screen Time page (Computer, Set up sync).')
+  if (provider.id === ACTIVITYWATCH_PROVIDER) throw new HttpError(400, 'ActivityWatch is connected on the Screen Time page.')
   throw new HttpError(501, `${provider.name} isn't available yet.`)
 })
 
@@ -63,7 +65,7 @@ integrations.delete('/:id/connection', async (req, res) => {
   const userId = currentUserId(req)
   if (provider.id === 'plaid') await disconnectPlaid(userId)
   else if (provider.id === 'crunch') await disconnectCrunch(userId)
-  else if (provider.id === COMPUTER_PROVIDER) await disconnectScreenTime(userId)
+  else if (provider.id === ACTIVITYWATCH_PROVIDER) await disconnectActivityWatch(userId)
   else await Connection.deleteOne({ provider: provider.id, userId })
   res.status(204).end()
 })

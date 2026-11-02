@@ -218,7 +218,7 @@ The Dashboard's **Connect** button lists the outside services we want to pull da
 | MyFitnessPal | Likely partner-only API | Not started, may not be possible |
 | Crunch Fitness | Unofficial (no public API). Connect opens https://members.crunch.com/ in a new tab; you sign in there and click a "Send to Valkyrie" bookmark, which sends the same data the My Profile page shows. Optionally Valkyrie can sign in for you instead (password stored encrypted; needs INTEGRATION_ENCRYPTION_KEY) so it refreshes by itself | Built: check-in progress and history, class history, payment history on the Fitness page |
 | Samsung S23 screen time | No public API, needs a companion app | Not started |
-| Windows screen time | Local agent (`agent/valkyrie-agent.mjs`) reads the program in front while you use the PC and sends daily totals. Set up on the Screen Time page. Windows only, records program names only | Built |
+| ActivityWatch | Free open-source tracker on this PC. Valkyrie reads its daily per-app and per-website totals from its local API (`localhost:5600`) and keeps only names and seconds. Connect from the Screen Time page | Built |
 
 ### Plaid (bank accounts)
 

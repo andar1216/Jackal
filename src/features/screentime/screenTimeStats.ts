@@ -1,5 +1,5 @@
 import { format, parseISO, subDays } from 'date-fns'
-import type { ScreenTimeUsage } from '../../types'
+import type { ScreenTimeSite, ScreenTimeUsage } from '../../types'
 
 /** "2h 5m", "45m", or "<1m" for a little. */
 export function formatSeconds(seconds: number) {
@@ -26,6 +26,17 @@ export function topApps(usage: ScreenTimeUsage[], days: number, today: Date = ne
     byApp.set(u.app, (byApp.get(u.app) ?? 0) + u.seconds)
   }
   return [...byApp.entries()].map(([app, seconds]) => ({ app, seconds })).sort((a, b) => b.seconds - a.seconds)
+}
+
+/** The websites used most in the last days days (1 means today only), biggest first. */
+export function topSites(sites: ScreenTimeSite[], days: number, today: Date = new Date()) {
+  const since = format(subDays(today, days - 1), 'yyyy-MM-dd')
+  const bySite = new Map<string, number>()
+  for (const s of sites) {
+    if (s.day < since) continue
+    bySite.set(s.site, (bySite.get(s.site) ?? 0) + s.seconds)
+  }
+  return [...bySite.entries()].map(([site, seconds]) => ({ site, seconds })).sort((a, b) => b.seconds - a.seconds)
 }
 
 // The program's own name, tidied up for reading.

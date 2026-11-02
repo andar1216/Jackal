@@ -6,6 +6,8 @@ export const config = {
   host: process.env.HOST || '127.0.0.1',
   mongoUri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/valkyrie',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+  // Where ActivityWatch (the screen time program) answers on this computer.
+  activityWatchUrl: (process.env.ACTIVITYWATCH_URL || 'http://127.0.0.1:5600').replace(/\/+$/, ''),
   isProduction: process.env.NODE_ENV === 'production',
   // Set ALLOW_REGISTRATION=false to stop new sign-ups once your own account exists.
   allowRegistration: process.env.ALLOW_REGISTRATION !== 'false',

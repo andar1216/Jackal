@@ -154,6 +154,7 @@ const connectionSchema = ownedSchema({
   provider: { type: String, required: true },
   connectedAt: { type: Date, default: Date.now },
   accountLabel: String, // for example the Google account email
+  lastSyncedAt: Date, // for services Valkyrie pulls from (ActivityWatch)
   // Tokens and other secrets will be added here, encrypted, when the first integration is built.
 })
 connectionSchema.index({ userId: 1, provider: 1 }, { unique: true })
@@ -244,44 +245,28 @@ export const CrunchPayment = mongoose.model(
   }),
 )
 
-/** The secret the computer agent sends with its totals. It can only send screen time for this one person. Only a hash is kept. */
-const screenTimeTokenSchema = ownedSchema({
-  // The computer agent and the Chrome extension each have their own, so setting one up never breaks the other.
-  purpose: { type: String, enum: ['agent', 'extension'], default: 'agent' },
-  tokenHash: { type: String, required: true, unique: true },
-  expiresAt: { type: Date, required: true, index: { expires: 0 } },
-})
-screenTimeTokenSchema.index({ userId: 1, purpose: 1 }, { unique: true }) // one of each at a time
-export const ScreenTimeToken = mongoose.model('ScreenTimeToken', screenTimeTokenSchema)
-
-/** A computer (later also phones) that reports screen time. */
-const screenTimeDeviceSchema = ownedSchema({
-  name: { type: String, required: true, trim: true },
-  kind: { type: String, enum: ['computer', 'phone'], default: 'computer' },
-  lastSeenAt: Date, // the agent's last report
-  webSeenAt: Date, // the Chrome extension's last report
-})
-screenTimeDeviceSchema.index({ userId: 1, name: 1 }, { unique: true })
-export const ScreenTimeDevice = mongoose.model('ScreenTimeDevice', screenTimeDeviceSchema)
-
-/** Seconds of active use of one app on one day. The agent sends running totals, so a resend never counts twice. */
+/** Seconds of active use of one app on one day, read from ActivityWatch (see integrations/activityWatch.ts). */
 const screenTimeUsageSchema = ownedSchema({
   device: { type: String, required: true },
+  // Where the numbers came from. Always 'activitywatch' now.
+  source: { type: String, default: '' },
   day,
   app: { type: String, required: true },
   seconds: { type: Number, required: true, min: 0 },
 })
-screenTimeUsageSchema.index({ userId: 1, device: 1, day: 1, app: 1 }, { unique: true })
+screenTimeUsageSchema.index({ userId: 1, device: 1, source: 1, day: 1, app: 1 }, { unique: true })
 export const ScreenTimeUsage = mongoose.model('ScreenTimeUsage', screenTimeUsageSchema)
 
-/** Seconds on one website on one day, from the Chrome extension. Only the site's name is kept, never the page. */
+/** Seconds on one website on one day, read from ActivityWatch. Only the site's name is kept, never the page. */
 const screenTimeSiteSchema = ownedSchema({
   device: { type: String, required: true },
+  // Where the numbers came from. Always 'activitywatch' now.
+  source: { type: String, default: '' },
   day,
   site: { type: String, required: true },
   seconds: { type: Number, required: true, min: 0 },
 })
-screenTimeSiteSchema.index({ userId: 1, device: 1, day: 1, site: 1 }, { unique: true })
+screenTimeSiteSchema.index({ userId: 1, device: 1, source: 1, day: 1, site: 1 }, { unique: true })
 export const ScreenTimeSite = mongoose.model('ScreenTimeSite', screenTimeSiteSchema)
 
 /** Every model that belongs to a user. */
@@ -335,7 +320,7 @@ const boardLayoutSchema = ownedSchema({
 boardLayoutSchema.index({ userId: 1, page: 1 }, { unique: true })
 export const BoardLayout = mongoose.model('BoardLayout', boardLayoutSchema)
 
-export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment, ScreenTimeToken, ScreenTimeDevice, ScreenTimeUsage, ScreenTimeSite]
+export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment, ScreenTimeUsage, ScreenTimeSite]
 
 /**
  * Data created before accounts existed has no owner. The first account to be created inherits it.
@@ -356,4 +341,18 @@ export const migrateStreakFlags = async () => {
   await Skill.collection.updateMany({ hideStreak: false }, { $unset: { hideStreak: '' } })
 }
 
+/**
+ * Valkyrie used to have its own computer agent and Chrome extension for screen time. ActivityWatch replaced them, so what
+ * they sent (and their secrets and computer list) is removed. This runs before the indexes are rebuilt, because those
+ * rows would clash with ActivityWatch's. Safe to run every start.
+ */
+export const removeOldScreenTimeData = async () => {
+  const own = { source: { $ne: 'activitywatch' } }
+  await ScreenTimeUsage.collection.deleteMany(own)
+  await ScreenTimeSite.collection.deleteMany(own)
+  await Connection.collection.deleteMany({ provider: 'windows-screen-time' })
+  for (const name of ['screentimetokens', 'screentimedevices']) {
+    await mongoose.connection.collection(name).drop().catch(() => undefined) // not there: nothing to remove
+  }
+}
 export const syncAllIndexes = () => Promise.all(mongoose.modelNames().map((name) => mongoose.model(name).syncIndexes()))
