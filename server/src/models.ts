@@ -298,6 +298,19 @@ const phoneDaySchema = ownedSchema({
 phoneDaySchema.index({ userId: 1, device: 1, day: 1 }, { unique: true })
 export const PhoneDay = mongoose.model('PhoneDay', phoneDaySchema)
 
+/**
+ * The category of an app or website. `phone` is what Android says about a phone app; `mine` is what the person chose, which
+ * wins. With neither, the page guesses from the name. A row with neither is deleted.
+ */
+const appCategorySchema = ownedSchema({
+  kind: { type: String, enum: ['app', 'site'], required: true },
+  name: { type: String, required: true, maxlength: 120 },
+  mine: { type: String, maxlength: 40 },
+  phone: { type: String, maxlength: 40 },
+})
+appCategorySchema.index({ userId: 1, kind: 1, name: 1 }, { unique: true })
+export const AppCategory = mongoose.model('AppCategory', appCategorySchema)
+
 /** The small picture of an app on the phone, sent by the phone itself (the computer's own icons come from Windows). */
 const phoneIconSchema = ownedSchema({
   app: { type: String, required: true },
@@ -367,7 +380,7 @@ const boardLayoutSchema = ownedSchema({
 boardLayoutSchema.index({ userId: 1, page: 1 }, { unique: true })
 export const BoardLayout = mongoose.model('BoardLayout', boardLayoutSchema)
 
-export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment, ScreenTimeUsage, ScreenTimeSite, PhoneDevice, PhonePairing, PhoneIcon, PhoneDay, DeviceGroup]
+export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment, ScreenTimeUsage, ScreenTimeSite, PhoneDevice, PhonePairing, PhoneIcon, PhoneDay, AppCategory, DeviceGroup]
 
 /**
  * Data created before accounts existed has no owner. The first account to be created inherits it.

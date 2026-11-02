@@ -853,7 +853,7 @@ describe('activitywatch', () => {
   it('forgets what it read when disconnected', async () => {
     assert.equal((await call('DELETE', '/integrations/activitywatch/connection')).status, 204)
     const { body } = await call('GET', '/integrations/screen-time/data')
-    assert.deepEqual(body, { usage: [], sites: [], phoneDays: [] })
+    assert.deepEqual(body, { usage: [], sites: [], phoneDays: [], categories: [] })
     assert.equal((await call('GET', '/integrations/activitywatch')).body.connected, false)
   })
 })
@@ -1342,6 +1342,34 @@ describe('phone', () => {
     assert.equal((await asPhone('POST', '/sync', { days: [{ day, apps: [], unlocks: 1, notifications: [{ app: 'X', count: 0 }] }] })).status, 400)
   })
 
+  it('keeps the categories Android gives apps, lets the person file anything under their own, and can go back to automatic', async () => {
+    const categories = async () => (await call('GET', '/integrations/screen-time/data')).body.categories
+    const find = async (kind: string, name: string) => (await categories()).find((c: { kind: string; name: string }) => c.kind === kind && c.name === name)
+
+    await asPhone('POST', '/sync', { days: [{ day, apps: [{ app: 'Instagram', seconds: 60 }] }], categories: { Instagram: 'Social', Maps: 'Maps & travel' } })
+    assert.deepEqual(await find('app', 'Instagram'), { kind: 'app', name: 'Instagram', mine: null, phone: 'Social' })
+
+    assert.equal((await call('PUT', '/integrations/screen-time/category', { kind: 'app', name: 'Instagram', category: 'Time wasters' })).status, 204)
+    assert.deepEqual(await find('app', 'Instagram'), { kind: 'app', name: 'Instagram', mine: 'Time wasters', phone: 'Social' })
+    await asPhone('POST', '/sync', { days: [{ day, apps: [{ app: 'Instagram', seconds: 60 }] }], categories: { Instagram: 'Social' } })
+    assert.equal((await find('app', 'Instagram')).mine, 'Time wasters', 'the phone does not overwrite what the person chose')
+
+    assert.equal((await call('PUT', '/integrations/screen-time/category', { kind: 'site', name: 'youtube.com', category: 'Video' })).status, 204)
+    assert.equal((await call('PUT', '/integrations/screen-time/category', { kind: 'site', name: 'youtube.com', category: null })).status, 204)
+    assert.equal(await find('site', 'youtube.com'), undefined, 'automatic again, and nothing left to keep')
+    assert.equal((await call('PUT', '/integrations/screen-time/category', { kind: 'app', name: 'Instagram', category: null })).status, 204)
+    assert.deepEqual(await find('app', 'Instagram'), { kind: 'app', name: 'Instagram', mine: null, phone: 'Social' })
+
+    assert.equal((await call('PUT', '/integrations/screen-time/category', { kind: 'thing', name: 'x', category: 'y' })).status, 400)
+    assert.equal((await call('PUT', '/integrations/screen-time/category', { kind: 'app', name: 'x', category: '' })).status, 400)
+    assert.equal((await asPhone('POST', '/sync', { days: [{ day, apps: [] }], categories: { X: 'a'.repeat(41) } })).status, 400)
+    await call('PUT', '/integrations/screen-time/category', { kind: 'site', name: 'mine.example', category: 'Work' })
+
+    const other = makeClient()
+    assert.equal((await other('POST', '/auth/register', { email: 'category-other@example.com', name: 'Other', password: PASSWORD })).status, 201)
+    assert.deepEqual((await other('GET', '/integrations/screen-time/data')).body.categories, [], "someone else's categories are not yours")
+  })
+
   it("does not show one person's phone to another", async () => {
     const other = makeClient()
     assert.equal((await other('POST', '/auth/register', { email: 'phone-other@example.com', name: 'Other', password: PASSWORD })).status, 201)
@@ -1361,6 +1389,11 @@ describe('phone', () => {
     const usage = (await call('GET', '/integrations/screen-time/data')).body.usage
     assert.deepEqual(usage.map((u: { app: string }) => u.app), ['chrome'], "the computer's numbers stay")
     assert.deepEqual((await call('GET', '/integrations/screen-time/data')).body.phoneDays, [], 'its unlocks and notifications go too')
+    assert.deepEqual(
+      (await call('GET', '/integrations/screen-time/data')).body.categories,
+      [{ kind: 'site', name: 'mine.example', mine: 'Work', phone: null }],
+      "what Android said goes with the phone; what the person chose stays",
+    )
     assert.deepEqual((await call('GET', '/integrations/phone')).body.devices, [])
     const entry = (await call('GET', '/integrations')).body.find((i: { id: string }) => i.id === 'samsung-screen-time')
     assert.equal(entry.status, 'not_connected')

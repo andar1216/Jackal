@@ -6,7 +6,7 @@ import { createAttemptLimiter, currentUserId } from '../auth/middleware.js'
 import { config } from '../config.js'
 import { HttpError } from '../lib/errors.js'
 import { requireId } from '../lib/crud.js'
-import { Connection, PhoneDay, PhoneDevice, PhoneIcon, PhonePairing, ScreenTimeUsage } from '../models.js'
+import { AppCategory, Connection, PhoneDay, PhoneDevice, PhoneIcon, PhonePairing, ScreenTimeUsage } from '../models.js'
 import { dateString } from '../validation.js'
 
 /**
@@ -82,6 +82,9 @@ async function removeDevices(userId: unknown, filter: { _id?: unknown } = {}) {
       PhonePairing.deleteMany({ userId }),
       PhoneIcon.deleteMany({ userId }),
     ])
+    // What Android said about the apps goes with the phone. What the person chose stays.
+    await AppCategory.updateMany({ userId }, { $unset: { phone: '' } })
+    await AppCategory.deleteMany({ userId, mine: { $exists: false } })
   }
 }
 
@@ -186,6 +189,8 @@ const syncSchema = z.strictObject({
     )
     .min(1)
     .max(31),
+  // What Android calls each app ("Social", "Games"), for the apps it has one for.
+  categories: z.record(z.string().trim().min(1).max(120), z.string().trim().min(1).max(40)).optional(),
 })
 
 const MAX_ICONS_ASKED = 40
@@ -194,7 +199,7 @@ const MAX_ICONS_ASKED = 40
 phoneAppRouter.post('/sync', requirePhone, async (req, res) => {
   const device = deviceOf(res)
   const userId = device.userId
-  const { days } = syncSchema.parse(req.body)
+  const { days, categories } = syncSchema.parse(req.body)
 
   const rows = days.flatMap(({ day, apps }) => {
     const byApp = new Map<string, number>() // two apps with one name are one line
@@ -204,6 +209,15 @@ phoneAppRouter.post('/sync', requirePhone, async (req, res) => {
 
   await ScreenTimeUsage.deleteMany({ userId, source: PHONE_SOURCE, device: device.name, day: { $in: [...new Set(days.map((d) => d.day))] } })
   if (rows.length) await ScreenTimeUsage.insertMany(rows)
+
+  const named = Object.entries(categories ?? {}).slice(0, 500)
+  if (named.length) {
+    await AppCategory.bulkWrite(
+      named.map(([name, category]) => ({
+        updateOne: { filter: { userId, kind: 'app', name }, update: { $set: { phone: category } }, upsert: true },
+      })),
+    )
+  }
 
   const counted = days.filter((d) => d.unlocks !== undefined)
   if (counted.length) {

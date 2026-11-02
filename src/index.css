@@ -288,6 +288,12 @@ button.link {
   gap: 4px;
 }
 
+.category-select {
+  font-size: 0.75rem;
+  padding: 2px 4px;
+  max-width: 140px;
+}
+
 .segmented {
   display: flex;
   border: 1px solid var(--border);

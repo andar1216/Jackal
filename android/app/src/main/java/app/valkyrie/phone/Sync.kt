@@ -75,6 +75,8 @@ object Sync {
 
             var apps = 0
             val sent = LinkedHashSet<String>()
+            // What Android says each app is ("Social"). Many apps say nothing, and the page guesses those.
+            val categories = reading.packageOf.mapNotNull { (label, pkg) -> UsageReader.category(context, pkg)?.let { label to it } }.toMap()
             // The server takes a month at a time.
             for (chunk in reading.days.toSortedMap().entries.chunked(MAX_DAYS_PER_SEND)) {
                 val days = JSONArray()
@@ -90,7 +92,7 @@ object Sync {
                     }
                     days.put(entry)
                 }
-                sent.addAll(Api.sync(store.server, token, days))
+                sent.addAll(Api.sync(store.server, token, days, categories))
             }
             if (everything) store.historyDone = true
             val wanted = sent.toList()

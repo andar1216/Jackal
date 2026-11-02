@@ -33,6 +33,19 @@ export function useAmount(key: string, initial: string, options: AmountOption[],
   return [amount, update] as const
 }
 
+/** One of a few named choices (like "All" or "Apps"), remembered between visits. */
+export function useChoice<T extends string>(key: string, initial: T, allowed: readonly T[]) {
+  const [choice, setChoice] = useState<T>(() => {
+    const saved = localStorage.getItem(storageKey(key))
+    return allowed.find((a) => a === saved) ?? initial
+  })
+  const update = (next: T) => {
+    setChoice(next)
+    localStorage.setItem(storageKey(key), next)
+  }
+  return [choice, update] as const
+}
+
 /** The number a choice means. "all" is every item, so it has no limit. */
 export function amountOf(amount: Amount) {
   if (amount.choice === 'all') return Infinity

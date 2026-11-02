@@ -65,7 +65,10 @@ export type ActivityWatchStatus = {
 /** How many times a phone was unlocked on one day, and how many notifications each app sent. */
 export type PhoneDayCounts = { device: string; day: string; unlocks: number; notifications: { app: string; count: number }[] }
 
-export type ScreenTimeData = { usage: ScreenTimeUsage[]; sites: ScreenTimeSite[]; phoneDays: PhoneDayCounts[] }
+/** What an app or website is filed under: `mine` is the person's choice, `phone` is what Android says. */
+export type AppCategoryEntry = { kind: 'app' | 'site'; name: string; mine: string | null; phone: string | null }
+
+export type ScreenTimeData = { usage: ScreenTimeUsage[]; sites: ScreenTimeSite[]; phoneDays: PhoneDayCounts[]; categories: AppCategoryEntry[] }
 
 export type Integration = {
   id: string

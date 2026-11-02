@@ -62,8 +62,11 @@ object Api {
     }
 
     /** Sends the days. Returns the names of apps the server wants a picture of. */
-    fun sync(server: String, token: String, days: JSONArray): List<String> {
-        val r = call(server, "POST", "/sync", token, JSONObject().put("days", days))!!
+    /** `categories` maps an app's name to what Android calls it ("Social"), for the apps it has one for. */
+    fun sync(server: String, token: String, days: JSONArray, categories: Map<String, String> = emptyMap()): List<String> {
+        val body = JSONObject().put("days", days)
+        if (categories.isNotEmpty()) body.put("categories", JSONObject(categories))
+        val r = call(server, "POST", "/sync", token, body)!!
         val wanted = r.optJSONArray("wantIcons") ?: JSONArray()
         return List(wanted.length()) { wanted.getString(it) }
     }

@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { currentUserId } from '../auth/middleware.js'
 import { z } from 'zod'
-import { PhoneDay, PhoneIcon, ScreenTimeSite, ScreenTimeUsage } from '../models.js'
+import { AppCategory, PhoneDay, PhoneIcon, ScreenTimeSite, ScreenTimeUsage } from '../models.js'
 import { iconSources } from './icons.js'
 
 /** What the Screen Time page reads. The numbers come from ActivityWatch (see activityWatch.ts). */
@@ -13,17 +13,40 @@ const HISTORY_DAYS = 1100
 screenTimeRouter.get('/data', async (req, res) => {
   const userId = currentUserId(req)
   const since = new Date(Date.now() - HISTORY_DAYS * 24 * 3600 * 1000).toLocaleDateString('en-CA')
-  const [usage, sites, phoneDays] = await Promise.all([
+  const [usage, sites, phoneDays, categories] = await Promise.all([
     ScreenTimeUsage.find({ userId, day: { $gte: since } }).sort({ day: -1 }).limit(200000),
     ScreenTimeSite.find({ userId, day: { $gte: since } }).sort({ day: -1 }).limit(200000),
     PhoneDay.find({ userId, day: { $gte: since } }).sort({ day: -1 }).limit(5000),
+    AppCategory.find({ userId }).limit(20000),
   ])
   res.json({
     usage: usage.map((u) => ({ device: u.device, kind: u.source === 'phone' ? 'phone' : 'computer', day: u.day, app: u.app, seconds: u.seconds })),
     sites: sites.map((s) => ({ device: s.device, kind: 'computer', day: s.day, site: s.site, seconds: s.seconds })),
+    // What each app or website is filed under: what the person chose (`mine`) and what Android says (`phone`).
+    categories: categories.map((c) => ({ kind: c.kind, name: c.name, mine: c.mine ?? null, phone: c.phone ?? null })),
     // Phone unlocks and the notifications each app sent, one entry per phone and day.
     phoneDays: phoneDays.map((p) => ({ device: p.device, day: p.day, unlocks: p.unlocks, notifications: p.notifications.map((n: { app: string; count: number }) => ({ app: n.app, count: n.count })) })),
   })
+})
+
+const categoryBody = z.strictObject({
+  kind: z.enum(['app', 'site']),
+  name: z.string().trim().min(1).max(120),
+  // null puts it back to automatic
+  category: z.string().trim().min(1).max(40).nullable(),
+})
+
+// Files an app or website under a category the person chose, or puts it back to automatic with null.
+screenTimeRouter.put('/category', async (req, res) => {
+  const userId = currentUserId(req)
+  const { kind, name, category } = categoryBody.parse(req.body)
+  if (category === null) {
+    await AppCategory.updateOne({ userId, kind, name }, { $unset: { mine: '' } })
+    await AppCategory.deleteOne({ userId, kind, name, mine: { $exists: false }, phone: { $exists: false } })
+  } else {
+    await AppCategory.updateOne({ userId, kind, name }, { $set: { mine: category } }, { upsert: true })
+  }
+  res.status(204).end()
 })
 
 const iconQuery = z.object({ kind: z.enum(['site', 'app']), name: z.string().trim().min(1).max(120), source: z.enum(['phone']).optional() })

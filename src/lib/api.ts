@@ -199,6 +199,9 @@ export const SCREEN_TIME_CHANGED = 'valkyrie:screen-time-changed'
 
 export const screenTimeApi = {
   data: () => request<ScreenTimeData>('GET', '/integrations/screen-time/data'),
+  /** Files an app or website under a category. null puts it back to automatic. */
+  setCategory: (kind: 'app' | 'site', name: string, category: string | null) =>
+    request<void>('PUT', '/integrations/screen-time/category', { kind, name, category }),
   /** Where the picture for a website or app comes from (an <img> can't send headers, so this is a plain address). */
   iconUrl: (kind: 'site' | 'app', name: string, source?: 'phone') =>
     `${BASE}/integrations/screen-time/icon?kind=${kind}&name=${encodeURIComponent(name)}${source ? `&source=${source}` : ''}`,

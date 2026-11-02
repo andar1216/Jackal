@@ -5,6 +5,7 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -107,6 +108,23 @@ object UsageReader {
     fun label(context: Context, pkg: String): String? = try {
         val pm = context.packageManager
         pm.getApplicationInfo(pkg, 0).loadLabel(pm).toString().trim().ifBlank { null }
+    } catch (e: PackageManager.NameNotFoundException) {
+        null
+    }
+
+    /** What Android files the app under ("Social", "Games"), or null when the app never said (many do not). */
+    fun category(context: Context, pkg: String): String? = try {
+        when (context.packageManager.getApplicationInfo(pkg, 0).category) {
+            ApplicationInfo.CATEGORY_GAME -> "Games"
+            ApplicationInfo.CATEGORY_AUDIO -> "Music & audio"
+            ApplicationInfo.CATEGORY_VIDEO -> "Video"
+            ApplicationInfo.CATEGORY_IMAGE -> "Photos"
+            ApplicationInfo.CATEGORY_SOCIAL -> "Social"
+            ApplicationInfo.CATEGORY_NEWS -> "News"
+            ApplicationInfo.CATEGORY_MAPS -> "Maps & travel"
+            ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Productivity"
+            else -> null
+        }
     } catch (e: PackageManager.NameNotFoundException) {
         null
     }

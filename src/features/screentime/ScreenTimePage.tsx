@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { Smartphone } from 'lucide-react'
 import Board, { Panel } from '../../components/Board'
 import MetricCalendar from '../../components/MetricCalendar'
 import PanelFilter from '../../components/PanelFilter'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
+import { screenTimeApi } from '../../lib/api'
 import { buildMetric } from '../../lib/calendarMetrics'
 import { todayKey } from '../../lib/dates'
 import type { Integration } from '../../types'
@@ -16,7 +16,8 @@ import DevicesPanel from './DevicesPanel'
 import DeviceViewsBar from './DeviceViewsBar'
 import { devicesIn, resolveView } from './deviceViews'
 import ItemIcon from './ItemIcon'
-import { appName, countsByDay, formatCompact, formatSeconds, ofKind, recentDays, topApps, topNotifiers, topSites, totalsByDay } from './screenTimeStats'
+import MostUsedTable from './MostUsedTable'
+import { countsByDay, formatCompact, formatSeconds, ofKind, recentDays, topNotifiers, totalsByDay } from './screenTimeStats'
 import { useDeviceGroups, useDeviceView } from './useDeviceViews'
 import { useScreenTime } from './useScreenTime'
 
@@ -53,10 +54,6 @@ export default function ScreenTimePage() {
   const layout = useLayoutEditing()
   const screenTime = useScreenTime()
   // Each list remembers how many items and how many days its owner likes to see.
-  const [appCount, setAppCount] = useAmount('apps-count', '10', COUNTS, { start: 15, max: MAX_ITEMS })
-  const [appPeriod, setAppPeriod] = useAmount('apps-period', '1', PERIODS, { start: 14, max: MAX_DAYS })
-  const [siteCount, setSiteCount] = useAmount('sites-count', '10', COUNTS, { start: 15, max: MAX_ITEMS })
-  const [sitePeriod, setSitePeriod] = useAmount('sites-period', '1', PERIODS, { start: 14, max: MAX_DAYS })
   const [historyRange, setHistoryRange] = useAmount('history', '14', HISTORY_RANGES, { start: 21, max: MAX_DAYS })
   const [notifyCount, setNotifyCount] = useAmount('notifications-count', '10', COUNTS, { start: 15, max: MAX_ITEMS })
   const [notifyPeriod, setNotifyPeriod] = useAmount('notifications-period', '1', PERIODS, { start: 14, max: MAX_DAYS })
@@ -84,16 +81,21 @@ export default function ScreenTimePage() {
   const hasPhone = usage.some((u) => u.kind === 'phone')
   const hasAny = hasComputer || hasPhone
 
-  const sites = topSites(siteRows, amountOf(sitePeriod)).slice(0, amountOf(siteCount))
-  const sitesTotal = sites.reduce((s, a) => s + a.seconds, 0)
-  const apps = topApps(usage, amountOf(appPeriod)).slice(0, amountOf(appCount))
-  const appsTotal = apps.reduce((s, a) => s + a.seconds, 0)
   const history = recentDays(byDay, amountOf(historyRange))
   const busiest = Math.max(1, ...history.map((h) => h.seconds))
-  const notifiers = topNotifiers(phoneDays, amountOf(notifyPeriod)).slice(0, amountOf(notifyCount))
-  const notifiersTotal = notifiers.reduce((s, n) => s + n.count, 0)
+  const allNotifiers = topNotifiers(phoneDays, amountOf(notifyPeriod))
+  const notifiers = allNotifiers.slice(0, amountOf(notifyCount))
+  const notificationsInPeriod = allNotifiers.reduce((s, n) => s + n.count, 0)
+  const busiestNotifier = Math.max(1, ...notifiers.map((n) => n.count))
   const unlocksToday = countsByDayMap[today]?.unlocks
-  const notificationsToday = countsByDayMap[today]?.notifications
+
+  // Files an app or website under a category, then looks again so the table shows it.
+  const chooseCategory = (kind: 'app' | 'site', name: string, category: string | null) => {
+    screenTimeApi.setCategory(kind, name, category).then(
+      () => void screenTime.reload(),
+      (e: unknown) => setError(e instanceof Error ? e.message : 'Could not save the category.'),
+    )
+  }
 
   const metrics = [
     buildMetric(
@@ -174,7 +176,7 @@ export default function ScreenTimePage() {
           </div>
         </Panel>
 
-        <Panel id="unlocks-today" title="Phone unlocks today" size="half">
+        <Panel id="unlocks-today" title="Phone unlocks today" size="third">
           <div className="card">
             <div className="stat-label">Phone unlocks today</div>
             <div className="stat-value">{unlocksToday === undefined ? '--' : unlocksToday}</div>
@@ -182,77 +184,12 @@ export default function ScreenTimePage() {
           </div>
         </Panel>
 
-        <Panel id="notifications-today" title="Phone notifications today" size="half">
-          <div className="card">
-            <div className="stat-label">Phone notifications today</div>
-            <div className="stat-value">{notificationsToday === undefined ? '--' : notificationsToday}</div>
-            <p className="stat-label">{notificationsToday === undefined ? 'No data yet' : 'Notifications that reached you'}</p>
-          </div>
-        </Panel>
-
         <Panel id="devices" title="Devices" size="full">
           <DevicesPanel screenTime={screenTime} />
         </Panel>
 
-        <Panel id="apps" title="Most used apps" size="half">
-          <section className="card">
-            <div className="row between">
-              <h2>Most used apps</h2>
-              <span className="row">
-                <AmountSelect label="Apps to show" options={COUNTS} amount={appCount} onChange={setAppCount} unit="apps" max={MAX_ITEMS} />
-                <AmountSelect label="Period" options={PERIODS} amount={appPeriod} onChange={setAppPeriod} unit="days" max={MAX_DAYS} />
-              </span>
-            </div>
-            {apps.length === 0 ? (
-              <p className="empty">{!neverSent ? 'Nothing counted for this period yet.' : 'Connect ActivityWatch or pair your phone to see which apps take your time.'}</p>
-            ) : (
-              <ul className="list">
-                {apps.map((a) => (
-                  <li key={`${a.kind}:${a.app}`}>
-                    <ItemIcon kind="app" name={a.app} label={a.kind === 'phone' ? a.app : appName(a.app)} source={a.kind === 'phone' ? 'phone' : undefined} />
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      {a.kind === 'phone' ? a.app : appName(a.app)}
-                      {a.kind === 'phone' && <Smartphone size={13} aria-label="On your phone" style={{ marginLeft: 6, verticalAlign: '-2px', opacity: 0.6 }} />}
-                      <div className="bar">
-                        <span style={{ width: `${(a.seconds / appsTotal) * 100}%` }} />
-                      </div>
-                    </span>
-                    <strong>{formatSeconds(a.seconds)}</strong>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </Panel>
-
-        <Panel id="websites" title="Websites" size="half">
-          <section className="card">
-            <div className="row between">
-              <h2>Websites</h2>
-              <span className="row">
-                <AmountSelect label="Websites to show" options={COUNTS} amount={siteCount} onChange={setSiteCount} unit="sites" max={MAX_ITEMS} />
-                <AmountSelect label="Period" options={PERIODS} amount={sitePeriod} onChange={setSitePeriod} unit="days" max={MAX_DAYS} />
-              </span>
-            </div>
-            {sites.length === 0 ? (
-              <p className="empty">{neverSent ? 'Connect ActivityWatch and add its browser extension to see which websites take your time.' : 'No websites for this view and period yet.'}</p>
-            ) : (
-              <ul className="list">
-                {sites.map((s) => (
-                  <li key={s.site}>
-                    <ItemIcon kind="site" name={s.site} label={s.site} />
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      {s.site}
-                      <div className="bar">
-                        <span style={{ width: `${(s.seconds / sitesTotal) * 100}%` }} />
-                      </div>
-                    </span>
-                    <strong>{formatSeconds(s.seconds)}</strong>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+        <Panel id="most-used" title="Most used" size="full">
+          <MostUsedTable usage={usage} sites={siteRows} categories={screenTime.data?.categories ?? []} neverSent={neverSent} onCategory={chooseCategory} />
         </Panel>
         <Panel id="history" title="Daily history" size="half">
           <section className="card">
@@ -285,10 +222,10 @@ export default function ScreenTimePage() {
           </section>
         </Panel>
 
-        <Panel id="notifiers" title="Notifications by app" size="half">
+        <Panel id="notifiers" title="Phone notifications" size="half">
           <section className="card">
             <div className="row between">
-              <h2>Notifications by app</h2>
+              <h2>Phone notifications</h2>
               <span className="row">
                 <AmountSelect label="Apps to show" options={COUNTS} amount={notifyCount} onChange={setNotifyCount} unit="apps" max={MAX_ITEMS} />
                 <AmountSelect label="Period" options={PERIODS} amount={notifyPeriod} onChange={setNotifyPeriod} unit="days" max={MAX_DAYS} />
@@ -298,13 +235,17 @@ export default function ScreenTimePage() {
               <p className="empty">{phoneDays.length === 0 ? 'Update the Valkyrie phone app and sync to see which apps notify you.' : 'No notifications for this period yet.'}</p>
             ) : (
               <ul className="list">
+                <li>
+                  <span style={{ flex: 1, minWidth: 0 }}>All apps</span>
+                  <strong>{notificationsInPeriod}</strong>
+                </li>
                 {notifiers.map((n) => (
                   <li key={n.app}>
                     <ItemIcon kind="app" name={n.app} label={n.app} source="phone" />
                     <span style={{ flex: 1, minWidth: 0 }}>
                       {n.app}
                       <div className="bar">
-                        <span style={{ width: `${(n.count / notifiersTotal) * 100}%` }} />
+                        <span style={{ width: `${(n.count / busiestNotifier) * 100}%` }} />
                       </div>
                     </span>
                     <strong>{n.count}</strong>
