@@ -66,6 +66,11 @@ export const accountViewSchema = z.strictObject({
   accounts: z.array(z.string().trim().min(1).max(200)).max(200),
 })
 
+export const deviceGroupSchema = z.strictObject({
+  name,
+  devices: z.array(z.string().trim().min(1).max(120)).max(50),
+})
+
 export const manualAccountSchema = z.strictObject({
   name,
   kind: z.enum(['bank', 'credit']),

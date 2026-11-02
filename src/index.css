@@ -1150,6 +1150,20 @@ button:disabled {
   margin: 6px 0 0;
 }
 
+/* A device in the Devices list: a whole-row button that opens that device's dialog. */
+.device-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+}
+
+.device-row:hover {
+  background: var(--accent-soft);
+}
+
 .device-steps {
   margin-top: 8px;
 }

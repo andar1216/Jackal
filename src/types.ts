@@ -42,9 +42,14 @@ export type CrunchData = {
 }
 
 /** Active seconds in one app on one day, from one device. */
-export type ScreenTimeUsage = { device: string; day: string; app: string; seconds: number }
+export type ScreenTimeUsage = { device: string; kind: 'computer' | 'phone'; day: string; app: string; seconds: number }
 /** Active seconds on one website on one day (from the Chrome extension). */
-export type ScreenTimeSite = { device: string; day: string; site: string; seconds: number }
+export type ScreenTimeSite = { device: string; kind: 'computer'; day: string; site: string; seconds: number }
+
+/** A phone paired with Valkyrie, and where a new phone can find this server on the home network. */
+export type PhoneDevice = { id: string; name: string; lastSyncedAt: string | null; pairedAt: string | null }
+export type PhoneStatus = { devices: PhoneDevice[]; addresses: string[]; listening: boolean }
+export type PhonePairCode = { code: string; expiresAt: string; addresses: string[]; listening: boolean }
 /** ActivityWatch on the machine Valkyrie runs on, and whether Valkyrie reads from it. */
 export type ActivityWatchStatus = {
   running: boolean
@@ -120,6 +125,13 @@ export type AccountView = {
   id: string
   name: string
   accounts: string[]
+}
+
+/** A named group of devices on the Screen Time page, like "Work". Devices are listed by their names. */
+export type DeviceGroup = {
+  id: string
+  name: string
+  devices: string[]
 }
 
 /** An account the person listed by hand. */

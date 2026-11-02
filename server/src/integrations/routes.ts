@@ -5,6 +5,7 @@ import { Connection } from '../models.js'
 import { crunchRouter, disconnectCrunch } from './crunch.js'
 import { disconnectPlaid, plaidRouter, plaidStatus } from './plaid.js'
 import { ACTIVITYWATCH_PROVIDER, activityWatchRouter, disconnectActivityWatch } from './activityWatch.js'
+import { PHONE_PROVIDER, disconnectPhones, phoneRouter } from './phone.js'
 import { screenTimeRouter } from './screenTime.js'
 import { findProvider, providers } from './registry.js'
 
@@ -21,6 +22,7 @@ integrations.use('/plaid', plaidRouter)
 integrations.use('/crunch', crunchRouter)
 integrations.use('/screen-time', screenTimeRouter)
 integrations.use('/activitywatch', activityWatchRouter)
+integrations.use('/phone', phoneRouter)
 
 // List every integration with this user's connection state.
 integrations.get('/', async (req, res) => {
@@ -57,6 +59,7 @@ integrations.post('/:id/connect', (req) => {
   if (provider.id === 'plaid') throw new HttpError(400, 'Plaid connects through Plaid Link. See /integrations/plaid/link-token.')
   if (provider.id === 'crunch') throw new HttpError(400, 'Crunch connects with your member email and password. See /integrations/crunch/connect.')
   if (provider.id === ACTIVITYWATCH_PROVIDER) throw new HttpError(400, 'ActivityWatch is connected on the Screen Time page.')
+  if (provider.id === PHONE_PROVIDER) throw new HttpError(400, 'Phones are paired on the Screen Time page.')
   throw new HttpError(501, `${provider.name} isn't available yet.`)
 })
 
@@ -66,6 +69,7 @@ integrations.delete('/:id/connection', async (req, res) => {
   if (provider.id === 'plaid') await disconnectPlaid(userId)
   else if (provider.id === 'crunch') await disconnectCrunch(userId)
   else if (provider.id === ACTIVITYWATCH_PROVIDER) await disconnectActivityWatch(userId)
+  else if (provider.id === PHONE_PROVIDER) await disconnectPhones(userId)
   else await Connection.deleteOne({ provider: provider.id, userId })
   res.status(204).end()
 })

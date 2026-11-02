@@ -217,8 +217,38 @@ The Dashboard's **Connect** button lists the outside services we want to pull da
 | Plaid (bank accounts) | Official API (Plaid Link) | **Built** (Sandbox tested; see below) |
 | MyFitnessPal | Likely partner-only API | Not started, may not be possible |
 | Crunch Fitness | Unofficial (no public API). Connect opens https://members.crunch.com/ in a new tab; you sign in there and click a "Send to Valkyrie" bookmark, which sends the same data the My Profile page shows. Optionally Valkyrie can sign in for you instead (password stored encrypted; needs INTEGRATION_ENCRYPTION_KEY) so it refreshes by itself | Built: check-in progress and history, class history, payment history on the Fitness page |
-| Samsung S23 screen time | No public API, needs a companion app | Not started |
+| Android phone screen time | Unofficial (Android has no outside API). The Valkyrie app in `android/` reads it on the phone and sends daily totals to this server over your Wi-Fi. Pair it from the Screen Time page | Built (see below) |
 | ActivityWatch | Free open-source tracker on this PC. Valkyrie reads its daily per-app and per-website totals from its local API (`localhost:5600`) and keeps only names and seconds. Connect from the Screen Time page | Built |
+
+### Phone screen time (the Android app)
+
+`android/` is a small Kotlin app (no libraries beyond WorkManager). Android only lets an app on the phone read screen time, with the **Usage access** permission the person switches on in Settings.
+
+Build and install (needs Android Studio's SDK and JDK 17, both already on this machine):
+
+```
+cd android
+.\gradlew.bat testDebugUnitTest assembleDebug
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+```
+
+`adb install` works over USB with USB debugging on, or copy `app-debug.apk` to the phone and open it (allow installs from that source). You can also open the `android` folder in Android Studio and press Run.
+
+Make the server reachable from the phone (same Wi-Fi). In `.env` set `HOST=0.0.0.0` and `ALLOW_REGISTRATION=false` (so nobody else on the network can sign up), restart the API, and allow the port through Windows Firewall for private networks:
+
+```
+New-NetFirewallRule -DisplayName "Valkyrie API" -Direction Inbound -Protocol TCP -LocalPort 4000 -Profile Private -Action Allow
+```
+
+Then on the Screen Time page press **Pair a phone**. It shows this computer's address and a one-time code (good for ten minutes). Type both into the app, after allowing usage access. The phone then gets its own key (only a hash is kept here, so **Remove** on the page revokes it) and never sees your password.
+
+How it works:
+
+- The app works out seconds per app per day from Android's app-opened/closed events (the home screen and the screen being off are not counted), and sends the last 3 days (7 the first time: Android only keeps about a week) every 30 minutes, when it is opened, and on **Sync now**. Each sync replaces those days, so repeats are harmless.
+- It also sends a small icon for each app, which the Most used apps panel shows. Only app names, icons and seconds ever leave the phone.
+- Traffic is plain `http` on your home network (the key is not protected from someone else on your Wi-Fi). Away from home the phone can't reach the server, so it catches up on the next sync at home, up to a week back.
+- The numbers are stored with the computer's, marked `source: 'phone'` and filed under the phone's name. The sync logic and tests are in `server/src/integrations/phone.ts`; the reading logic and its unit tests are in `android/app/src/main/java/app/valkyrie/phone/UsageMath.kt`.
+- Samsung phones may pause apps you don't open. If syncs stop, set Valkyrie's battery use to Unrestricted (the app has a button for that).
 
 ### Plaid (bank accounts)
 

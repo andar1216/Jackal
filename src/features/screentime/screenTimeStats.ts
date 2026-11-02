@@ -17,15 +17,21 @@ export function totalsByDay(usage: ScreenTimeUsage[]) {
   return byDay
 }
 
-/** The apps used most in the last `days` days (1 means today only), biggest first. */
+/** Only the rows from one kind of device. */
+export const ofKind = (usage: ScreenTimeUsage[], kind: ScreenTimeUsage['kind']) => usage.filter((u) => u.kind === kind)
+
+/** The apps used most in the last `days` days (1 means today only), biggest first. The same name on computer and phone stays two lines. */
 export function topApps(usage: ScreenTimeUsage[], days: number, today: Date = new Date()) {
   const since = format(subDays(today, days - 1), 'yyyy-MM-dd')
-  const byApp = new Map<string, number>()
+  const byApp = new Map<string, { app: string; kind: ScreenTimeUsage['kind']; seconds: number }>()
   for (const u of usage) {
     if (u.day < since) continue
-    byApp.set(u.app, (byApp.get(u.app) ?? 0) + u.seconds)
+    const key = `${u.kind}:${u.app}`
+    const line = byApp.get(key) ?? { app: u.app, kind: u.kind, seconds: 0 }
+    line.seconds += u.seconds
+    byApp.set(key, line)
   }
-  return [...byApp.entries()].map(([app, seconds]) => ({ app, seconds })).sort((a, b) => b.seconds - a.seconds)
+  return [...byApp.values()].sort((a, b) => b.seconds - a.seconds)
 }
 
 /** The websites used most in the last days days (1 means today only), biggest first. */

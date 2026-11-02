@@ -1,246 +1,101 @@
-import { useEffect, useState } from 'react'
-import { format, formatDistanceToNow, parseISO } from 'date-fns'
-import { Activity, Smartphone } from 'lucide-react'
+import { useState } from 'react'
+import { format } from 'date-fns'
+import { Smartphone } from 'lucide-react'
 import Board, { Panel } from '../../components/Board'
 import MetricCalendar from '../../components/MetricCalendar'
 import PanelFilter from '../../components/PanelFilter'
 import SettingsMenu from '../../components/SettingsMenu'
 import { useLayoutEditing } from '../../components/useLayoutEditing'
-import { activityWatchApi, integrationsApi } from '../../lib/api'
 import { buildMetric } from '../../lib/calendarMetrics'
 import { todayKey } from '../../lib/dates'
-import type { ActivityWatchStatus, Integration } from '../../types'
+import type { Integration } from '../../types'
 import ConnectorsButton from '../connections/ConnectorsButton'
+import { MAX_DAYS, MAX_ITEMS, amountOf, useAmount } from './amount'
+import AmountSelect from './AmountSelect'
+import DevicesPanel from './DevicesPanel'
+import DeviceViewsBar from './DeviceViewsBar'
+import { devicesIn, resolveView } from './deviceViews'
 import ItemIcon from './ItemIcon'
-import { appName, formatSeconds, recentDays, topApps, topSites, totalsByDay } from './screenTimeStats'
-import { useScreenTime, type ScreenTime } from './useScreenTime'
+import { appName, formatSeconds, ofKind, recentDays, topApps, topSites, totalsByDay } from './screenTimeStats'
+import { useDeviceGroups, useDeviceView } from './useDeviceViews'
+import { useScreenTime } from './useScreenTime'
 
 const isScreenTimeConnector = (i: Integration) => i.category === 'screen-time'
 
-const ICON = 20
 const COMPUTER_COLOR = '#16a34a'
 const PHONE_COLOR = '#4f46e5'
-const HISTORY_DAYS = 14
 
-
-const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.')
-
-function ActivityWatchCard({ screenTime }: { screenTime: ScreenTime }) {
-  const [status, setStatus] = useState<ActivityWatchStatus | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [note, setNote] = useState<string | null>(null)
-
-  // Whether ActivityWatch is running and connected, checked now and every few seconds.
-  useEffect(() => {
-    let cancelled = false
-    const look = () =>
-      activityWatchApi.status().then(
-        (s) => !cancelled && setStatus(s),
-        () => undefined,
-      )
-    void look()
-    const timer = setInterval(() => void look(), 10_000)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [])
-
-  const { reload } = screenTime
-  const act = async (job: () => Promise<{ status: ActivityWatchStatus; apps: number; sites: number } | ActivityWatchStatus>, done?: (apps: number, sites: number) => string) => {
-    setBusy(true)
-    setError(null)
-    setNote(null)
-    try {
-      const r = await job()
-      if ('status' in r) {
-        setStatus(r.status)
-        if (done) setNote(done(r.apps, r.sites))
-      } else {
-        setStatus(r)
-      }
-      await reload()
-    } catch (err) {
-      setError(errorText(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const disconnect = async () => {
-    if (!window.confirm('Disconnect ActivityWatch? The numbers Valkyrie read from it are removed here (ActivityWatch keeps its own).')) return
-    setBusy(true)
-    try {
-      await integrationsApi.disconnect('activitywatch')
-      setStatus(await activityWatchApi.status())
-      await reload()
-    } catch (err) {
-      setError(errorText(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const read = (apps: number, sites: number) => `Read ${apps} app totals and ${sites} website totals.`
-  const pill = !status ? null : status.connected ? (
-    <span className="pill good-pill">Connected</span>
-  ) : status.running ? (
-    <span className="pill">Running</span>
-  ) : (
-    <span className="pill">{status.installed ? 'Not running' : 'Not installed'}</span>
-  )
-
-  return (
-    <div className="device">
-      <div className="row between">
-        <span className="row">
-          <Activity size={ICON} aria-hidden />
-          <strong>ActivityWatch</strong>
-          <span className="pill api-official">Recommended</span>
-          {pill}
-        </span>
-        <span className="row">
-          {status?.connected && (
-            <>
-              <button disabled={busy} onClick={() => void act(activityWatchApi.sync, read)}>
-                {busy ? 'Working...' : 'Sync now'}
-              </button>
-              <button className="link" disabled={busy} onClick={() => void disconnect()}>
-                Disconnect
-              </button>
-            </>
-          )}
-          {status && !status.connected && status.running && (
-            <button className="primary" disabled={busy} onClick={() => void act(activityWatchApi.connect, read)}>
-              {busy ? 'Reading...' : 'Connect ActivityWatch'}
-            </button>
-          )}
-          {status && !status.running && status.installed && (
-            <button className="primary" disabled={busy} onClick={() => void act(activityWatchApi.start)}>
-              {busy ? 'Starting...' : 'Start ActivityWatch'}
-            </button>
-          )}
-          {status && !status.running && !status.installed && (
-            <a className="button-link primary" href="https://activitywatch.net/downloads/" target="_blank" rel="noopener noreferrer">
-              Download ActivityWatch ↗
-            </a>
-          )}
-        </span>
-      </div>
-      <p className="stat-label">
-        A free, open-source tracker that runs on this computer: time in each app, and on each website with its browser extension. Valkyrie
-        reads its daily totals and keeps only app and site names and seconds.
-      </p>
-      {status && !status.running && !status.installed && (
-        <p className="stat-label">Install it, make sure it is running (it lives in the system tray), then come back here. This page notices by itself.</p>
-      )}
-      {status?.connected && (
-        <p className="stat-label">
-          {status.lastSyncedAt ? `Synced ${formatDistanceToNow(parseISO(status.lastSyncedAt), { addSuffix: true })}. ` : ''}
-          Updates by itself every few minutes while Valkyrie is running.
-        </p>
-      )}
-      {status?.running && status.watchers && (
-        <ul className="list">
-          <li>
-            <span>Apps</span>
-            <span className="pill">{status.watchers.window ? 'Recording' : 'No data yet'}</span>
-          </li>
-          <li>
-            <span>Away from keyboard detection</span>
-            <span className="pill">{status.watchers.afk ? 'On' : 'Off: idle time will be counted'}</span>
-          </li>
-          <li>
-            <span>Websites</span>
-            <span className="pill">
-              {status.watchers.web > 0 ? 'Recording' : 'No browser extension yet'}
-            </span>
-            {status.watchers.web === 0 && (
-              <a
-                className="link"
-                href="https://chromewebstore.google.com/search/ActivityWatch%20Web%20Watcher"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Add the Chrome extension ↗
-              </a>
-            )}
-          </li>
-        </ul>
-      )}
-      {note && <p className="stat-label">{note}</p>}
-      {error && (
-        <div className="banner error" role="alert">
-          <span>{error}</span>
-        </div>
-      )}
-    </div>
-  )
-}
-function PhoneCard() {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="device">
-      <div className="row between">
-        <span className="row">
-          <Smartphone size={ICON} aria-hidden />
-          <strong>Phone</strong>
-          <span className="pill">Not synced</span>
-        </span>
-        <span className="row">
-          <button onClick={() => setOpen(!open)} aria-expanded={open}>
-            {open ? 'Hide steps' : 'Set up sync'}
-          </button>
-          <button className="primary" disabled title="Available once a phone is set up">
-            Sync now
-          </button>
-        </span>
-      </div>
-      <p className="stat-label">Screen-on time and time in each app.</p>
-      {open && (
-        <div className="device-steps">
-          <ol>
-            <li>Install the Valkyrie companion app on your phone.</li>
-            <li>Allow it to read app usage when the phone asks.</li>
-            <li>Sign in with your Valkyrie account. It sends your daily totals after that.</li>
-          </ol>
-          <p className="stat-label">Phone syncing is not switched on yet. Nothing is sent from your phone until it is.</p>
-        </div>
-      )}
-    </div>
-  )
-}
+// What the drop-downs offer. "Custom" is added to each by the control itself.
+const COUNTS = [
+  { value: '3', label: 'Top 3' },
+  { value: '5', label: 'Top 5' },
+  { value: '10', label: 'Top 10' },
+  { value: '20', label: 'Top 20' },
+  { value: 'all', label: 'All' },
+]
+const PERIODS = [
+  { value: '1', label: 'Today' },
+  { value: '3', label: 'Last 3 days' },
+  { value: '7', label: 'Last 7 days' },
+  { value: '30', label: 'Last 30 days' },
+]
+const HISTORY_RANGES = [
+  { value: '1', label: '1 day' },
+  { value: '3', label: '3 days' },
+  { value: '7', label: '1 week' },
+  { value: '14', label: '2 weeks' },
+  { value: '30', label: '1 month' },
+]
 
 export default function ScreenTimePage() {
   const layout = useLayoutEditing()
   const screenTime = useScreenTime()
-  const [appDays, setAppDays] = useState(1)
-  const [siteDays, setSiteDays] = useState(1)
+  // Each list remembers how many items and how many days its owner likes to see.
+  const [appCount, setAppCount] = useAmount('apps-count', '10', COUNTS, { start: 15, max: MAX_ITEMS })
+  const [appPeriod, setAppPeriod] = useAmount('apps-period', '1', PERIODS, { start: 14, max: MAX_DAYS })
+  const [siteCount, setSiteCount] = useAmount('sites-count', '10', COUNTS, { start: 15, max: MAX_ITEMS })
+  const [sitePeriod, setSitePeriod] = useAmount('sites-period', '1', PERIODS, { start: 14, max: MAX_DAYS })
+  const [historyRange, setHistoryRange] = useAmount('history', '14', HISTORY_RANGES, { start: 21, max: MAX_DAYS })
 
-  const usage = screenTime.data?.usage ?? []
-  const byDay = totalsByDay(usage)
+  // What the page shows: all devices, one, or a group, as chosen in the bar at the top.
+  const [error, setError] = useState<string | null>(null)
+  const [viewChoice, chooseView] = useDeviceView()
+  const { groups, saved: groupSaved, deleted: groupDeleted } = useDeviceGroups()
+  const sentUsage = screenTime.data?.usage ?? []
+  const sentSites = screenTime.data?.sites ?? []
+  const devices = devicesIn(sentUsage, sentSites)
+  const view = resolveView(viewChoice, devices, groups)
+  const usage = sentUsage.filter((u) => view.includes(u.device))
+  const siteRows = sentSites.filter((s) => view.includes(s.device))
+  const neverSent = sentUsage.length === 0 && sentSites.length === 0
+  const computerByDay = totalsByDay(ofKind(usage, 'computer'))
+  const phoneByDay = totalsByDay(ofKind(usage, 'phone'))
+  const byDay = totalsByDay(usage) // both together
   const today = todayKey()
-  const computerToday = byDay[today] ?? 0
-  const hasComputer = usage.length > 0 || (screenTime.data?.sites.length ?? 0) > 0
+  const computerToday = computerByDay[today] ?? 0
+  const phoneToday = phoneByDay[today] ?? 0
+  const hasComputer = usage.some((u) => u.kind === 'computer') || siteRows.length > 0
+  const hasPhone = usage.some((u) => u.kind === 'phone')
+  const hasAny = hasComputer || hasPhone
 
-  const sites = topSites(screenTime.data?.sites ?? [], siteDays).slice(0, 10)
+  const sites = topSites(siteRows, amountOf(sitePeriod)).slice(0, amountOf(siteCount))
   const sitesTotal = sites.reduce((s, a) => s + a.seconds, 0)
-  const apps = topApps(usage, appDays).slice(0, 10)
+  const apps = topApps(usage, amountOf(appPeriod)).slice(0, amountOf(appCount))
   const appsTotal = apps.reduce((s, a) => s + a.seconds, 0)
-  const history = recentDays(byDay, HISTORY_DAYS)
+  const history = recentDays(byDay, amountOf(historyRange))
   const busiest = Math.max(1, ...history.map((h) => h.seconds))
 
   const metrics = [
     buildMetric(
       { id: 'computer', label: 'Computer screen time', color: COMPUTER_COLOR, format: formatSeconds },
-      Object.entries(byDay),
+      Object.entries(computerByDay),
       ([day, seconds]) => ({ day, amount: seconds, line: `Computer · ${formatSeconds(seconds)}` }),
     ),
-    buildMetric({ id: 'phone', label: 'Phone screen time', color: PHONE_COLOR, format: formatSeconds }, [] as [string, number][], ([day, seconds]) => ({
-      day,
-      amount: seconds,
-    })),
+    buildMetric(
+      { id: 'phone', label: 'Phone screen time', color: PHONE_COLOR, format: formatSeconds },
+      Object.entries(phoneByDay),
+      ([day, seconds]) => ({ day, amount: seconds, line: `Phone · ${formatSeconds(seconds)}` }),
+    ),
   ]
 
   return (
@@ -248,7 +103,7 @@ export default function ScreenTimePage() {
       <header className="page-header row between">
         <div>
           <h1>Screen Time</h1>
-          <p>Time on your computer and your phone. Connect ActivityWatch to start tracking this computer.</p>
+          <p>Time on your computer and your phone. Connect ActivityWatch for this computer and pair the Valkyrie app for your phone.</p>
         </div>
         <div className="row">
           <PanelFilter page="screentime" />
@@ -256,6 +111,23 @@ export default function ScreenTimePage() {
           <SettingsMenu items={[layout.item]} />
         </div>
       </header>
+
+      {error && (
+        <div className="banner error" role="alert">
+          <span>{error}</span>
+          <button onClick={() => setError(null)}>Dismiss</button>
+        </div>
+      )}
+
+      <DeviceViewsBar
+        devices={devices}
+        groups={groups}
+        activeKey={view.key}
+        onSelect={chooseView}
+        onSaved={groupSaved}
+        onDeleted={groupDeleted}
+        onError={setError}
+      />
 
       <Board page="screentime" editing={layout.editing} onEditingChange={layout.setEditing}>
         <Panel id="today-computer" title="Computer today" size="third">
@@ -269,48 +141,42 @@ export default function ScreenTimePage() {
         <Panel id="today-phone" title="Phone today" size="third">
           <div className="card">
             <div className="stat-label">Phone today</div>
-            <div className="stat-value">--</div>
-            <p className="stat-label">No data yet</p>
+            <div className="stat-value">{hasPhone ? formatSeconds(phoneToday) : '--'}</div>
+            <p className="stat-label">{hasPhone ? 'Screen on, in apps' : 'No data yet'}</p>
           </div>
         </Panel>
 
         <Panel id="today-total" title="Total today" size="third">
           <div className="card">
             <div className="stat-label">Total today</div>
-            <div className="stat-value">{hasComputer ? formatSeconds(computerToday) : '--'}</div>
-            <p className="stat-label">{hasComputer ? 'All synced devices' : 'No data yet'}</p>
+            <div className="stat-value">{hasAny ? formatSeconds(computerToday + phoneToday) : '--'}</div>
+            <p className="stat-label">{hasAny ? (view.label ?? 'All synced devices') : 'No data yet'}</p>
           </div>
         </Panel>
 
         <Panel id="devices" title="Devices" size="full">
-          <section className="card">
-            <h2>Devices</h2>
-            <div className="device-list">
-              <ActivityWatchCard screenTime={screenTime} />
-              <PhoneCard />
-            </div>
-          </section>
+          <DevicesPanel screenTime={screenTime} />
         </Panel>
 
         <Panel id="apps" title="Most used apps" size="half">
           <section className="card">
             <div className="row between">
               <h2>Most used apps</h2>
-              <select aria-label="Period" value={appDays} onChange={(e) => setAppDays(Number(e.target.value))}>
-                <option value={1}>Today</option>
-                <option value={7}>Last 7 days</option>
-                <option value={30}>Last 30 days</option>
-              </select>
+              <span className="row">
+                <AmountSelect label="Apps to show" options={COUNTS} amount={appCount} onChange={setAppCount} unit="apps" max={MAX_ITEMS} />
+                <AmountSelect label="Period" options={PERIODS} amount={appPeriod} onChange={setAppPeriod} unit="days" max={MAX_DAYS} />
+              </span>
             </div>
             {apps.length === 0 ? (
-              <p className="empty">{hasComputer ? 'Nothing counted for this period yet.' : 'Connect ActivityWatch to see which apps take your time.'}</p>
+              <p className="empty">{!neverSent ? 'Nothing counted for this period yet.' : 'Connect ActivityWatch or pair your phone to see which apps take your time.'}</p>
             ) : (
               <ul className="list">
                 {apps.map((a) => (
-                  <li key={a.app}>
-                    <ItemIcon kind="app" name={a.app} label={appName(a.app)} />
+                  <li key={`${a.kind}:${a.app}`}>
+                    <ItemIcon kind="app" name={a.app} label={a.kind === 'phone' ? a.app : appName(a.app)} source={a.kind === 'phone' ? 'phone' : undefined} />
                     <span style={{ flex: 1, minWidth: 0 }}>
-                      {appName(a.app)}
+                      {a.kind === 'phone' ? a.app : appName(a.app)}
+                      {a.kind === 'phone' && <Smartphone size={13} aria-label="On your phone" style={{ marginLeft: 6, verticalAlign: '-2px', opacity: 0.6 }} />}
                       <div className="bar">
                         <span style={{ width: `${(a.seconds / appsTotal) * 100}%` }} />
                       </div>
@@ -327,14 +193,13 @@ export default function ScreenTimePage() {
           <section className="card">
             <div className="row between">
               <h2>Websites</h2>
-              <select aria-label="Period" value={siteDays} onChange={(e) => setSiteDays(Number(e.target.value))}>
-                <option value={1}>Today</option>
-                <option value={7}>Last 7 days</option>
-                <option value={30}>Last 30 days</option>
-              </select>
+              <span className="row">
+                <AmountSelect label="Websites to show" options={COUNTS} amount={siteCount} onChange={setSiteCount} unit="sites" max={MAX_ITEMS} />
+                <AmountSelect label="Period" options={PERIODS} amount={sitePeriod} onChange={setSitePeriod} unit="days" max={MAX_DAYS} />
+              </span>
             </div>
             {sites.length === 0 ? (
-              <p className="empty">Connect ActivityWatch and add its browser extension to see which websites take your time.</p>
+              <p className="empty">{neverSent ? 'Connect ActivityWatch and add its browser extension to see which websites take your time.' : 'No websites for this view and period yet.'}</p>
             ) : (
               <ul className="list">
                 {sites.map((s) => (
@@ -355,9 +220,12 @@ export default function ScreenTimePage() {
         </Panel>
         <Panel id="history" title="Daily history" size="half">
           <section className="card">
-            <h2>Daily history</h2>
-            {!hasComputer ? (
-              <p className="empty">Connect ActivityWatch to see your day-by-day totals.</p>
+            <div className="row between">
+              <h2>Daily history</h2>
+              <AmountSelect label="Days to show" options={HISTORY_RANGES} amount={historyRange} onChange={setHistoryRange} unit="days" max={MAX_DAYS} />
+            </div>
+            {!hasAny ? (
+              <p className="empty">{neverSent ? 'Connect ActivityWatch or pair your phone to see your day-by-day totals.' : 'No numbers from this view yet.'}</p>
             ) : (
               <ul className="list">
                 {history.map((h) => (

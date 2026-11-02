@@ -6,10 +6,11 @@ import { addDays, catchUp, daysFrom, mergeDays } from './lib/autoMark.js'
 import { crudRouter, requireId } from './lib/crud.js'
 import { HttpError } from './lib/errors.js'
 import { detectRecurring, markId, merchantKey, type Charge, type Mark } from './lib/recurring.js'
-import { AccountView, BoardLayout, CalendarEvent, ManualAccount, Meal, Skill, SubscriptionMark, TimeEntry, Tracker, Transaction, Workout } from './models.js'
+import { AccountView, BoardLayout, CalendarEvent, DeviceGroup, ManualAccount, Meal, Skill, SubscriptionMark, TimeEntry, Tracker, Transaction, Workout } from './models.js'
 import {
   accountViewSchema,
   dateString,
+  deviceGroupSchema,
   eventSchema,
   layoutBody,
   layoutPageParam,
@@ -182,6 +183,8 @@ api.delete('/layouts/:page', async (req, res) => {
 })
 
 api.use('/views', crudRouter(AccountView, { schema: accountViewSchema, sort: { createdAt: 1 } }))
+
+api.use('/device-groups', crudRouter(DeviceGroup, { schema: deviceGroupSchema, sort: { createdAt: 1 } }))
 
 api.use('/accounts', crudRouter(ManualAccount, { schema: manualAccountSchema, sort: { createdAt: 1 } }))
 

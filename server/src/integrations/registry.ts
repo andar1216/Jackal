@@ -62,12 +62,12 @@ export const providers: Provider[] = [
   },
   {
     id: 'samsung-screen-time',
-    name: 'Samsung S23 screen time',
-    description: 'Track phone screen time.',
+    name: 'Android phone (Valkyrie app)',
+    description: 'Screen time and time in each app on your Android phone, sent by the Valkyrie app on it.',
     category: 'screen-time',
     api: 'unofficial',
-    implemented: false,
-    note: 'No public API. Would likely need a small companion app on the phone.',
+    implemented: true,
+    note: 'Android has no public way to read this from outside, so the Valkyrie app (the android folder) reads it on the phone and sends daily totals over your home Wi-Fi. Pair it on the Screen Time page.',
   },
   {
     id: 'activitywatch',

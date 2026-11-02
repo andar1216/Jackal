@@ -384,6 +384,30 @@ describe('account views', () => {
   })
 })
 
+describe('device groups', () => {
+  it('saves a named group of devices, edits it, and keeps it private', async () => {
+    const made = await call('POST', '/device-groups', { name: 'Work', devices: ['ANDREWSLAPTOP', 'Galaxy S23'] })
+    assert.equal(made.status, 201)
+    assert.deepEqual(made.body.devices, ['ANDREWSLAPTOP', 'Galaxy S23'])
+
+    const edited = await call('PATCH', '/device-groups/' + made.body.id, { name: 'Phones', devices: ['Galaxy S23'] })
+    assert.equal(edited.body.name, 'Phones')
+    assert.deepEqual(edited.body.devices, ['Galaxy S23'])
+    assert.deepEqual((await call('GET', '/device-groups')).body.map((g: { name: string }) => g.name), ['Phones'])
+
+    assert.equal((await call('POST', '/device-groups', { name: '', devices: [] })).status, 400)
+    assert.equal((await call('POST', '/device-groups', { name: 'X', devices: [''] })).status, 400)
+
+    const other = makeClient()
+    await other('POST', '/auth/register', { email: 'groups-other@example.com', name: 'Other', password: PASSWORD })
+    assert.deepEqual((await other('GET', '/device-groups')).body, [])
+    assert.equal((await other('PATCH', '/device-groups/' + made.body.id, { name: 'Hijack' })).status, 404)
+
+    assert.equal((await call('DELETE', '/device-groups/' + made.body.id)).status, 204)
+    assert.equal((await call('GET', '/device-groups')).body.length, 0)
+  })
+})
+
 describe('page layouts', () => {
   it('saves how a page is arranged, replaces it, resets it, and keeps it private', async () => {
     assert.deepEqual((await call('GET', '/layouts')).body, {})
@@ -444,7 +468,7 @@ describe('meals and time entries', () => {
 })
 
 describe('integrations', () => {
-  it('lists every planned integration as not connected, and only Crunch and ActivityWatch (which need no keys) as available', async () => {
+  it('lists every planned integration as not connected, and only Crunch, ActivityWatch and the phone app (which need no keys) as available', async () => {
     const { status, body } = await call('GET', '/integrations')
     assert.equal(status, 200)
     assert.deepEqual(
@@ -453,7 +477,7 @@ describe('integrations', () => {
     )
     for (const item of body) {
       assert.equal(item.status, 'not_connected')
-      assert.equal(item.available, item.id === 'crunch' || item.id === 'activitywatch')
+      assert.equal(item.available, ['crunch', 'activitywatch', 'samsung-screen-time'].includes(item.id))
     }
   })
 
@@ -818,10 +842,11 @@ describe('activitywatch', () => {
       { ...row, app: 'old-agent' }, // from before `source` existed
       { ...row, app: 'old-agent-2', source: '' },
       { ...row, app: 'kept', source: 'activitywatch' },
+      { ...row, app: 'kept-phone', source: 'phone' },
     ])
     await removeOldScreenTimeData()
     const left = await ScreenTimeUsage.collection.find({ userId }).toArray()
-    assert.deepEqual(left.map((r) => r.app), ['kept'])
+    assert.deepEqual(left.map((r) => r.app).sort(), ['kept', 'kept-phone'])
     await ScreenTimeUsage.collection.deleteMany({ userId })
   })
 
@@ -1199,5 +1224,140 @@ describe('icon helpers', () => {
     const { isAppName } = await import('../src/integrations/icons.js')
     for (const ok of ['chrome', 'Cursor', 'Spotify', 'Discord']) assert.ok(isAppName(ok), ok)
     for (const bad of ['', '..\\x', 'a/b', 'a;b', '$(x)', 'x'.repeat(200)]) assert.ok(!isAppName(bad), bad)
+  })
+})
+
+describe('phone', () => {
+  const png = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.from('fake-image-bytes')])
+  const phone = makeClient() // the phone app: no cookie, only its own key
+  let token = ''
+  let deviceId = ''
+  const asPhone = (method: string, path: string, body?: unknown, key = token) => phone(method, `/phone${path}`, body, { authorization: `Bearer ${key}` })
+  const day = '2026-10-31'
+
+  it('makes a code that pairs a phone once, and not with a wrong one', async () => {
+    const made = await call('POST', '/integrations/phone/pair-code')
+    assert.equal(made.status, 201)
+    assert.match(made.body.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}$/)
+    assert.ok(Array.isArray(made.body.addresses))
+
+    assert.equal((await phone('POST', '/phone/pair', { code: 'AAAA-AAAA', name: 'Galaxy S23' })).status, 400)
+    // Typed with the dash or without, in any case.
+    const ok = await phone('POST', '/phone/pair', { code: made.body.code.toLowerCase().replace('-', ' '), name: 'Galaxy S23' })
+    assert.equal(ok.status, 201)
+    assert.ok(ok.body.token.length > 30)
+    token = ok.body.token
+    assert.equal((await phone('POST', '/phone/pair', { code: made.body.code, name: 'Again' })).status, 400, 'a code works once')
+
+    const list = await call('GET', '/integrations/phone')
+    assert.deepEqual(list.body.devices.map((d: { name: string }) => d.name), ['Galaxy S23'])
+    deviceId = list.body.devices[0].id
+    assert.equal(JSON.stringify(list.body).includes(token), false, 'the key is never shown again')
+    const connected = (await call('GET', '/integrations')).body.find((i: { id: string }) => i.id === 'samsung-screen-time')
+    assert.equal(connected.status, 'connected')
+  })
+
+  it('offers the secure tunnel address first when there is one', async () => {
+    const before = config.clientOrigin
+    config.clientOrigin = 'https://my-name.ngrok.dev'
+    try {
+      const made = await call('POST', '/integrations/phone/pair-code')
+      assert.equal(made.body.addresses[0], 'https://my-name.ngrok.dev')
+      assert.equal(made.body.listening, true)
+    } finally {
+      config.clientOrigin = before
+    }
+  })
+
+  it('only talks to a phone that has its key', async () => {
+    assert.equal((await asPhone('GET', '/status')).body.name, 'Galaxy S23')
+    assert.equal((await asPhone('GET', '/status', undefined, 'wrong')).status, 401)
+    assert.equal((await phone('GET', '/phone/status')).status, 401)
+    assert.equal((await asPhone('POST', '/sync', { days: [] })).status, 400)
+  })
+
+  it('stores what the phone sends, replaces a day on a repeat, and shows it as phone time', async () => {
+    const first = await asPhone('POST', '/sync', {
+      days: [{ day, apps: [{ app: 'YouTube', seconds: 3600 }, { app: 'Instagram', seconds: 600 }, { app: 'Instagram', seconds: 60 }] }],
+    })
+    assert.equal(first.status, 200)
+    assert.equal(first.body.apps, 2, 'two lines with one name are one line')
+    assert.deepEqual([...first.body.wantIcons].sort(), ['Instagram', 'YouTube'])
+
+    const read = async () => (await call('GET', '/integrations/screen-time/data')).body.usage.filter((u: { kind: string }) => u.kind === 'phone')
+    assert.deepEqual(
+      (await read()).map((u: { app: string; seconds: number; device: string }) => [u.device, u.app, u.seconds]).sort(),
+      [['Galaxy S23', 'Instagram', 660], ['Galaxy S23', 'YouTube', 3600]],
+    )
+
+    await asPhone('POST', '/sync', { days: [{ day, apps: [{ app: 'YouTube', seconds: 4000 }] }] })
+    assert.deepEqual((await read()).map((u: { app: string; seconds: number }) => [u.app, u.seconds]), [['YouTube', 4000]], 'replaced, not added to')
+    assert.equal((await asPhone('POST', '/sync', { days: [{ day: 'yesterday', apps: [] }] })).status, 400)
+    assert.equal((await asPhone('POST', '/sync', { days: [{ day, apps: [{ app: 'X', seconds: 999999 }] }] })).status, 400)
+
+    const device = (await call('GET', '/integrations/phone')).body.devices[0]
+    assert.ok(device.lastSyncedAt)
+  })
+
+  it("keeps the pictures the phone sends, and only real pictures of apps it reported", async () => {
+    const wanted = (await asPhone('POST', '/sync', { days: [{ day, apps: [{ app: 'YouTube', seconds: 4000 }, { app: 'Maps', seconds: 90 }] }] })).body.wantIcons
+    assert.deepEqual([...wanted].sort(), ['Maps', 'YouTube'])
+
+    const saved = await asPhone('POST', '/icons', {
+      icons: { YouTube: png.toString('base64'), Maps: Buffer.from('<svg onload=alert(1)>').toString('base64'), Stranger: png.toString('base64') },
+    })
+    assert.equal(saved.body.saved, 1, 'not a PNG, and not an app it sent, are both skipped')
+
+    const icon = await call('GET', '/integrations/screen-time/icon?kind=app&source=phone&name=YouTube')
+    assert.equal(icon.status, 200)
+    assert.equal(icon.headers.get('content-type'), 'image/png')
+    assert.deepEqual(icon.bytes, png)
+    assert.equal((await call('GET', '/integrations/screen-time/icon?kind=app&source=phone&name=Maps')).status, 404)
+    assert.equal((await call('GET', '/integrations/screen-time/icon?kind=app&source=phone&name=Stranger')).status, 404)
+    const after = (await asPhone('POST', '/sync', { days: [{ day, apps: [{ app: 'YouTube', seconds: 4000 }, { app: 'Maps', seconds: 90 }] }] })).body.wantIcons
+    assert.deepEqual(after, ['Maps'], 'it only asks again for what it still has no picture of')
+  })
+
+  it("does not show one person's phone to another", async () => {
+    const other = makeClient()
+    assert.equal((await other('POST', '/auth/register', { email: 'phone-other@example.com', name: 'Other', password: PASSWORD })).status, 201)
+    assert.deepEqual((await other('GET', '/integrations/phone')).body.devices, [])
+    assert.deepEqual((await other('GET', '/integrations/screen-time/data')).body.usage, [])
+    assert.equal((await other('GET', '/integrations/screen-time/icon?kind=app&source=phone&name=YouTube')).status, 404)
+    await other('DELETE', `/integrations/phone/${deviceId}`)
+    assert.equal((await asPhone('GET', '/status')).status, 200, "someone else cannot unpair your phone")
+  })
+
+  it('is turned off by removing the phone, taking its numbers with it', async () => {
+    const aw = await import('../src/models.js')
+    await aw.ScreenTimeUsage.create({ userId: (await aw.PhoneDevice.findById(deviceId))?.userId, device: 'PC', source: 'activitywatch', day, app: 'chrome', seconds: 60 })
+    assert.equal((await call('DELETE', `/integrations/phone/${deviceId}`)).status, 204)
+    assert.equal((await asPhone('GET', '/status')).status, 401, 'its key stops working')
+    const usage = (await call('GET', '/integrations/screen-time/data')).body.usage
+    assert.deepEqual(usage.map((u: { app: string }) => u.app), ['chrome'], "the computer's numbers stay")
+    assert.deepEqual((await call('GET', '/integrations/phone')).body.devices, [])
+    const entry = (await call('GET', '/integrations')).body.find((i: { id: string }) => i.id === 'samsung-screen-time')
+    assert.equal(entry.status, 'not_connected')
+    await aw.ScreenTimeUsage.deleteMany({ app: 'chrome', device: 'PC' })
+  })
+
+  it('names a second phone with the same name differently, and lets a phone unpair itself', async () => {
+    const pair = async (name: string) => (await phone('POST', '/phone/pair', { code: (await call('POST', '/integrations/phone/pair-code')).body.code, name })).body
+    const a = await pair('Pixel')
+    const b = await pair('Pixel')
+    assert.equal(a.name, 'Pixel')
+    assert.equal(b.name, 'Pixel 2')
+    assert.equal((await asPhone('DELETE', '/me', undefined, a.token)).status, 204)
+    assert.equal((await asPhone('GET', '/status', undefined, a.token)).status, 401)
+    assert.equal((await asPhone('GET', '/status', undefined, b.token)).status, 200)
+    assert.equal((await call('POST', '/integrations/samsung-screen-time/connect')).status, 400, 'pairing happens on the Screen Time page')
+    assert.equal((await call('DELETE', '/integrations/samsung-screen-time/connection')).status, 204)
+    assert.equal((await asPhone('GET', '/status', undefined, b.token)).status, 401)
+  })
+
+  it('slows down someone guessing codes', async () => {
+    let last = 0
+    for (let i = 0; i < 12 && last !== 429; i++) last = (await phone('POST', '/phone/pair', { code: `ZZZZ-${1000 + i}` })).status
+    assert.equal(last, 429)
   })
 })

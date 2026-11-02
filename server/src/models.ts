@@ -245,10 +245,10 @@ export const CrunchPayment = mongoose.model(
   }),
 )
 
-/** Seconds of active use of one app on one day, read from ActivityWatch (see integrations/activityWatch.ts). */
+/** Seconds of active use of one app on one day: read from ActivityWatch on the computer, or sent by the phone app (integrations/phone.ts). */
 const screenTimeUsageSchema = ownedSchema({
   device: { type: String, required: true },
-  // Where the numbers came from. Always 'activitywatch' now.
+  // Where the numbers came from: 'activitywatch' (the computer) or 'phone'.
   source: { type: String, default: '' },
   day,
   app: { type: String, required: true },
@@ -268,6 +268,34 @@ const screenTimeSiteSchema = ownedSchema({
 })
 screenTimeSiteSchema.index({ userId: 1, device: 1, source: 1, day: 1, site: 1 }, { unique: true })
 export const ScreenTimeSite = mongoose.model('ScreenTimeSite', screenTimeSiteSchema)
+/** A paired phone. The phone app holds a secret key; only its hash is kept here, so it can be revoked from the Screen Time page. */
+export const PhoneDevice = mongoose.model(
+  'PhoneDevice',
+  ownedSchema({
+    name: { type: String, required: true, trim: true, maxlength: 60 },
+    tokenHash: { type: String, required: true, unique: true },
+    lastSyncedAt: Date,
+  }),
+)
+
+/** The short code shown on the Screen Time page for pairing a phone. One at a time, expires quickly, only its hash is kept. */
+export const PhonePairing = mongoose.model(
+  'PhonePairing',
+  ownedSchema({
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+    codeHash: { type: String, required: true, unique: true },
+    expiresAt: { type: Date, required: true, index: { expires: 0 } },
+  }),
+)
+
+/** The small picture of an app on the phone, sent by the phone itself (the computer's own icons come from Windows). */
+const phoneIconSchema = ownedSchema({
+  app: { type: String, required: true },
+  type: { type: String, required: true },
+  data: { type: Buffer, required: true },
+})
+phoneIconSchema.index({ userId: 1, app: 1 }, { unique: true })
+export const PhoneIcon = mongoose.model('PhoneIcon', phoneIconSchema)
 
 /** Every model that belongs to a user. */
 /** A bank or card the person lists by hand (for example one Plaid can't reach yet). It shows up under Finances > By account. */
@@ -287,6 +315,15 @@ export const AccountView = mongoose.model(
   ownedSchema({
     name: { type: String, required: true, trim: true },
     accounts: { type: [String], default: [] },
+  }),
+)
+
+/** A named group of devices, like "Work" or "Phones", for looking at part of your screen time at a time. Devices are listed by the name Screen Time shows for them. */
+export const DeviceGroup = mongoose.model(
+  'DeviceGroup',
+  ownedSchema({
+    name: { type: String, required: true, trim: true },
+    devices: { type: [String], default: [] },
   }),
 )
 
@@ -320,7 +357,7 @@ const boardLayoutSchema = ownedSchema({
 boardLayoutSchema.index({ userId: 1, page: 1 }, { unique: true })
 export const BoardLayout = mongoose.model('BoardLayout', boardLayoutSchema)
 
-export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment, ScreenTimeUsage, ScreenTimeSite]
+export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment, ScreenTimeUsage, ScreenTimeSite, PhoneDevice, PhonePairing, PhoneIcon, DeviceGroup]
 
 /**
  * Data created before accounts existed has no owner. The first account to be created inherits it.
@@ -347,7 +384,7 @@ export const migrateStreakFlags = async () => {
  * rows would clash with ActivityWatch's. Safe to run every start.
  */
 export const removeOldScreenTimeData = async () => {
-  const own = { source: { $ne: 'activitywatch' } }
+  const own = { source: { $nin: ['activitywatch', 'phone'] } }
   await ScreenTimeUsage.collection.deleteMany(own)
   await ScreenTimeSite.collection.deleteMany(own)
   await Connection.collection.deleteMany({ provider: 'windows-screen-time' })

@@ -1,4 +1,4 @@
-import type { AccountView, ActivityWatchStatus, BankAccount, CrunchData, Integration, ManualAccount, Meal, PanelState, ScreenTimeData, Skill, SubscriptionData, Transaction, User, Workout } from '../types'
+import type { AccountView, ActivityWatchStatus, BankAccount, CrunchData, DeviceGroup, Integration, ManualAccount, Meal, PanelState, PhonePairCode, PhoneStatus, ScreenTimeData, Skill, SubscriptionData, Transaction, User, Workout } from '../types'
 import { todayKey } from './dates'
 
 // Dev: Vite proxies /api to the backend. For a separate API host, set VITE_API_URL.
@@ -82,7 +82,7 @@ export const integrationsApi = {
     await request<void>('DELETE', `/integrations/${id}/connection`)
     if (id === 'plaid') notifyTransactionsChanged()
     if (id === 'crunch') notifyCrunchChanged()
-    if (id === 'activitywatch') window.dispatchEvent(new Event(SCREEN_TIME_CHANGED))
+    if (id === 'activitywatch' || id === 'samsung-screen-time') window.dispatchEvent(new Event(SCREEN_TIME_CHANGED))
   },
 }
 
@@ -128,6 +128,14 @@ export const viewsApi = {
   create: (v: Pick<AccountView, 'name' | 'accounts'>) => request<AccountView>('POST', '/views', v),
   update: (id: string, v: Partial<Pick<AccountView, 'name' | 'accounts'>>) => request<AccountView>('PATCH', `/views/${id}`, v),
   remove: (id: string) => request<void>('DELETE', `/views/${id}`),
+}
+
+/** The groups of devices on the Screen Time page. */
+export const deviceGroupsApi = {
+  list: () => request<DeviceGroup[]>('GET', '/device-groups'),
+  create: (g: Pick<DeviceGroup, 'name' | 'devices'>) => request<DeviceGroup>('POST', '/device-groups', g),
+  update: (id: string, g: Partial<Pick<DeviceGroup, 'name' | 'devices'>>) => request<DeviceGroup>('PATCH', `/device-groups/${id}`, g),
+  remove: (id: string) => request<void>('DELETE', `/device-groups/${id}`),
 }
 
 export const accountsApi = {
@@ -192,10 +200,21 @@ export const SCREEN_TIME_CHANGED = 'valkyrie:screen-time-changed'
 export const screenTimeApi = {
   data: () => request<ScreenTimeData>('GET', '/integrations/screen-time/data'),
   /** Where the picture for a website or app comes from (an <img> can't send headers, so this is a plain address). */
-  iconUrl: (kind: 'site' | 'app', name: string) => `${BASE}/integrations/screen-time/icon?kind=${kind}&name=${encodeURIComponent(name)}`,
+  iconUrl: (kind: 'site' | 'app', name: string, source?: 'phone') =>
+    `${BASE}/integrations/screen-time/icon?kind=${kind}&name=${encodeURIComponent(name)}${source ? `&source=${source}` : ''}`,
 }
 
 const notifyScreenTimeChanged = () => window.dispatchEvent(new Event(SCREEN_TIME_CHANGED))
+
+/** Phones running the Valkyrie app: pairing and removing. The numbers themselves come in through `screenTimeApi.data`. */
+export const phoneApi = {
+  status: () => request<PhoneStatus>('GET', '/integrations/phone'),
+  pairCode: () => request<PhonePairCode>('POST', '/integrations/phone/pair-code'),
+  remove: async (id: string) => {
+    await request<void>('DELETE', `/integrations/phone/${id}`)
+    notifyScreenTimeChanged()
+  },
+}
 
 type AwResult = { days: number; apps: number; sites: number; status: ActivityWatchStatus }
 
