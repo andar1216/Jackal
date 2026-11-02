@@ -16,6 +16,31 @@ object HabitMath {
         return count
     }
 
+    /** The longest run of days in a row ever done. */
+    fun best(done: Set<String>): Int {
+        var best = 0
+        var run = 0
+        var previous: LocalDate? = null
+        for (day in done.map { LocalDate.parse(it) }.sorted()) {
+            run = if (previous != null && previous.plusDays(1) == day) run + 1 else 1
+            best = maxOf(best, run)
+            previous = day
+        }
+        return best
+    }
+
+    /** Days done and days missed since the start. Today isn't missed until it is over. */
+    fun onOff(done: Set<String>, start: LocalDate, today: LocalDate): Pair<Int, Int> {
+        var on = 0
+        var off = 0
+        var day = start
+        while (!day.isAfter(today)) {
+            if (day.toString() in done) on++ else if (day != today) off++
+            day = day.plusDays(1)
+        }
+        return on to off
+    }
+
     /** The last `n` days, oldest first, ending today. */
     fun lastDays(today: LocalDate, n: Int = 7): List<LocalDate> = (n - 1 downTo 0).map { today.minusDays(it.toLong()) }
 }
@@ -119,4 +144,23 @@ object FinanceMath {
         val name = java.time.Month.of(m).getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.US)
         return "$name $y"
     }
+}
+
+/** The calories a day is measured against, the same as the website's. */
+const val CALORIE_GOAL = 2200
+
+class MealEntry(val id: String, val name: String, val calories: Int, val protein: Int, val carbs: Int, val fat: Int, val day: String)
+
+class WorkoutEntry(val id: String, val type: String, val minutes: Int, val burned: Int, val day: String)
+
+object DietMath {
+    fun eaten(meals: List<MealEntry>, day: String) = meals.filter { it.day == day }.sumOf { it.calories }
+
+    fun burned(workouts: List<WorkoutEntry>, day: String) = workouts.filter { it.day == day }.sumOf { it.burned }
+
+    /** What is left of the day's goal. Exercise adds calories back, like the website's Fitness page. */
+    fun remaining(eaten: Int, burned: Int = 0) = CALORIE_GOAL - eaten + burned
+
+    /** The last `n` days, newest first, ending today. */
+    fun lastDays(today: LocalDate, n: Int = 7): List<String> = (0 until n).map { today.minusDays(it.toLong()).toString() }
 }

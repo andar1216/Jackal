@@ -95,4 +95,34 @@ class PhoneMathTest {
         assertEquals("2025-12", FinanceMath.shift("2026-01", -1))
         assertEquals("November 2026", FinanceMath.monthName("2026-11"))
     }
+
+    @Test
+    fun theBestStreakIsTheLongestRunEver() {
+        assertEquals(3, HabitMath.best(setOf("2026-10-01", "2026-10-02", "2026-10-03", "2026-10-10", "2026-10-11")))
+        assertEquals(0, HabitMath.best(emptySet()))
+        assertEquals(1, HabitMath.best(setOf("2026-10-01", "2026-10-03")))
+    }
+
+    @Test
+    fun daysOffDoNotIncludeTodayUntilItIsOver() {
+        val start = LocalDate.of(2026, 10, 29)
+        // 29th done, 30th missed, 31st done, today (1st) not done yet.
+        assertEquals(2 to 1, HabitMath.onOff(setOf("2026-10-29", "2026-10-31"), start, today))
+        assertEquals(3 to 1, HabitMath.onOff(setOf("2026-10-29", "2026-10-31", "2026-11-01"), start, today))
+    }
+
+    @Test
+    fun caloriesLeftGrowWithExercise() {
+        val meals = listOf(
+            MealEntry("1", "Eggs", 300, 20, 2, 18, "2026-11-01"),
+            MealEntry("2", "Rice", 500, 10, 100, 1, "2026-11-01"),
+            MealEntry("3", "Old", 900, 0, 0, 0, "2026-10-31"),
+        )
+        val workouts = listOf(WorkoutEntry("1", "Run", 30, 250, "2026-11-01"), WorkoutEntry("2", "Lift", 45, 100, "2026-10-31"))
+        assertEquals(800, DietMath.eaten(meals, "2026-11-01"))
+        assertEquals(250, DietMath.burned(workouts, "2026-11-01"))
+        assertEquals(1400, DietMath.remaining(800))
+        assertEquals(1650, DietMath.remaining(800, 250))
+        assertEquals(listOf("2026-11-01", "2026-10-31", "2026-10-30"), DietMath.lastDays(today, 3))
+    }
 }

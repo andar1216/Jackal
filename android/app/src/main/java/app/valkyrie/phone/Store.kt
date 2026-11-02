@@ -48,6 +48,11 @@ class Store(context: Context) {
         get() = prefs.getString("screenDevice", "all") ?: "all"
         set(value) = prefs.edit().putString("screenDevice", value).apply()
 
+    /** How the app looks: "system" (follow the phone), "light" or "dark". */
+    var theme: String
+        get() = prefs.getString("theme", "system") ?: "system"
+        set(value) = prefs.edit().putString("theme", value).apply()
+
     val paired get() = !token.isNullOrBlank()
 
     fun forgetPairing() {

@@ -7,6 +7,8 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import java.time.LocalDate
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -18,6 +20,9 @@ import kotlin.concurrent.thread
 abstract class Screen(val activity: Activity, val store: Store) {
     abstract val title: String
 
+    /** The little picture beside the name in the left menu (a drawable in res/drawable). */
+    abstract val icon: Int
+
     /** The column the screen puts its cards in. */
     protected val column = LinearLayout(activity).apply {
         orientation = LinearLayout.VERTICAL
@@ -25,7 +30,7 @@ abstract class Screen(val activity: Activity, val store: Store) {
     }
 
     val root: View = ScrollView(activity).apply {
-        setBackgroundColor(BACKGROUND)
+        setBackgroundColor(Palette.background)
         isFillViewport = true
         addView(column)
     }
@@ -56,6 +61,12 @@ abstract class Screen(val activity: Activity, val store: Store) {
     }
 
     /* ---------- Building blocks ---------- */
+
+    /** Adds a view that may still sit in an older card (a form that is drawn again keeps its fields). */
+    private fun ViewGroup.addFree(child: View) {
+        (child.parent as? ViewGroup)?.removeView(child)
+        addView(child)
+    }
 
     protected fun dp(n: Int) = (n * activity.resources.displayMetrics.density).toInt()
 
@@ -92,7 +103,7 @@ abstract class Screen(val activity: Activity, val store: Store) {
         setPadding(dp(12), dp(6), dp(12), dp(6))
         setTextColor(if (selected) Color.WHITE else INK)
         background = GradientDrawable().apply {
-            setColor(if (selected) ACCENT else Color.parseColor("#E7E7EF"))
+            setColor(if (selected) ACCENT else Palette.chip)
             cornerRadius = dp(16).toFloat()
         }
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { rightMargin = dp(8) }
@@ -102,7 +113,7 @@ abstract class Screen(val activity: Activity, val store: Store) {
     protected fun row(vararg children: View) = LinearLayout(activity).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        children.forEach { addView(it) }
+        children.forEach { addFree(it) }
     }
 
     /** A row with a name on the left and a figure on the right. */
@@ -122,11 +133,11 @@ abstract class Screen(val activity: Activity, val store: Store) {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(16), dp(14), dp(16), dp(16))
         background = GradientDrawable().apply {
-            setColor(Color.WHITE)
+            setColor(Palette.card)
             cornerRadius = dp(14).toFloat()
         }
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(12) }
-        children.forEach { addView(it) }
+        children.forEach { addFree(it) }
     }
 
     /** A card title and then what goes in it. */
@@ -149,7 +160,7 @@ abstract class Screen(val activity: Activity, val store: Store) {
         orientation = LinearLayout.HORIZONTAL
         val share = if (whole <= 0) 0f else (part.toFloat() / whole).coerceIn(0f, 1f)
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(6)).apply { bottomMargin = dp(4) }
-        background = GradientDrawable().apply { setColor(Color.parseColor("#ECECF3")); cornerRadius = dp(3).toFloat() }
+        background = GradientDrawable().apply { setColor(Palette.chip); cornerRadius = dp(3).toFloat() }
         addView(View(activity).apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, share)
             background = GradientDrawable().apply { setColor(color); cornerRadius = dp(3).toFloat() }
@@ -159,14 +170,29 @@ abstract class Screen(val activity: Activity, val store: Store) {
 
     protected fun problem(message: String) = card(text(message, 14f, color = BAD))
 
-    companion object {
-        val ACCENT = Color.parseColor("#4F46E5")
-        val INK = Color.parseColor("#222222")
-        val MUTED = Color.parseColor("#6B7280")
-        val BAD = Color.parseColor("#B42318")
-        val GOOD = Color.parseColor("#15803D")
-        val BACKGROUND = Color.parseColor("#F4F4F8")
+    /** A circle for one day: filled when done, outlined when not (and in the habit's colour for today). */
+    protected fun dayCircle(day: LocalDate, on: Boolean, color: Int, isToday: Boolean, size: Int = 34) = TextView(activity).apply {
+        text = day.dayOfMonth.toString()
+        textSize = 13f
+        gravity = Gravity.CENTER
+        setTextColor(if (on) Color.WHITE else INK)
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            if (on) setColor(color) else {
+                setColor(Palette.card)
+                setStroke(dp(1), if (isToday) color else Palette.line)
+            }
+        }
+        layoutParams = LinearLayout.LayoutParams(dp(size), dp(size))
+    }
 
+    companion object {
+        val ACCENT get() = Palette.accent
+        val INK get() = Palette.ink
+        val MUTED get() = Palette.muted
+        val BAD get() = Palette.bad
+        val GOOD get() = Palette.good
+        val BACKGROUND get() = Palette.background
         /** "1h 5m", "12m", "<1m". */
         fun duration(seconds: Long): String {
             val minutes = (seconds + 30) / 60
@@ -177,4 +203,42 @@ abstract class Screen(val activity: Activity, val store: Store) {
             }
         }
     }
+}
+
+/** The colours of the app. Light or dark is chosen once when the window opens (see MainActivity). */
+object Palette {
+    var dark = false
+        private set
+
+    var background = 0
+    var card = 0
+    var ink = 0
+    var muted = 0
+    var accent = 0
+    var accentText = 0
+    var bar = 0
+    var bad = 0
+    var good = 0
+    var chip = 0
+    var line = 0
+    var selected = 0
+
+    fun use(dark: Boolean) {
+        this.dark = dark
+        fun c(light: String, night: String) = Color.parseColor(if (dark) night else light)
+        background = c("#F4F4F8", "#0F1115")
+        card = c("#FFFFFF", "#1B1E26")
+        ink = c("#222222", "#E6E8EE")
+        muted = c("#6B7280", "#9AA1AF")
+        accent = c("#4F46E5", "#6366F1")
+        accentText = c("#4F46E5", "#A5B4FC")
+        bar = c("#4F46E5", "#1E2140")
+        bad = c("#B42318", "#F87171")
+        good = c("#15803D", "#4ADE80")
+        chip = c("#E7E7EF", "#2A2E38")
+        line = c("#D4D4DC", "#3A3F4B")
+        selected = c("#EEF0FF", "#262A44")
+    }
+
+    init { use(false) }
 }

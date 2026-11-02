@@ -12,13 +12,13 @@ import android.widget.TextView
 import androidx.drawerlayout.widget.DrawerLayout
 
 /**
- * The app: a left menu with the same places as the website (Dashboard, Screen Time, Finances) and "This phone", where
- * you allow usage access, pair, and send. Once paired, the phone also syncs by itself (see Sync.kt).
+ * The app: a left menu with the same places as the website (Dashboard, Screen Time, Finances) and Settings, where
+ * you change the theme, allow usage access, pair, and send. Once paired, the phone also syncs by itself (see Sync.kt).
  */
 class MainActivity : Activity() {
     private lateinit var store: Store
     private lateinit var screens: List<Screen>
-    private lateinit var phone: PhoneScreen
+    private lateinit var settings: SettingsScreen
     private lateinit var current: Screen
 
     private lateinit var drawer: DrawerLayout
@@ -27,19 +27,39 @@ class MainActivity : Activity() {
     private lateinit var menuItems: List<TextView>
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+        // The colours are chosen before anything is built. Changing the theme in Settings opens the window again.
         store = Store(this)
-        phone = PhoneScreen(this, store) { drawMenu() }
-        screens = listOf(DashboardScreen(this, store), ScreenTimeScreen(this, store), FinanceScreen(this, store), phone)
+        val dark = SettingsScreen.isDark(store.theme, this)
+        Palette.use(dark)
+        setTheme(if (dark) android.R.style.Theme_DeviceDefault_NoActionBar else android.R.style.Theme_DeviceDefault_Light_NoActionBar)
+        super.onCreate(savedInstanceState)
+
+        settings = SettingsScreen(this, store) { recreate() }
+        // The same places as the website's left menu, then Settings, which also holds this phone's link to Valkyrie.
+        screens = listOf(
+            DashboardScreen(this, store),
+            HabitsScreen(this, store),
+            FinanceScreen(this, store),
+            DietScreen(this, store),
+            FitnessScreen(this, store),
+            ScreenTimeScreen(this, store),
+            settings,
+        )
         setContentView(build())
-        open(if (store.paired) screens.first() else phone)
+        val before = savedInstanceState?.getInt("screen", -1) ?: -1
+        open(screens.getOrNull(before) ?: if (store.paired) screens.first() else settings)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt("screen", screens.indexOf(current))
     }
 
     override fun onResume() {
         super.onResume()
         current.show()
         // Opening the app is a good moment to catch up.
-        if (store.paired && UsageReader.hasAccess(this)) phone.syncInBackground()
+        if (store.paired && UsageReader.hasAccess(this)) settings.syncInBackground()
     }
 
     @Deprecated("Back closes the menu first")
@@ -67,7 +87,7 @@ class MainActivity : Activity() {
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(Screen.ACCENT)
+            setBackgroundColor(Palette.bar)
             addView(menuButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(52)))
             addView(heading)
         }
@@ -82,6 +102,9 @@ class MainActivity : Activity() {
             TextView(this).apply {
                 text = screen.title
                 textSize = 16f
+                gravity = Gravity.CENTER_VERTICAL
+                compoundDrawablePadding = dp(16)
+                setCompoundDrawablesRelativeWithIntrinsicBounds(screen.icon, 0, 0, 0)
                 setPadding(dp(20), dp(14), dp(20), dp(14))
                 setOnClickListener {
                     drawer.closeDrawer(Gravity.START)
@@ -91,19 +114,19 @@ class MainActivity : Activity() {
         }
         val menu = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(Palette.card)
             setPadding(0, dp(24), 0, 0)
             addView(TextView(context).apply {
                 text = "Valkyrie"
                 textSize = 24f
-                setTextColor(Screen.ACCENT)
+                setTextColor(Palette.accentText)
                 setTypeface(typeface, android.graphics.Typeface.BOLD)
                 setPadding(dp(20), dp(8), dp(20), dp(16))
             })
             menuItems.forEachIndexed { index, item ->
-                // "This phone" sits apart from the places that mirror the website.
-                if (index == screens.lastIndex) addView(View(context).apply {
-                    setBackgroundColor(Color.parseColor("#E5E7EB"))
+                // Settings sits apart from the places that mirror the website.
+                if (screens[index] === settings) addView(View(context).apply {
+                    setBackgroundColor(Palette.line)
                     layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)).apply { setMargins(dp(20), dp(8), dp(20), dp(8)) }
                 })
                 addView(item)
@@ -131,8 +154,10 @@ class MainActivity : Activity() {
         screens.forEachIndexed { index, screen ->
             val selected = screen === current
             menuItems[index].apply {
-                setTextColor(if (selected) Screen.ACCENT else Screen.INK)
-                background = if (selected) GradientDrawable().apply { setColor(Color.parseColor("#EEF0FF")) } else null
+                val color = if (selected) Palette.accentText else Palette.ink
+                setTextColor(color)
+                compoundDrawableTintList = android.content.res.ColorStateList.valueOf(color) // the icon matches the name
+                background = if (selected) GradientDrawable().apply { setColor(Palette.selected) } else null
             }
         }
     }

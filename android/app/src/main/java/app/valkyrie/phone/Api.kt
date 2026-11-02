@@ -97,6 +97,48 @@ object Api {
         request(server, "POST", "/app/habits/$id/toggle/$date", token, JSONObject())
     }
 
+    /** A new habit, started on `today` (this phone's date). */
+    fun addHabit(server: String, token: String, name: String, eliminating: Boolean, today: String) {
+        val body = JSONObject().put("name", name).put("kind", if (eliminating) "eliminating" else "performing")
+        request(server, "POST", "/app/habits?today=$today", token, body)
+    }
+
+    fun renameHabit(server: String, token: String, id: String, name: String) {
+        request(server, "PATCH", "/app/habits/$id", token, JSONObject().put("name", name))
+    }
+
+    /** Puts a habit away, or brings it back. */
+    fun archiveHabit(server: String, token: String, id: String, archived: Boolean) {
+        request(server, "PATCH", "/app/habits/$id", token, JSONObject().put("archived", archived))
+    }
+
+    fun deleteHabit(server: String, token: String, id: String) {
+        request(server, "DELETE", "/app/habits/$id", token)
+    }
+
+    /** Meals from `from` on ("2026-10-25"). */
+    fun meals(server: String, token: String, from: String): JSONArray = JSONArray(request(server, "GET", "/app/meals?from=$from", token))
+
+    fun addMeal(server: String, token: String, name: String, calories: Int, protein: Int, carbs: Int, fat: Int, day: String) {
+        val body = JSONObject().put("name", name).put("calories", calories).put("protein", protein).put("carbs", carbs).put("fat", fat).put("date", day)
+        request(server, "POST", "/app/meals", token, body)
+    }
+
+    fun deleteMeal(server: String, token: String, id: String) {
+        request(server, "DELETE", "/app/meals/$id", token)
+    }
+
+    fun workouts(server: String, token: String, from: String): JSONArray = JSONArray(request(server, "GET", "/app/workouts?from=$from", token))
+
+    fun addWorkout(server: String, token: String, type: String, minutes: Int, burned: Int, day: String) {
+        val body = JSONObject().put("type", type).put("durationMin", minutes).put("caloriesBurned", burned).put("date", day)
+        request(server, "POST", "/app/workouts", token, body)
+    }
+
+    fun deleteWorkout(server: String, token: String, id: String) {
+        request(server, "DELETE", "/app/workouts/$id", token)
+    }
+
     fun screenTime(server: String, token: String): JSONObject = JSONObject(request(server, "GET", "/app/screen-time", token))
 
     /** Files an app or website under `category`, or back to automatic with null. */

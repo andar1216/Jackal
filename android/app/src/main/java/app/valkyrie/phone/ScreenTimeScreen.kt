@@ -15,6 +15,7 @@ import org.json.JSONObject
  */
 class ScreenTimeScreen(activity: Activity, store: Store) : Screen(activity, store) {
     override val title = "Screen Time"
+    override val icon = R.drawable.ic_screen_time
 
     private val content = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
     private var data: JSONObject? = null

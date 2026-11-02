@@ -1,8 +1,6 @@
 package app.valkyrie.phone
 
 import android.app.Activity
-import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -11,10 +9,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** The dashboard: a look at today across habits, screen time and money, and the habits to tick off. */
-class DashboardScreen(activity: Activity, store: Store) : Screen(activity, store) {
+class DashboardScreen(activity: Activity, store: Store) : HabitScreen(activity, store) {
     override val title = "Dashboard"
-
-    private class Habit(val id: String, val name: String, val color: Int, val done: MutableSet<String>, val eliminating: Boolean, val showStreak: Boolean)
+    override val icon = R.drawable.ic_dashboard
 
     private val summary = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
     private val habitsBox = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
@@ -78,7 +75,7 @@ class DashboardScreen(activity: Activity, store: Store) : Screen(activity, store
         val today = LocalDate.now()
         load({ server, token -> Api.habits(server, token, today.toString()) }) { result ->
             result.onSuccess { list ->
-                habits = parse(list)
+                habits = HabitData.parse(list).filter { !it.archived }
                 draw()
             }.onFailure { error ->
                 habits = emptyList()
@@ -89,26 +86,12 @@ class DashboardScreen(activity: Activity, store: Store) : Screen(activity, store
         }
     }
 
-    private fun parse(list: JSONArray): List<Habit> = (0 until list.length()).map { list.getJSONObject(it) }
-        .filter { !it.optBoolean("archived") }
-        .map { h ->
-            val logs = h.optJSONArray("logs") ?: JSONArray()
-            Habit(
-                id = h.getString("id"),
-                name = h.getString("name"),
-                color = runCatching { Color.parseColor(h.optString("color", "#4f46e5")) }.getOrDefault(ACCENT),
-                done = (0 until logs.length()).map { logs.getString(it) }.toMutableSet(),
-                eliminating = h.optString("kind") == "eliminating",
-                showStreak = if (h.has("streakVisible") && !h.isNull("streakVisible")) h.getBoolean("streakVisible") else true,
-            )
-        }
-
     private fun draw() {
         val today = LocalDate.now()
         habitsBox.removeAllViews()
         habitsToday.text = "${habits.count { today.toString() in it.done }} of ${habits.size}"
         if (habits.isEmpty()) {
-            habitsBox.addView(panel("Habits", text("No habits yet. Add them on the website and they show up here.", color = MUTED)))
+            habitsBox.addView(panel("Habits", text("No habits yet. Add one in Habits.", color = MUTED)))
             return
         }
         val days = HabitMath.lastDays(today)
@@ -132,47 +115,17 @@ class DashboardScreen(activity: Activity, store: Store) : Screen(activity, store
     /** One of the last seven days: a filled circle when done. Tapping it puts the day on or off. */
     private fun dayButton(habit: Habit, day: LocalDate, today: LocalDate): LinearLayout {
         val on = day.toString() in habit.done
-        val circle = TextView(activity).apply {
-            text = day.dayOfMonth.toString()
-            textSize = 13f
-            gravity = Gravity.CENTER
-            setTextColor(if (on) Color.WHITE else INK)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                if (on) setColor(habit.color) else {
-                    setColor(Color.WHITE)
-                    setStroke(dp(1), if (day == today) habit.color else Color.parseColor("#D4D4DC"))
-                }
-            }
-            layoutParams = LinearLayout.LayoutParams(dp(34), dp(34))
-        }
         val letter = text(day.dayOfWeek.name.take(1), 11f, color = MUTED).apply { gravity = Gravity.CENTER }
         return LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             addView(letter)
-            addView(circle)
-            setOnClickListener { toggle(habit, day) }
-        }
-    }
-
-    private fun toggle(habit: Habit, day: LocalDate) {
-        val key = day.toString()
-        // Show the change at once, and put it back if the server doesn't take it.
-        val wasOn = key in habit.done
-        if (wasOn) habit.done.remove(key) else habit.done.add(key)
-        draw()
-        load({ server, token -> Api.toggleHabit(server, token, habit.id, key) }) { result ->
-            result.onFailure {
-                if (wasOn) habit.done.add(key) else habit.done.remove(key)
-                draw()
-                habitsBox.addView(problem(it.message ?: "Couldn't save that."), 0)
-            }
+            addView(dayCircle(day, on, habit.color, day == today))
+            setOnClickListener { toggle(habit, day, { draw() }) { habitsBox.addView(problem(it), 0) } }
         }
     }
 }
-
 /** Reads what the server sends for Screen Time into the plain types the sums use. */
 object ScreenData {
     fun uses(data: JSONObject): List<Use> {

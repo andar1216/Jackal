@@ -8,6 +8,7 @@ import org.json.JSONObject
 /** Finances: net worth and accounts, what the month brought in and spent, where it went, and the latest transactions. */
 class FinanceScreen(activity: Activity, store: Store) : Screen(activity, store) {
     override val title = "Finances"
+    override val icon = R.drawable.ic_finances
 
     private val content = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
     private var month = LocalDate.now().toString().take(7)

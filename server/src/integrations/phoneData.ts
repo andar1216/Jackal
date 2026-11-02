@@ -3,8 +3,8 @@ import { z } from 'zod'
 import { catchUp, toggleLog } from '../lib/autoMark.js'
 import { requireId } from '../lib/crud.js'
 import { HttpError } from '../lib/errors.js'
-import { ManualAccount, PhoneDevice, Skill, Transaction } from '../models.js'
-import { dateString } from '../validation.js'
+import { ManualAccount, Meal, PhoneDevice, Skill, Transaction, Workout } from '../models.js'
+import { dateString, mealSchema, skillSchema, workoutSchema } from '../validation.js'
 import { plaidAccounts } from './plaid.js'
 import { saveCategory, screenTimeData } from './screenTime.js'
 
@@ -40,6 +40,67 @@ phoneDataRouter.post('/habits/:id/toggle/:date', async (req, res) => {
   res.json(habit)
 })
 
+// A new habit, started today (the phone's today).
+phoneDataRouter.post('/habits', async (req, res) => {
+  const { name, kind, color } = skillSchema.pick({ name: true, kind: true, color: true }).parse(req.body)
+  const habit = await Skill.create({ name, kind, color, startDate: todayOf(req.query), userId: ownerOf(res) })
+  res.status(201).json(habit)
+})
+
+// Renames a habit, or puts it away (archived) and brings it back.
+phoneDataRouter.patch('/habits/:id', async (req, res) => {
+  const changes = skillSchema.pick({ name: true, archived: true }).partial().parse(req.body)
+  const habit = await Skill.findOne({ _id: requireId(req.params.id), userId: ownerOf(res) })
+  if (!habit) throw new HttpError(404, 'Not found')
+  habit.set(changes)
+  await habit.save()
+  res.json(habit)
+})
+
+phoneDataRouter.delete('/habits/:id', async (req, res) => {
+  const gone = await Skill.deleteOne({ _id: requireId(req.params.id), userId: ownerOf(res) })
+  if (gone.deletedCount === 0) throw new HttpError(404, 'Not found')
+  res.status(204).end()
+})
+
+/* ---------- Diet and Fitness ---------- */
+
+const span = z.object({ from: dateString.optional(), to: dateString.optional() })
+
+/** The days asked for with ?from= and ?to=, or the last 30 days when none were. */
+const daysAsked = (query: unknown) => {
+  const { from, to } = span.parse(query)
+  const fallback = new Date(Date.now() - 30 * 24 * 3600 * 1000).toLocaleDateString('en-CA')
+  return { $gte: from ?? fallback, ...(to ? { $lte: to } : {}) }
+}
+
+phoneDataRouter.get('/meals', async (req, res) => {
+  res.json(await Meal.find({ userId: ownerOf(res), date: daysAsked(req.query) }).sort({ date: -1, createdAt: 1 }))
+})
+
+phoneDataRouter.post('/meals', async (req, res) => {
+  res.status(201).json(await Meal.create({ ...mealSchema.parse(req.body), userId: ownerOf(res) }))
+})
+
+phoneDataRouter.delete('/meals/:id', async (req, res) => {
+  const gone = await Meal.deleteOne({ _id: requireId(req.params.id), userId: ownerOf(res) })
+  if (gone.deletedCount === 0) throw new HttpError(404, 'Not found')
+  res.status(204).end()
+})
+
+phoneDataRouter.get('/workouts', async (req, res) => {
+  res.json(await Workout.find({ userId: ownerOf(res), date: daysAsked(req.query) }).sort({ date: -1, createdAt: 1 }))
+})
+
+phoneDataRouter.post('/workouts', async (req, res) => {
+  res.status(201).json(await Workout.create({ ...workoutSchema.parse(req.body), userId: ownerOf(res) }))
+})
+
+phoneDataRouter.delete('/workouts/:id', async (req, res) => {
+  const gone = await Workout.deleteOne({ _id: requireId(req.params.id), userId: ownerOf(res) })
+  if (gone.deletedCount === 0) throw new HttpError(404, 'Not found')
+  res.status(204).end()
+})
 /* ---------- Screen Time ---------- */
 
 const DAYS_FOR_PHONE = 45 // the phone's longest "last 30 days" plus some room, and it keeps the answer small

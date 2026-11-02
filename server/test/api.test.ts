@@ -1422,6 +1422,39 @@ describe('phone', () => {
     assert.equal((await asPhone('GET', '/app/finance?month=nope')).status, 400)
   })
 
+  it('lets the phone add, put away and delete habits, and log meals and workouts the website shows', async () => {
+    // Habits
+    const made = await asPhone('POST', '/app/habits?today=2026-10-31', { name: 'Stretch', kind: 'performing' })
+    assert.equal(made.status, 201)
+    assert.equal(made.body.startDate, '2026-10-31', "starts on the phone's today")
+    assert.equal((await asPhone('POST', '/app/habits', { name: '' })).status, 400)
+    assert.equal((await asPhone('PATCH', `/app/habits/${made.body.id}`, { archived: true })).body.archived, true)
+    assert.equal((await call('GET', `/skills/${made.body.id}`)).body.archived, true, 'the website sees it put away')
+    assert.equal((await asPhone('PATCH', `/app/habits/${made.body.id}`, { startDate: '2020-01-01' })).status, 400, 'only the name and archiving can change')
+    assert.equal((await asPhone('DELETE', `/app/habits/${made.body.id}`)).status, 204)
+    assert.equal((await asPhone('DELETE', `/app/habits/${made.body.id}`)).status, 404)
+
+    // Meals
+    const meal = await asPhone('POST', '/app/meals', { name: 'Eggs', calories: 300, protein: 20, date: '2031-04-01' })
+    assert.equal(meal.status, 201)
+    assert.equal((await asPhone('POST', '/app/meals', { name: 'Bad', calories: -5 })).status, 400)
+    const meals = (await asPhone('GET', '/app/meals?from=2031-04-01&to=2031-04-01')).body
+    assert.deepEqual(meals.map((m: { name: string }) => m.name), ['Eggs'])
+    assert.equal((await call('GET', '/meals?from=2031-04-01&to=2031-04-01')).body.length, 1, 'the website has the same meal')
+    assert.equal((await asPhone('GET', '/app/meals?from=2031-04-02')).body.some((m: { name: string }) => m.name === 'Eggs'), false)
+    assert.equal((await asPhone('DELETE', `/app/meals/${meal.body.id}`)).status, 204)
+    assert.deepEqual((await asPhone('GET', '/app/meals?from=2031-04-01&to=2031-04-01')).body, [])
+
+    // Workouts
+    const run = await asPhone('POST', '/app/workouts', { type: 'Run', durationMin: 30, caloriesBurned: 250, date: '2031-04-01' })
+    assert.equal(run.status, 201)
+    assert.equal((await asPhone('POST', '/app/workouts', { type: 'Run', durationMin: 0 })).status, 400)
+    assert.deepEqual((await asPhone('GET', '/app/workouts?from=2031-04-01&to=2031-04-01')).body.map((w: { type: string }) => w.type), ['Run'])
+    assert.equal((await asPhone('DELETE', `/app/workouts/${run.body.id}`)).status, 204)
+
+    for (const path of ['/app/meals', '/app/workouts']) assert.equal((await asPhone('GET', path, undefined, 'wrong')).status, 401)
+  })
+
   it("does not show one person's phone to another", async () => {
     const other = makeClient()
     assert.equal((await other('POST', '/auth/register', { email: 'phone-other@example.com', name: 'Other', password: PASSWORD })).status, 201)
