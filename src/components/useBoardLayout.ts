@@ -4,7 +4,7 @@ import type { PanelState } from '../types'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
-const SIZES = ['third', 'half', 'full']
+const SIZES = ['third', 'half', 'threeQuarters', 'full']
 const cacheKey = (page: string) => `valkyrie.layout.${page}`
 
 const isPanelState = (x: unknown): x is PanelState =>
@@ -14,11 +14,15 @@ const isPanelState = (x: unknown): x is PanelState =>
   SIZES.includes((x as PanelState).size) &&
   typeof (x as PanelState).hidden === 'boolean'
 
+// Only these things are kept: a layout saved by an earlier version may carry others, which the server wouldn't take.
+const plain = (items: PanelState[]): PanelState[] =>
+  items.map(({ id, size, hidden, height }) => (typeof height === 'number' ? { id, size, hidden, height } : { id, size, hidden }))
+
 // The last layout is also kept in this browser, so the page doesn't jump around while the saved one loads.
 const readCache = (page: string): PanelState[] => {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(cacheKey(page)) ?? 'null')
-    return Array.isArray(value) ? value.filter(isPanelState) : []
+    return Array.isArray(value) ? plain(value.filter(isPanelState)) : []
   } catch {
     return []
   }
@@ -58,7 +62,7 @@ export function useBoardLayout(page: string, defaults: PanelState[]) {
       .list()
       .then((all) => {
         if (cancelled || changed.current) return
-        const items = all[page] ?? []
+        const items = plain((all[page] ?? []).filter(isPanelState))
         setSaved(items)
         writeCache(page, items)
       })

@@ -368,8 +368,9 @@ const boardLayoutSchema = ownedSchema({
       new mongoose.Schema(
         {
           id: { type: String, required: true },
-          size: { type: String, enum: ['third', 'half', 'full'], required: true },
+          size: { type: String, enum: ['third', 'half', 'threeQuarters', 'full'], required: true },
           hidden: { type: Boolean, default: false },
+          height: { type: Number }, // pixels, when made taller than its contents need; absent means as tall as they are
         },
         { _id: false },
       ),

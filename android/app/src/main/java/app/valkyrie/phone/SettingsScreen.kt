@@ -188,6 +188,17 @@ class SettingsScreen(activity: Activity, store: Store, private val onThemeChange
                 ),
             ),
         )
+        themeBox.addView(
+            panel(
+                "Boards",
+                text("Hold a card on any screen and drag it where you want it. It stays there, and comes back after a reinstall.", color = MUTED),
+                space(8),
+                button("Put every board back in its first place") {
+                    boards.reset()
+                    drawTheme()
+                },
+            ),
+        )
     }
 
     private fun chooseTheme(theme: String) {

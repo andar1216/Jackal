@@ -81,6 +81,7 @@ class FinanceScreen(activity: Activity, store: Store) : Screen(activity, store) 
             panel(
                 FinanceMath.monthName(month),
                 figures("Income" to FinanceMath.money(income), "Spent" to FinanceMath.money(spent), "Left" to FinanceMath.money(income - spent)),
+                id = "month",
             ),
         )
 
@@ -129,5 +130,6 @@ class FinanceScreen(activity: Activity, store: Store) : Screen(activity, store) 
                     }.toTypedArray(),
             ),
         )
+        arrange("phone-finances", content)
     }
 }

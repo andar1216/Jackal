@@ -82,13 +82,14 @@ class ScreenTimeScreen(activity: Activity, store: Store) : Screen(activity, stor
             card(
                 figures("Screen time" to if (appSeconds > 0) duration(appSeconds) else "0m", "Unlocks" to unlocks.toString(), "Notifications" to notifications.toString()),
                 text(if (device == null) "Phones and computers together" else device, 12f, color = MUTED),
-            ),
+            ).board("Totals"),
         )
 
         content.addView(mostUsedPanel(ranked, categorize))
         content.addView(categoryPanel(ranked))
         if (notified.isNotEmpty()) content.addView(notificationsPanel(notified, notifications))
         content.addView(historyPanel(uses, counts, device, from, today))
+        arrange("phone-screen-time", content)
     }
 
     /* ---------- Most used: apps and websites together ---------- */

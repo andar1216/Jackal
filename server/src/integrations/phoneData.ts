@@ -3,8 +3,8 @@ import { z } from 'zod'
 import { catchUp, toggleLog } from '../lib/autoMark.js'
 import { requireId } from '../lib/crud.js'
 import { HttpError } from '../lib/errors.js'
-import { ManualAccount, Meal, PhoneDevice, Skill, Transaction, Workout } from '../models.js'
-import { dateString, mealSchema, skillSchema, workoutSchema } from '../validation.js'
+import { BoardLayout, ManualAccount, Meal, PhoneDevice, Skill, Transaction, Workout } from '../models.js'
+import { dateString, layoutBody, layoutPageParam, mealSchema, skillSchema, workoutSchema } from '../validation.js'
 import { crunchData, syncCrunch } from './crunch.js'
 import { integrationList } from './list.js'
 import { plaidAccounts } from './plaid.js'
@@ -113,6 +113,29 @@ phoneDataRouter.get('/fitness', async (_req, res) => {
 // Refreshes Crunch from Crunch's site, like Sync now on the website.
 phoneDataRouter.post('/fitness/crunch/sync', async (_req, res) => {
   res.json(await syncCrunch(ownerOf(res)))
+})
+
+/* ---------- Where the phone's boards sit ---------- */
+
+// The phone keeps its own arrangement (a page called "phone-..."), apart from the website's pages of the same name.
+const phonePage = layoutPageParam.refine((page) => page.startsWith('phone-'), "A phone page's name starts with phone-")
+
+phoneDataRouter.get('/layouts', async (_req, res) => {
+  const saved = await BoardLayout.find({ userId: ownerOf(res), page: /^phone-/ }).lean()
+  res.json(Object.fromEntries(saved.map((l) => [l.page, l.items])))
+})
+
+phoneDataRouter.put('/layouts/:page', async (req, res) => {
+  const page = phonePage.parse(req.params.page)
+  const { items } = layoutBody.parse(req.body)
+  await BoardLayout.updateOne({ userId: ownerOf(res), page }, { $set: { items } }, { upsert: true })
+  res.status(204).end()
+})
+
+// Puts every phone page back the way it came.
+phoneDataRouter.delete('/layouts', async (_req, res) => {
+  await BoardLayout.deleteMany({ userId: ownerOf(res), page: /^phone-/ })
+  res.status(204).end()
 })
 
 /* ---------- Screen Time ---------- */

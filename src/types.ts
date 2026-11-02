@@ -195,7 +195,7 @@ export type User = {
   name: string
 }
 
-export type PanelSize = 'third' | 'half' | 'full'
+export type PanelSize = 'third' | 'half' | 'threeQuarters' | 'full'
 
-/** How one panel sits on a page: how wide it is and whether it is put away. The list's order is the panels' order. */
-export type PanelState = { id: string; size: PanelSize; hidden: boolean }
+/** How one panel sits on a page: how wide it is, how tall (in pixels, only when the person made it taller than its contents need) and whether it is put away. The list's order is the panels' order. */
+export type PanelState = { id: string; size: PanelSize; hidden: boolean; height?: number }

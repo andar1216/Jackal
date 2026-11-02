@@ -191,3 +191,25 @@ object CrunchMath {
             java.time.LocalDateTime.parse(text)
         }
 }
+
+/** The order of the boards (cards) on a screen. Plain Kotlin, so it is tested without a phone. */
+object BoardMath {
+    /** The boards on a screen now, in the saved order. Ones with no saved place (new ones) come last, as they were. */
+    fun arranged(present: List<String>, saved: List<String>): List<String> {
+        val here = present.toSet()
+        val first = saved.filter { it in here }.distinct()
+        return first + present.filter { it !in first }
+    }
+
+    /** What to save after a move: the order on screen now, then any saved boards that aren't on screen at the moment. */
+    fun merged(saved: List<String>, onScreen: List<String>): List<String> {
+        val here = onScreen.toSet()
+        return onScreen + saved.filter { it !in here }.distinct()
+    }
+
+    /** Reads a saved order ("[\"a\",\"b\"]"). Anything unreadable is no order at all. */
+    fun parse(json: String?): List<String> = runCatching {
+        val list = org.json.JSONArray(json ?: "[]")
+        List(list.length()) { list.getString(it) }
+    }.getOrDefault(emptyList())
+}

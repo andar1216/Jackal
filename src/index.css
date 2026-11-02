@@ -748,7 +748,7 @@ button:disabled {
 /* A page's movable panels. */
 .board {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 16px;
   align-items: start;
 }
@@ -758,11 +758,15 @@ button:disabled {
 }
 
 .board-item.third {
-  grid-column: span 2;
+  grid-column: span 4;
 }
 
 .board-item.half {
-  grid-column: span 3;
+  grid-column: span 6;
+}
+
+.board-item.threeQuarters {
+  grid-column: span 9;
 }
 
 .board-item.full {
@@ -818,11 +822,8 @@ button:disabled {
   white-space: nowrap;
 }
 
-.board-bar-actions {
+.board-bar button {
   margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .widget {
@@ -847,14 +848,6 @@ button:disabled {
   font-size: 0.85rem;
 }
 
-
-.drag-handle {
-  color: var(--muted);
-  padding: 0 4px;
-  border-radius: 4px;
-  font-size: 1.1rem;
-  line-height: 1;
-}
 
 .widget-body {
   padding: 16px;
@@ -1055,11 +1048,167 @@ button:disabled {
   opacity: 0.35;
 }
 
+/* Moving and resizing a panel without customizing: once it is clicked, the control to put it away (a garbage can) sits low inside it. */
+.board-item {
+  position: relative;
+}
+
+.board-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 5;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+  user-select: none;
+}
+
+.board-item.selected > .board-controls,
+.board-item.resizing > .board-controls {
+  display: flex;
+}
+
+.board-item.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+.board-item.resizing {
+  outline: 2px dashed var(--accent);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+/* Any side or corner stretches it. The strips are invisible: only the pointer changes. */
+.board-edge {
+  position: absolute;
+  z-index: 4;
+  touch-action: none;
+}
+
+.board-edge.edge-n,
+.board-edge.edge-s {
+  left: 10px;
+  right: 10px;
+  height: 10px;
+  cursor: ns-resize;
+}
+
+.board-edge.edge-n { top: -5px; }
+.board-edge.edge-s { bottom: -5px; }
+
+.board-edge.edge-e,
+.board-edge.edge-w {
+  top: 10px;
+  bottom: 10px;
+  width: 10px;
+  cursor: ew-resize;
+}
+
+.board-edge.edge-e { right: -5px; }
+.board-edge.edge-w { left: -5px; }
+
+.board-edge.edge-ne,
+.board-edge.edge-nw,
+.board-edge.edge-se,
+.board-edge.edge-sw {
+  width: 16px;
+  height: 16px;
+  z-index: 5;
+}
+
+.board-edge.edge-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+.board-edge.edge-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.board-edge.edge-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+.board-edge.edge-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+
+/* Made taller than its contents need: the panel stretches to fill the height. */
+.board-item.tall {
+  display: flex;
+  flex-direction: column;
+}
+
+.board-item.tall > .board-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.board-item.tall > .board-content > * {
+  flex: 1;
+}
+
+.board-item {
+  cursor: grab;
+}
+
+.board-item a,
+.board-item button,
+.board-item input,
+.board-item select,
+.board-item textarea,
+.board-item label {
+  cursor: pointer;
+}
+
+.board-item input,
+.board-item textarea {
+  cursor: text;
+}
+
+.board-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+.board-item.dragging {
+  cursor: grabbing;
+}
+/* Where a dragged panel would land: a bar on the side it would go. */
+.board-item.drop-before-x {
+  box-shadow: -8px 0 0 -2px var(--accent);
+}
+
+.board-item.drop-after-x {
+  box-shadow: 8px 0 0 -2px var(--accent);
+}
+
+.board-item.drop-before-y {
+  box-shadow: 0 -8px 0 -2px var(--accent);
+}
+
+.board-item.drop-after-y {
+  box-shadow: 0 8px 0 -2px var(--accent);
+}
+
+.board-dropzone {
+  margin-top: 16px;
+  padding: 18px;
+  text-align: center;
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  color: var(--accent);
+}
+
+@media (max-width: 800px) {
+  .board-edge {
+    display: none !important;
+  }
+}
 /* ---------- Responsive ---------- */
 
 @media (max-width: 800px) {
   .board-item.third,
-  .board-item.half {
+  .board-item.half,
+  .board-item.threeQuarters {
     grid-column: 1 / -1;
   }
 

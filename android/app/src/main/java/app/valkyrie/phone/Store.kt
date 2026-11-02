@@ -53,6 +53,16 @@ class Store(context: Context) {
         get() = prefs.getString("theme", "system") ?: "system"
         set(value) = prefs.edit().putString("theme", value).apply()
 
+    /** Where the person put the boards on each screen: page name to a list of board names, as JSON. */
+    var layouts: String
+        get() = prefs.getString("layouts", "{}") ?: "{}"
+        set(value) = prefs.edit().putString("layouts", value).apply()
+
+    /** Pages whose new order hasn't reached the server yet. */
+    var layoutsUnsent: Set<String>
+        get() = prefs.getStringSet("layoutsUnsent", emptySet()) ?: emptySet()
+        set(value) = prefs.edit().putStringSet("layoutsUnsent", value).apply()
+
     val paired get() = !token.isNullOrBlank()
 
     fun forgetPairing() {

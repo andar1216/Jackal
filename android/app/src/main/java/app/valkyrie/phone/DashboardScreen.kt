@@ -106,10 +106,11 @@ class DashboardScreen(activity: Activity, store: Store) : HabitScreen(activity, 
                 setPadding(0, dp(8), 0, 0)
                 days.forEach { addView(dayButton(habit, it, today)) }
             }
-            card(title, dayRow)
+            card(title, dayRow).board("habit:${habit.id}")
         }
         habitsBox.addView(text("Habits", 17f, bold = true).apply { setPadding(dp(4), dp(4), 0, dp(8)) })
         views.forEach { habitsBox.addView(it) }
+        arrange("phone-habits", habitsBox)
     }
 
     /** One of the last seven days: a filled circle when done. Tapping it puts the day on or off. */

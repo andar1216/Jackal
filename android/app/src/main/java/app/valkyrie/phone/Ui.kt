@@ -1,11 +1,14 @@
 package app.valkyrie.phone
 
 import android.app.Activity
+import android.content.ClipData
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.view.DragEvent
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import java.time.LocalDate
@@ -36,17 +39,16 @@ abstract class Screen(val activity: Activity, val store: Store) {
         visibility = View.GONE
     }
 
+    private val scroll = ScrollView(activity).apply {
+        isFillViewport = true
+        addView(column)
+    }
+
     val root: View = LinearLayout(activity).apply {
         orientation = LinearLayout.VERTICAL
         setBackgroundColor(Palette.background)
         addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        addView(
-            ScrollView(activity).apply {
-                isFillViewport = true
-                addView(column)
-            },
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f),
-        )
+        addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
     }
 
     /** Called each time the screen comes into view, or the app is opened again. Reload what it shows. */
@@ -155,7 +157,8 @@ abstract class Screen(val activity: Activity, val store: Store) {
     }
 
     /** A card title and then what goes in it. */
-    protected fun panel(title: String, vararg children: View) = card(text(title, 17f, bold = true).apply { setPadding(0, 0, 0, dp(6)) }, *children)
+    protected fun panel(title: String, vararg children: View, id: String = title) =
+        card(text(title, 17f, bold = true).apply { setPadding(0, 0, 0, dp(6)) }, *children).board(id)
 
     /** Two or three small figures side by side. */
     protected fun figures(vararg pairs: Pair<String, String>) = row(
@@ -184,6 +187,115 @@ abstract class Screen(val activity: Activity, val store: Store) {
 
     protected fun problem(message: String) = card(text(message, 14f, color = BAD))
 
+    /* ---------- Boards: hold one and drag it where you want it ---------- */
+
+    protected val boards = Boards(store)
+    private var dragged: View? = null
+    private var dragY = 0f
+    private var edgeStep = 0
+    private var scrolling = false
+
+    /** Marks a card as a board that can be moved. `id` stays the same for good: the saved order remembers it. */
+    protected fun <V : View> V.board(id: String): V {
+        tag = id
+        return this
+    }
+
+    /**
+     * Puts the boards in `container` (the views marked with board()) in the order the person left them, and lets each be
+     * held down and dragged to a new place. Where it lands is saved under `page`. Other views stay where they are.
+     * Call it each time the container has been filled.
+     */
+    protected fun arrange(page: String, container: LinearLayout) {
+        val slots = (0 until container.childCount).filter { container.getChildAt(it).tag is String }
+        val views = slots.map { container.getChildAt(it) }
+        val ids = views.map { it.tag as String }
+        if (views.isEmpty() || ids.toSet().size != ids.size) return
+
+        val byId = views.associateBy { it.tag as String }
+        views.forEach { container.removeView(it) }
+        BoardMath.arranged(ids, boards.order(page)).forEachIndexed { i, id -> container.addView(byId.getValue(id), slots[i]) }
+
+        if (views.size < 2) return
+        views.forEach { view ->
+            view.setOnLongClickListener {
+                dragged = view
+                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                view.startDragAndDrop(ClipData.newPlainText("board", view.tag as String), View.DragShadowBuilder(view), DRAG_MARK, 0)
+                view.alpha = 0.35f // the board being moved fades, and its picture follows the finger
+                true
+            }
+        }
+        container.setOnDragListener { _, event ->
+            when (event.action) {
+                DragEvent.ACTION_DRAG_STARTED -> event.localState === DRAG_MARK && dragged?.parent === container
+                DragEvent.ACTION_DRAG_LOCATION -> {
+                    dragY = event.y
+                    reorder(container)
+                    edgeScroll(container)
+                    true
+                }
+                DragEvent.ACTION_DROP -> true
+                DragEvent.ACTION_DRAG_ENDED -> {
+                    val view = dragged
+                    if (view?.parent === container) {
+                        view.alpha = 1f
+                        edgeStep = 0
+                        boards.save(page, (0 until container.childCount).mapNotNull { container.getChildAt(it).tag as? String })
+                    }
+                    dragged = null
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    /** Moves the held board past the one under the finger once the finger is over that one's middle. */
+    private fun reorder(container: LinearLayout) {
+        val held = dragged ?: return
+        val from = container.indexOfChild(held)
+        for (i in 0 until container.childCount) {
+            val other = container.getChildAt(i)
+            if (other === held || other.tag !is String || dragY < other.top || dragY > other.bottom) continue
+            val middle = (other.top + other.bottom) / 2
+            if ((i > from && dragY > middle) || (i < from && dragY < middle)) {
+                container.removeView(held)
+                container.addView(held, i)
+            }
+            return
+        }
+    }
+
+    /** Near the top or bottom of the screen the page scrolls by itself, so a board can be taken a long way. */
+    private fun edgeScroll(container: LinearLayout) {
+        val at = IntArray(2)
+        val within = IntArray(2)
+        container.getLocationOnScreen(at)
+        scroll.getLocationOnScreen(within)
+        val y = at[1] + dragY - within[1]
+        val edge = dp(110)
+        edgeStep = when {
+            y < edge -> -dp(12)
+            y > scroll.height - edge -> dp(12)
+            else -> 0
+        }
+        if (edgeStep == 0 || scrolling) return
+        scrolling = true
+        container.post(object : Runnable {
+            override fun run() {
+                if (dragged == null || edgeStep == 0) {
+                    scrolling = false
+                    return
+                }
+                val before = scroll.scrollY
+                scroll.scrollBy(0, edgeStep)
+                dragY += scroll.scrollY - before // the page moved under the finger
+                reorder(container)
+                container.postDelayed(this, 16)
+            }
+        })
+    }
     /** A circle for one day: filled when done, outlined when not (and in the habit's colour for today). */
     protected fun dayCircle(day: LocalDate, on: Boolean, color: Int, isToday: Boolean, size: Int = 34) = TextView(activity).apply {
         text = day.dayOfMonth.toString()
@@ -201,6 +313,8 @@ abstract class Screen(val activity: Activity, val store: Store) {
     }
 
     companion object {
+        private val DRAG_MARK = Any()
+
         val ACCENT get() = Palette.accent
         val INK get() = Palette.ink
         val MUTED get() = Palette.muted

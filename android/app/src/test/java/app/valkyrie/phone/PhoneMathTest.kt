@@ -146,4 +146,23 @@ class PhoneMathTest {
         assertEquals(java.time.LocalDateTime.of(2026, 10, 30, 17, 5), CrunchMath.time("2026-10-30T17:05", newYork))
         assertEquals(java.time.LocalDateTime.of(2026, 10, 30, 18, 0), CrunchMath.time("2026-10-30T22:00:00.000Z", newYork))
     }
+
+    @Test
+    fun boardsFollowTheSavedOrderAndNewOnesComeLast() {
+        assertEquals(listOf("b", "a", "c"), BoardMath.arranged(listOf("a", "b", "c"), listOf("b", "a")))
+        assertEquals("a saved board that is not on screen is skipped", listOf("c", "a"), BoardMath.arranged(listOf("a", "c"), listOf("c", "gone", "a")))
+        assertEquals(listOf("a", "b"), BoardMath.arranged(listOf("a", "b"), emptyList()))
+        assertEquals(listOf("a", "b"), BoardMath.arranged(listOf("a", "b"), listOf("a", "a", "b")))
+    }
+
+    @Test
+    fun aMoveKeepsTheSavedPlacesOfBoardsNotOnScreen() {
+        assertEquals(listOf("c", "a", "z"), BoardMath.merged(listOf("a", "z", "c"), listOf("c", "a")))
+        assertEquals(listOf("b", "a"), BoardMath.merged(emptyList(), listOf("b", "a")))
+    }
+
+    @Test
+    fun anUnreadableSavedOrderIsNoOrder() {
+        assertEquals(emptyList<String>(), BoardMath.parse(null))
+    }
 }

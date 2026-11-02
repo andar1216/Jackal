@@ -419,6 +419,13 @@ describe('page layouts', () => {
     assert.equal((await call('PUT', '/layouts/finance', { items })).status, 200)
     assert.deepEqual((await call('GET', '/layouts')).body, { finance: items })
 
+    // A panel made taller keeps its height; one left alone has none.
+    const tall = [{ id: 'networth', size: 'half', hidden: false, height: 420 }, { id: 'budgets', size: 'threeQuarters', hidden: false }]
+    await call('PUT', '/layouts/finance', { items: tall })
+    assert.deepEqual((await call('GET', '/layouts')).body.finance, tall)
+    assert.equal((await call('PUT', '/layouts/finance', { items: [{ id: 'a', size: 'full', hidden: false, height: 5 }] })).status, 400)
+    await call('PUT', '/layouts/finance', { items })
+
     const swapped = [...items].reverse()
     await call('PUT', '/layouts/finance', { items: swapped })
     assert.deepEqual((await call('GET', '/layouts')).body.finance, swapped)
@@ -1462,6 +1469,27 @@ describe('phone', () => {
     assert.deepEqual([fitness.crunch.checkIns, fitness.crunch.classes, fitness.crunch.payments], [[], [], []])
     assert.ok([409, 503].includes((await asPhone('POST', '/app/fitness/crunch/sync')).status), 'nothing to sync until Crunch is connected')
     assert.equal((await asPhone('POST', '/app/fitness/crunch/sync', undefined, 'wrong')).status, 401)
+  })
+
+  it("keeps where the phone's boards were put, apart from the website's", async () => {
+    const items = [{ id: 'habit:b', size: 'full', hidden: false }, { id: 'habit:a', size: 'full', hidden: false }]
+    assert.equal((await asPhone('GET', '/app/layouts', undefined, 'wrong')).status, 401)
+    assert.equal((await asPhone('PUT', '/app/layouts/phone-habits', { items })).status, 204)
+    assert.deepEqual((await asPhone('GET', '/app/layouts')).body['phone-habits'], items)
+    assert.deepEqual(Object.keys((await call('GET', '/layouts')).body).filter((p) => p.startsWith('phone-')), ['phone-habits'], 'it is saved with the account')
+
+    items.reverse()
+    assert.equal((await asPhone('PUT', '/app/layouts/phone-habits', { items })).status, 204)
+    assert.deepEqual((await asPhone('GET', '/app/layouts')).body['phone-habits'].map((i: { id: string }) => i.id), ['habit:a', 'habit:b'], 'saving again replaces it')
+
+    assert.equal((await asPhone('PUT', '/app/layouts/habits', { items })).status, 400, "the website's pages are not the phone's to change")
+    assert.equal((await asPhone('PUT', '/app/layouts/phone-habits', { items: [items[0], items[0]] })).status, 400)
+
+    await call('PUT', '/layouts/diet', { items: [{ id: 'eaten', size: 'half', hidden: false }] })
+    assert.equal((await asPhone('DELETE', '/app/layouts')).status, 204)
+    assert.deepEqual(await (await asPhone('GET', '/app/layouts')).body, {})
+    assert.equal(Object.keys((await call('GET', '/layouts')).body).includes('diet'), true, "putting the phone's boards back leaves the website's alone")
+    await call('DELETE', '/layouts/diet')
   })
 
   it("does not show one person's phone to another", async () => {

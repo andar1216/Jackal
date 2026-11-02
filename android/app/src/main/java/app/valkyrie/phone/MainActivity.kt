@@ -60,6 +60,8 @@ class MainActivity : Activity() {
         current.show()
         // Opening the app is a good moment to catch up.
         if (store.paired && UsageReader.hasAccess(this)) settings.syncInBackground()
+        // Boards moved on another phone (or the website's account) arrive here.
+        Boards(store).refresh { runOnUiThread { current.show() } }
     }
 
     @Deprecated("Back closes the menu first")

@@ -68,7 +68,7 @@ class DietScreen(activity: Activity, store: Store) : Screen(activity, store) {
                 figures("Eaten (goal $CALORIE_GOAL)" to "$eaten kcal", "Left today" to "$left kcal"),
                 bar(eaten.toLong(), CALORIE_GOAL.toLong(), if (eaten > CALORIE_GOAL) BAD else ACCENT),
                 figures("Protein" to "${todays.sumOf { it.protein }} g", "Carbs" to "${todays.sumOf { it.carbs }} g", "Fat" to "${todays.sumOf { it.fat }} g"),
-            ),
+            ).board("Today"),
         )
 
         content.addView(addCard())
@@ -90,6 +90,7 @@ class DietScreen(activity: Activity, store: Store) : Screen(activity, store) {
                 }.toTypedArray(),
             ),
         )
+        arrange("phone-diet", content)
     }
 
     private fun addCard(): View = panel(

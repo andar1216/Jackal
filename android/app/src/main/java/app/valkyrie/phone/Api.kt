@@ -147,6 +147,25 @@ object Api {
         request(server, "POST", "/app/fitness/crunch/sync", token, JSONObject(), readTimeoutMs = 120_000)
     }
 
+    /** Where the phone's boards were put, from any phone paired with this account: page to list of board names. */
+    fun layouts(server: String, token: String): Map<String, List<String>> {
+        val all = JSONObject(request(server, "GET", "/app/layouts", token))
+        return all.keys().asSequence().associateWith { page ->
+            val items = all.getJSONArray(page)
+            List(items.length()) { items.getJSONObject(it).getString("id") }
+        }
+    }
+
+    fun saveLayout(server: String, token: String, page: String, ids: List<String>) {
+        val items = JSONArray(ids.map { JSONObject().put("id", it).put("size", "full").put("hidden", false) })
+        request(server, "PUT", "/app/layouts/$page", token, JSONObject().put("items", items))
+    }
+
+    /** Puts every screen's boards back in the order they came in. */
+    fun resetLayouts(server: String, token: String) {
+        request(server, "DELETE", "/app/layouts", token)
+    }
+
     fun screenTime(server: String, token: String): JSONObject = JSONObject(request(server, "GET", "/app/screen-time", token))
 
     /** Files an app or website under `category`, or back to automatic with null. */

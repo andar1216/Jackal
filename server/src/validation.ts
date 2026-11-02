@@ -56,7 +56,7 @@ export const layoutPageParam = z.string().trim().regex(/^[a-z][a-z0-9-]{0,39}$/)
 
 export const layoutBody = z.strictObject({
   items: z
-    .array(z.strictObject({ id: layoutId, size: z.enum(['third', 'half', 'full']), hidden: z.boolean() }))
+    .array(z.strictObject({ id: layoutId, size: z.enum(['third', 'half', 'threeQuarters', 'full']), hidden: z.boolean(), height: z.number().int().min(60).max(1200).optional() }))
     .max(50)
     .refine((items) => new Set(items.map((i) => i.id)).size === items.length, 'Each panel can be listed once.'),
 })

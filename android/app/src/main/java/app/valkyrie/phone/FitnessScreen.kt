@@ -75,7 +75,7 @@ class FitnessScreen(activity: Activity, store: Store) : Screen(activity, store) 
                 figures("Eaten (goal $CALORIE_GOAL)" to "$eaten kcal", "Burned" to "$out kcal"),
                 bar(eaten.toLong(), CALORIE_GOAL.toLong(), if (eaten > CALORIE_GOAL) BAD else ACCENT),
                 figures("Remaining" to "$left kcal", "Workout time" to "${todays.sumOf { it.minutes }} min"),
-            ),
+            ).board("Today"),
         )
 
         content.addView(panel("Add a workout", type, minutes, burned, space(6), button("Add", primary = true) { add() }))
@@ -106,6 +106,7 @@ class FitnessScreen(activity: Activity, store: Store) : Screen(activity, store) 
 
         if (crunch != null) crunchPanels(crunch, checkIns, today)
         content.addView(connectorsPanel())
+        arrange("phone-fitness", content)
     }
 
     /* ---------- Crunch ---------- */

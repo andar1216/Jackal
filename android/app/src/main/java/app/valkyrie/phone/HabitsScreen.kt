@@ -59,6 +59,7 @@ class HabitsScreen(activity: Activity, store: Store) : HabitScreen(activity, sto
             content.addView(button(if (showArchived) "Hide archived (${archived.size})" else "Show archived (${archived.size})") { showArchived = !showArchived; draw() })
             if (showArchived) archived.forEach { content.addView(archivedCard(it)) }
         }
+        arrange("phone-habits", content)
     }
 
     /* ---------- Adding ---------- */
@@ -68,7 +69,7 @@ class HabitsScreen(activity: Activity, store: Store) : HabitScreen(activity, sto
             chip("Doing something", !eliminating) { eliminating = false; draw() },
             chip("Giving something up", eliminating) { eliminating = true; draw() },
         )
-        return panel("Add a habit", nameField, space(6), kind, space(6), button("Add", primary = true) { add() })
+        return panel("Add a habit", nameField, space(6), kind, space(6), button("Add", primary = true) { add() }, id = "add")
     }
 
     private fun add() {
@@ -118,7 +119,7 @@ class HabitsScreen(activity: Activity, store: Store) : HabitScreen(activity, sto
             button("Rename") { rename(habit) },
             button("Archive") { setArchived(habit, true) },
         )
-        return card(head, facts, grid, space(6), actions)
+        return card(head, facts, grid, space(6), actions).board("habit:${habit.id}")
     }
 
     private fun archivedCard(habit: Habit): View = card(
