@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Activity, CircleGauge, Landmark, Smartphone, Soup } from 'lucide-react'
+import { Activity, CircleGauge, Flag, Landmark, Smartphone, Soup } from 'lucide-react'
 import { subDays } from 'date-fns'
 import { CgPerformance } from 'react-icons/cg'
 import { useBoardLayout } from './components/useBoardLayout'
@@ -11,6 +11,7 @@ import DashboardPage from './features/dashboard/DashboardPage'
 import DietPage from './features/diet/DietPage'
 import FinancePage from './features/finance/FinancePage'
 import FitnessPage from './features/fitness/FitnessPage'
+import GoalsPage from './features/goals/GoalsPage'
 import HabitsPage from './features/habits/HabitsPage'
 import ScreenTimePage from './features/screentime/ScreenTimePage'
 import StreaksPage from './features/streaks/StreaksPage'
@@ -28,6 +29,7 @@ const ICON_SIZE = 18
 const PAGES: { id: string; label: string; icon: ReactNode; hidden?: boolean }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <CircleGauge size={ICON_SIZE} /> },
   { id: 'habits', label: 'Habits', icon: <CgPerformance size={ICON_SIZE} /> },
+  { id: 'goals', label: 'Goals', icon: <Flag size={ICON_SIZE} /> },
   { id: 'streaks', label: 'Streaks', icon: '🔥', hidden: true },
   { id: 'finance', label: 'Finances', icon: <Landmark size={ICON_SIZE} /> },
   { id: 'diet', label: 'Diet', icon: <Soup size={ICON_SIZE} /> },
@@ -39,7 +41,7 @@ const PAGES: { id: string; label: string; icon: ReactNode; hidden?: boolean }[] 
 
 const isShown = (id: PageId) => !PAGES.find((p) => p.id === id)?.hidden
 
-type PageId = 'dashboard' | 'habits' | 'streaks' | 'finance' | 'diet' | 'fitness' | 'screentime' | 'time' | 'calendar'
+type PageId = 'dashboard' | 'habits' | 'goals' | 'streaks' | 'finance' | 'diet' | 'fitness' | 'screentime' | 'time' | 'calendar'
 
 const SEED_TRACKERS: Tracker[] = [
   { id: 't1', name: 'Daily reading', startDate: toDateKey(subDays(new Date(), 12)), color: '#4f46e5' },
@@ -175,6 +177,9 @@ function Shell({ user, theme, onThemeChange }: ShellProps) {
           </div>
           <div {...show('habits')}>
             <HabitsPage />
+          </div>
+          <div {...show('goals')}>
+            <GoalsPage />
           </div>
           {isShown('streaks') && (
             <div {...show('streaks')}>

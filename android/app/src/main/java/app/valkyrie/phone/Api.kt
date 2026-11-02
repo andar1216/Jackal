@@ -119,6 +119,34 @@ object Api {
         request(server, "DELETE", "/app/habits/$id", token)
     }
 
+    /* ---------- Goals ---------- */
+
+    fun goals(server: String, token: String): JSONArray = JSONArray(request(server, "GET", "/app/goals", token))
+
+    fun createGoal(server: String, token: String, body: JSONObject) {
+        request(server, "POST", "/app/goals", token, body)
+    }
+
+    fun updateGoal(server: String, token: String, id: String, body: JSONObject) {
+        request(server, "PATCH", "/app/goals/$id", token, body)
+    }
+
+    fun deleteGoal(server: String, token: String, id: String) {
+        request(server, "DELETE", "/app/goals/$id", token)
+    }
+
+    fun addGoalStep(server: String, token: String, goalId: String, body: JSONObject) {
+        request(server, "POST", "/app/goals/$goalId/tasks", token, body)
+    }
+
+    fun updateGoalStep(server: String, token: String, goalId: String, stepId: String, body: JSONObject) {
+        request(server, "PATCH", "/app/goals/$goalId/tasks/$stepId", token, body)
+    }
+
+    fun deleteGoalStep(server: String, token: String, goalId: String, stepId: String) {
+        request(server, "DELETE", "/app/goals/$goalId/tasks/$stepId", token)
+    }
+
     /** Meals from `from` on ("2026-10-25"). */
     fun meals(server: String, token: String, from: String): JSONArray = JSONArray(request(server, "GET", "/app/meals?from=$from", token))
 

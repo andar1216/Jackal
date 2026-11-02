@@ -474,6 +474,72 @@ describe('meals and time entries', () => {
   })
 })
 
+describe('goals', () => {
+  it('keeps a goal with deadlines, cost and time, and its steps one by one', async () => {
+    const made = await call('POST', '/goals', {
+      title: 'Run a half marathon',
+      category: 'Health',
+      priority: 'high',
+      startDate: '2030-01-01',
+      dueDate: '2030-06-01',
+      budgetCents: 50_000,
+      budgetMinutes: 6000,
+      tasks: [{ title: 'Buy shoes', dueDate: '2030-01-10', costCents: 12_000, minutes: 90 }],
+    })
+    assert.equal(made.status, 201)
+    assert.equal(made.body.status, 'active')
+    assert.equal(made.body.tasks.length, 1)
+    const first = made.body.tasks[0]
+    assert.equal(typeof first.id, 'string')
+    assert.notEqual(first.id, 'undefined', "a step's id is its own")
+    assert.deepEqual([first.dueDate, first.costCents, first.minutes, first.done], ['2030-01-10', 12_000, 90, false])
+    assert.equal(made.body.userId, undefined, 'the owner is never sent')
+
+    const added = await call('POST', `/goals/${made.body.id}/tasks`, { title: 'Sign up for a race', dueDate: '2030-02-01', costCents: 6500 })
+    assert.equal(added.status, 201)
+    assert.equal(added.body.tasks.length, 2)
+    const second = added.body.tasks[1]
+
+    const finished = await call('PATCH', `/goals/${made.body.id}/tasks/${first.id}`, { done: true })
+    assert.equal(finished.body.tasks[0].done, true)
+    assert.ok(finished.body.tasks[0].doneAt, 'remembers when it was finished')
+    const undone = await call('PATCH', `/goals/${made.body.id}/tasks/${first.id}`, { done: false, costCents: null })
+    assert.equal(undone.body.tasks[0].doneAt, undefined)
+    assert.equal(undone.body.tasks[0].costCents, undefined, 'null takes a cost away')
+    assert.equal(undone.body.tasks[0].title, 'Buy shoes', 'the rest is left alone')
+
+    const done = await call('PATCH', `/goals/${made.body.id}`, { status: 'done', dueDate: null })
+    assert.equal(done.body.status, 'done')
+    assert.ok(done.body.completedAt)
+    assert.equal(done.body.dueDate, undefined)
+    assert.equal(done.body.tasks.length, 2, 'changing the goal keeps its steps')
+    assert.equal((await call('PATCH', `/goals/${made.body.id}`, { status: 'active' })).body.completedAt, undefined)
+
+    const trimmed = await call('DELETE', `/goals/${made.body.id}/tasks/${second.id}`)
+    assert.equal(trimmed.body.tasks.length, 1)
+    assert.equal((await call('DELETE', `/goals/${made.body.id}/tasks/${second.id}`)).status, 404)
+
+    assert.equal((await call('DELETE', `/goals/${made.body.id}`)).status, 204)
+    assert.equal((await call('DELETE', `/goals/${made.body.id}`)).status, 404)
+  })
+
+  it('turns away a deadline before the start, a bad step and a goal in a stranger\'s hands', async () => {
+    assert.equal((await call('POST', '/goals', { title: 'Backwards', startDate: '2030-05-01', dueDate: '2030-04-01' })).status, 400)
+    assert.equal((await call('POST', '/goals', { title: '' })).status, 400)
+    assert.equal((await call('POST', '/goals', { title: 'X', tasks: [{ title: 'Y', costCents: -1 }] })).status, 400)
+    assert.equal((await call('POST', '/goals', { title: 'X', extra: 1 })).status, 400)
+
+    const mine = (await call('POST', '/goals', { title: 'Private' })).body
+    const other = makeClient()
+    await other('POST', '/auth/register', { email: 'goals-other@example.com', name: 'Other', password: PASSWORD })
+    assert.deepEqual((await other('GET', '/goals')).body, [])
+    assert.equal((await other('PATCH', `/goals/${mine.id}`, { title: 'Hijack' })).status, 404)
+    assert.equal((await other('POST', `/goals/${mine.id}/tasks`, { title: 'Sneak' })).status, 404)
+    assert.equal((await makeClient()('GET', '/goals')).status, 401)
+    assert.equal((await call('PATCH', `/goals/${mine.id}/tasks/nope`, { done: true })).status, 404)
+  })
+})
+
 describe('integrations', () => {
   it('lists every planned integration as not connected, and only Crunch, ActivityWatch and the phone app (which need no keys) as available', async () => {
     const { status, body } = await call('GET', '/integrations')
@@ -1492,6 +1558,19 @@ describe('phone', () => {
     assert.deepEqual(Object.keys(me).sort(), ['email', 'name'], 'only the name and email, never anything private')
     assert.equal(typeof me.name, 'string')
     assert.equal((await asPhone('GET', '/app/me', undefined, 'wrong')).status, 401)
+  })
+
+  it('lets the phone keep the same goals the website shows', async () => {
+    assert.equal((await asPhone('GET', '/app/goals', undefined, 'wrong')).status, 401)
+    const made = await asPhone('POST', '/app/goals', { title: 'Save for a trip', dueDate: '2031-12-01', budgetCents: 200_000 })
+    assert.equal(made.status, 201)
+    const withStep = await asPhone('POST', `/app/goals/${made.body.id}/tasks`, { title: 'Book flights', costCents: 45_000, minutes: 60, dueDate: '2031-06-01' })
+    assert.equal(withStep.body.tasks[0].title, 'Book flights')
+    const onSite = (await call('GET', '/goals')).body.find((g: { id: string }) => g.id === made.body.id)
+    assert.equal(onSite.tasks[0].costCents, 45_000, 'the website sees it')
+    await asPhone('PATCH', `/app/goals/${made.body.id}/tasks/${withStep.body.tasks[0].id}`, { done: true })
+    assert.equal((await call('GET', '/goals')).body.find((g: { id: string }) => g.id === made.body.id).tasks[0].done, true)
+    assert.equal((await asPhone('DELETE', `/app/goals/${made.body.id}`)).status, 204)
   })
 
   it('lets the phone add, put away and delete habits, and log meals and workouts the website shows', async () => {

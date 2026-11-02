@@ -1,0 +1,49 @@
+---
+description: Every card or panel on a screen (web and Android) must be a draggable, resizable board
+alwaysApply: true
+---
+
+# Every board is draggable
+
+Any card, panel or widget shown on a page or screen is a **board**: the person can press it and drag it to a new
+place, and where it lands is saved. Never add a fixed, unmovable card.
+
+## Web (`src/features/<page>/`)
+
+Put each card in a `<Panel>` inside the page's `<Board>` (`src/components/Board.tsx`). Do not render a bare
+`.card` / `<section>` straight into the page.
+
+```tsx
+// BAD: a card that can't be moved
+<section className="card">...</section>
+
+// GOOD: a panel, with a stable id the saved layout remembers
+<Board page="goals" editing={layout.editing} onEditingChange={layout.setEditing}>
+  <Panel id="overview" title="Active goals" size="third">
+    <div className="card">...</div>
+  </Panel>
+  {goals.map((g) => (
+    <Panel key={g.id} id={`goal:${g.id}`} title={g.title} size="full">...</Panel>
+  ))}
+</Board>
+```
+
+- Give the page a `PanelFilter` and a `SettingsMenu` with `useLayoutEditing().item` in its header.
+- A panel `id` never changes (it is saved). Per-item panels use `kind:${id}`.
+- Sizes are only `third | half | threeQuarters | full`.
+- Only short-lived things (an open "add" form, a modal, filters, the page header) may sit outside a Board.
+
+## Android (`android/.../phone/*Screen.kt`)
+
+Mark every card with `.board("stable-id")` (or build it with `panel(title, ..., id = ...)`), and call
+`arrange("phone-<screen>", content)` after the container is filled. The person holds a card to drag it.
+
+```kotlin
+content.addView(summaryCard(today).board("summary"))
+shown.forEach { content.addView(goalCard(it, today).board("goal:${it.id}")) }
+arrange("phone-goals", content)
+```
+
+## Every new screen
+
+When adding a new tab, make its cards boards on both web and phone before calling it done, and say so in the README.

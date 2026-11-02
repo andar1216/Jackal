@@ -2,6 +2,9 @@ package app.valkyrie.phone
 
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PhoneMathTest {
@@ -191,5 +194,57 @@ class PhoneMathTest {
         assertEquals("AL", ProfileMath.initials("ada lovelace"))
         assertEquals("G", ProfileMath.initials("  Grace "))
         assertEquals("?", ProfileMath.initials(""))
+    }
+
+    @Test
+    fun `time is read from the ways people write it`() {
+        assertEquals(90, GoalMath.parseMinutes("90").value)
+        assertEquals(90, GoalMath.parseMinutes("1.5h").value)
+        assertEquals(90, GoalMath.parseMinutes("1h 30m").value)
+        assertEquals(90, GoalMath.parseMinutes("1:30").value)
+        assertEquals(120, GoalMath.parseMinutes("2 hr").value)
+        assertEquals(45, GoalMath.parseMinutes("45m").value)
+        assertTrue(GoalMath.parseMinutes("").ok)
+        assertNull(GoalMath.parseMinutes("").value)
+        assertFalse(GoalMath.parseMinutes("soon").ok)
+        assertEquals("1h 30m", GoalMath.formatMinutes(90))
+        assertEquals("2h", GoalMath.formatMinutes(120))
+        assertEquals("45m", GoalMath.formatMinutes(45))
+    }
+
+    @Test
+    fun `money is read in dollars and kept in cents`() {
+        assertEquals(120000L, GoalMath.parseDollars("$1,200").value)
+        assertEquals(1250L, GoalMath.parseDollars("12.5").value)
+        assertNull(GoalMath.parseDollars(" ").value)
+        assertFalse(GoalMath.parseDollars("twelve").ok)
+        assertEquals("12.50", GoalMath.dollarsForInput(1250))
+        assertEquals("120", GoalMath.dollarsForInput(12000))
+    }
+
+    @Test
+    fun `a goal adds up its steps and says what is late or does not fit`() {
+        fun step(id: String, due: String?, cents: Long?, minutes: Int?, done: Boolean) = GoalStep(id, id, null, due, cents, minutes, done)
+        val goal = GoalItem(
+            "g", "Trip", null, "", "medium", "#4f46e5", "2030-01-01", "2030-03-01", 10000L, 60, "active",
+            listOf(
+                step("a", "2030-01-10", 8000L, 30, true),
+                step("b", "2030-02-01", 5000L, 45, false),
+                step("c", "2030-04-01", null, null, false),
+            ),
+        )
+        val today = java.time.LocalDate.parse("2030-02-15")
+        val stats = GoalMath.stats(goal, today)
+        assertEquals(1, stats.done)
+        assertEquals(33, stats.percent)
+        assertEquals(13000L, stats.costTotal)
+        assertEquals(8000L, stats.costDone)
+        assertEquals(75, stats.minutesTotal)
+        assertEquals(1, stats.overdue)
+        assertFalse(stats.late)
+        assertEquals(3, GoalMath.warnings(goal, stats).size)
+        assertEquals(listOf("b", "c", "a"), GoalMath.orderedSteps(goal.steps).map { it.id })
+        assertEquals("2 days overdue", GoalMath.dueText("2030-02-13", today))
+        assertEquals("Due tomorrow", GoalMath.dueText("2030-02-16", today))
     }
 }

@@ -5,6 +5,7 @@ import { integrations } from './integrations/routes.js'
 import { importStrongFile } from './integrations/workoutImport.js'
 import { addDays, catchUp, daysFrom, mergeDays, toggleLog } from './lib/autoMark.js'
 import { crudRouter, requireId } from './lib/crud.js'
+import { goalsRouter } from './lib/goalsRouter.js'
 import { HttpError } from './lib/errors.js'
 import { detectRecurring, markId, merchantKey, type Charge, type Mark } from './lib/recurring.js'
 import { AccountView, BoardLayout, CalendarEvent, DeviceGroup, ManualAccount, Meal, Skill, SubscriptionMark, TimeEntry, Tracker, Transaction, Workout } from './models.js'
@@ -108,6 +109,10 @@ skills.post('/:id/logs/:date/toggle', async (req, res) => {
 skills.use(crudRouter(Skill, { schema: skillSchema, sort: { createdAt: 1 } }))
 
 api.use('/skills', skills)
+
+/* ---------- Goals and their steps ---------- */
+
+api.use('/goals', goalsRouter((req) => currentUserId(req)))
 
 /* ---------- Everything else is plain CRUD ---------- */
 

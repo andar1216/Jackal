@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import mongoose, { Schema, type SchemaDefinition } from 'mongoose'
 
 /** Today as YYYY-MM-DD in the server's local time. */
@@ -118,6 +119,40 @@ export const Meal = mongoose.model(
     carbs: { type: Number, default: 0, min: 0 },
     fat: { type: Number, default: 0, min: 0 },
     date: { ...day, default: today },
+  }),
+)
+
+/** One step towards a goal. Its id is its own (not a database id) so the website and the phone can name it. */
+const goalTaskSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true, default: () => randomUUID() },
+    title: { type: String, required: true, trim: true },
+    notes: String,
+    dueDate: { type: String, match: /^\d{4}-\d{2}-\d{2}$/ }, // the day this step should be finished by
+    costCents: { type: Number, min: 0 }, // what it is expected to cost
+    minutes: { type: Number, min: 0 }, // how long it is expected to take
+    done: { type: Boolean, default: false },
+    doneAt: Date,
+  },
+  { _id: false, toJSON: { transform: (_doc, ret: Record<string, unknown>) => ret } },
+)
+
+/** Something to reach by a date, broken into steps that each have a deadline, a cost and a time. */
+export const Goal = mongoose.model(
+  'Goal',
+  ownedSchema({
+    title: { type: String, required: true, trim: true },
+    notes: String, // why it matters, or what done looks like
+    category: { type: String, trim: true, default: '' },
+    priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
+    color: { type: String, default: '#4f46e5' },
+    startDate: { ...day, default: today },
+    dueDate: { type: String, match: /^\d{4}-\d{2}-\d{2}$/ }, // the deadline for the whole goal
+    budgetCents: { type: Number, min: 0 }, // most it should cost overall
+    budgetMinutes: { type: Number, min: 0 }, // most time it should take overall
+    status: { type: String, enum: ['active', 'paused', 'done'], default: 'active' },
+    completedAt: Date,
+    tasks: { type: [goalTaskSchema], default: [] },
   }),
 )
 
@@ -401,7 +436,7 @@ const boardLayoutSchema = ownedSchema({
 boardLayoutSchema.index({ userId: 1, page: 1 }, { unique: true })
 export const BoardLayout = mongoose.model('BoardLayout', boardLayoutSchema)
 
-export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment, ScreenTimeUsage, ScreenTimeSite, PhoneDevice, PhonePairing, PhoneIcon, PhoneDay, AppCategory, DeviceGroup]
+export const ownedModels = [Goal, Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment, ScreenTimeUsage, ScreenTimeSite, PhoneDevice, PhonePairing, PhoneIcon, PhoneDay, AppCategory, DeviceGroup]
 
 /**
  * Data created before accounts existed has no owner. The first account to be created inherits it.

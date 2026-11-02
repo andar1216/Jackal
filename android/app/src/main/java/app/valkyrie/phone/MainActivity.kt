@@ -40,6 +40,7 @@ class MainActivity : Activity() {
         screens = listOf(
             DashboardScreen(this, store),
             HabitsScreen(this, store),
+            GoalsScreen(this, store),
             FinanceScreen(this, store),
             DietScreen(this, store),
             FitnessScreen(this, store),

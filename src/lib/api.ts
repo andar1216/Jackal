@@ -1,4 +1,4 @@
-import type { AccountView, ActivityWatchStatus, BankAccount, CrunchData, DeviceGroup, Integration, ManualAccount, Meal, PanelState, PhonePairCode, PhoneStatus, ScreenTimeData, Skill, SubscriptionData, Transaction, User, Workout } from '../types'
+import type { AccountView, Goal, GoalPriority, GoalStatus, ActivityWatchStatus, BankAccount, CrunchData, DeviceGroup, Integration, ManualAccount, Meal, PanelState, PhonePairCode, PhoneStatus, ScreenTimeData, Skill, SubscriptionData, Transaction, User, Workout } from '../types'
 import { todayKey } from './dates'
 
 // Dev: Vite proxies /api to the backend. For a separate API host, set VITE_API_URL.
@@ -243,4 +243,38 @@ export const layoutsApi = {
   list: () => request<Record<string, PanelState[]>>('GET', '/layouts'),
   save: (page: string, items: PanelState[]) => request<PanelState[]>('PUT', `/layouts/${page}`, { items }),
   reset: (page: string) => request<void>('DELETE', `/layouts/${page}`),
+}
+
+/** What the person can say about a goal. A null takes a deadline, cost or time away. */
+export type GoalInput = {
+  title: string
+  notes: string | null
+  category: string
+  priority: GoalPriority
+  color: string
+  startDate: string
+  dueDate: string | null
+  budgetCents: number | null
+  budgetMinutes: number | null
+  status?: GoalStatus
+}
+
+export type GoalTaskInput = {
+  title: string
+  notes?: string | null
+  dueDate?: string | null
+  costCents?: number | null
+  minutes?: number | null
+  done?: boolean
+}
+
+// Every answer is the whole goal, steps included, so the page just swaps it in.
+export const goalsApi = {
+  list: () => request<Goal[]>('GET', '/goals'),
+  create: (goal: GoalInput) => request<Goal>('POST', '/goals', goal),
+  update: (id: string, changes: Partial<GoalInput>) => request<Goal>('PATCH', `/goals/${id}`, changes),
+  remove: (id: string) => request<void>('DELETE', `/goals/${id}`),
+  addTask: (id: string, task: GoalTaskInput) => request<Goal>('POST', `/goals/${id}/tasks`, task),
+  updateTask: (id: string, taskId: string, changes: Partial<GoalTaskInput>) => request<Goal>('PATCH', `/goals/${id}/tasks/${taskId}`, changes),
+  removeTask: (id: string, taskId: string) => request<Goal>('DELETE', `/goals/${id}/tasks/${taskId}`),
 }

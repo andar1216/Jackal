@@ -207,3 +207,36 @@ export type PanelSize = 'third' | 'half' | 'threeQuarters' | 'full'
 
 /** How one panel sits on a page: how wide it is, how tall (in pixels, only when the person made it taller than its contents need) and whether it is put away. The list's order is the panels' order. */
 export type PanelState = { id: string; size: PanelSize; hidden: boolean; height?: number }
+
+/* ---------- Goals ---------- */
+
+export type GoalPriority = 'low' | 'medium' | 'high'
+export type GoalStatus = 'active' | 'paused' | 'done'
+
+/** One step towards a goal, with its own deadline, cost and time. */
+export type GoalTask = {
+  id: string
+  title: string
+  notes?: string
+  dueDate?: string // YYYY-MM-DD: when this step should be finished
+  costCents?: number // what it is expected to cost
+  minutes?: number // how long it is expected to take
+  done: boolean
+  doneAt?: string // ISO time it was finished
+}
+
+export type Goal = {
+  id: string
+  title: string
+  notes?: string
+  category: string
+  priority: GoalPriority
+  color: string
+  startDate: string // YYYY-MM-DD
+  dueDate?: string // YYYY-MM-DD: the deadline for the whole goal
+  budgetCents?: number // the most it should cost overall
+  budgetMinutes?: number // the most time it should take overall
+  status: GoalStatus
+  completedAt?: string
+  tasks: GoalTask[]
+}

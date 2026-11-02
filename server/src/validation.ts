@@ -105,3 +105,32 @@ export const eventSchema = z.strictObject({
   title: z.string().trim().min(1).max(200),
   date: dateString,
 })
+
+/* ---------- Goals ---------- */
+
+// A null takes the value away (no deadline, no cost); leaving it out leaves it as it was.
+const minutes = z.number().int().min(0).max(5_256_000)
+const cents = z.number().int().min(0).max(100_000_000_000)
+
+export const goalTaskSchema = z.strictObject({
+  title: name,
+  notes: z.string().trim().max(1000).nullable().optional(),
+  dueDate: dateString.nullable().optional(),
+  costCents: cents.nullable().optional(),
+  minutes: minutes.nullable().optional(),
+  done: z.boolean().optional(),
+})
+
+export const goalSchema = z.strictObject({
+  title: name,
+  notes: z.string().trim().max(2000).nullable().optional(),
+  category: z.string().trim().max(40).optional(),
+  priority: z.enum(['low', 'medium', 'high']).optional(),
+  color: color.optional(),
+  startDate: dateString.optional(), // defaults to today
+  dueDate: dateString.nullable().optional(),
+  budgetCents: cents.nullable().optional(),
+  budgetMinutes: minutes.nullable().optional(),
+  status: z.enum(['active', 'paused', 'done']).optional(),
+  tasks: z.array(goalTaskSchema).max(200).optional(), // only when a goal is made; steps are changed one by one after that
+})

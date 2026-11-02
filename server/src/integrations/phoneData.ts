@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { catchUp, toggleLog } from '../lib/autoMark.js'
 import { requireId } from '../lib/crud.js'
 import { HttpError } from '../lib/errors.js'
+import { goalsRouter } from '../lib/goalsRouter.js'
 import { BoardLayout, ManualAccount, Meal, PhoneDevice, Skill, Transaction, User, Workout } from '../models.js'
 import { dateString, layoutBody, layoutPageParam, mealSchema, skillSchema, workoutSchema } from '../validation.js'
 import { crunchData, syncCrunch } from './crunch.js'
@@ -74,6 +75,11 @@ phoneDataRouter.delete('/habits/:id', async (req, res) => {
   if (gone.deletedCount === 0) throw new HttpError(404, 'Not found')
   res.status(204).end()
 })
+
+/* ---------- Goals ---------- */
+
+// The same goals and steps as the website, made and changed from the phone.
+phoneDataRouter.use('/goals', goalsRouter((_req, res) => ownerOf(res)))
 
 /* ---------- Diet and Fitness ---------- */
 
