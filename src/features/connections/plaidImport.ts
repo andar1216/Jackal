@@ -4,7 +4,7 @@ import { plaidApi } from '../../lib/api'
 export const PLAID_OAUTH_PATH = '/plaid-oauth'
 
 // Plaid's OAuth banks leave our page and come back, so the link token has to survive the round trip.
-const TOKEN_KEY = 'jackal.plaid.linkToken'
+const TOKEN_KEY = 'valkyrie.plaid.linkToken'
 export const saveLinkToken = (token: string) => localStorage.setItem(TOKEN_KEY, token)
 export const loadLinkToken = () => localStorage.getItem(TOKEN_KEY)
 export const clearLinkToken = () => localStorage.removeItem(TOKEN_KEY)

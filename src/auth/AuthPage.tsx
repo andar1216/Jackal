@@ -35,7 +35,7 @@ export default function AuthPage() {
   return (
     <div className="auth-screen">
       <form className="card auth-card" onSubmit={submit}>
-        <div className="brand">Jackal</div>
+        <div className="brand">Valkyrie</div>
         <h2>{isSignUp ? 'Create your account' : 'Welcome back'}</h2>
 
         {error && (

@@ -60,7 +60,7 @@ export default function App() {
   if (status === 'loading' || status === 'error') {
     return (
       <div className="auth-status">
-        <div className="brand">Jackal</div>
+        <div className="brand">Valkyrie</div>
         {status === 'error' ? (
           <>
             <p className="muted">Can't reach the server. Is the backend running? Trying again...</p>
@@ -125,7 +125,7 @@ function Shell({ user, theme, onThemeChange }: ShellProps) {
   return (
     <div className="app">
       <nav className="sidebar">
-        <div className="brand">Jackal</div>
+        <div className="brand">Valkyrie</div>
         {orderedNav.map((p) => (
           <button
             key={p.id}

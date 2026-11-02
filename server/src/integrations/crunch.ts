@@ -7,7 +7,7 @@ import { decryptSecret, encryptSecret, hasEncryptionKey } from '../lib/secrets.j
 import { Connection, CrunchCheckIn, CrunchClass, CrunchImportToken, CrunchLink, CrunchPayment } from '../models.js'
 import { CrunchError, crunchGateway, parseBilling, parseCheckIns, parseClasses, type CrunchSnapshot } from './crunchGateway.js'
 
-/** Two ways in: the person lets Jackal sign in for them (below), or sends the data from their own browser (`crunchImportRouter`). */
+/** Two ways in: the person lets Valkyrie sign in for them (below), or sends the data from their own browser (`crunchImportRouter`). */
 export const crunchRouter = Router()
 
 const credentialsSchema = z.object({
@@ -18,7 +18,7 @@ const credentialsSchema = z.object({
 /** One sync at a time per person, so a double click does not hit Crunch twice. */
 const running = new Set<string>()
 
-/** A wrong password is a 422, not a 401: a 401 would sign the person out of Jackal itself. */
+/** A wrong password is a 422, not a 401: a 401 would sign the person out of Valkyrie itself. */
 const toHttpError = (err: unknown) => {
   if (!(err instanceof CrunchError)) return err
   if (err.code === 'BAD_LOGIN') return new HttpError(422, err.message)
@@ -65,7 +65,7 @@ const requireKey = () => {
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
 
-/* ---------- Jackal signs in for the person ---------- */
+/* ---------- Valkyrie signs in for the person ---------- */
 
 // Sign in once with the person's Crunch details, import everything, and keep the (encrypted) login for later syncs.
 crunchRouter.post('/connect', async (req, res) => {
@@ -105,7 +105,7 @@ crunchRouter.post('/sync', async (req, res) => {
   const link = await CrunchLink.findOne({ userId }).select('+password')
   if (!link) throw new HttpError(409, 'Crunch is not connected yet.')
   if (!link.password || !link.email) {
-    throw new HttpError(409, 'Crunch was connected from your browser, so Jackal has no login to refresh with. Click the "Send to Jackal" bookmark on the Crunch tab instead.')
+    throw new HttpError(409, 'Crunch was connected from your browser, so Valkyrie has no login to refresh with. Click the "Send to Valkyrie" bookmark on the Crunch tab instead.')
   }
   const { email, password } = { email: link.email, password: link.password }
 
@@ -140,7 +140,7 @@ crunchRouter.post('/sync', async (req, res) => {
 
 const IMPORT_TOKEN_DAYS = 180
 
-// Makes the secret for the "Send to Jackal" bookmark. A new one replaces the old, so old bookmarks stop working.
+// Makes the secret for the "Send to Valkyrie" bookmark. A new one replaces the old, so old bookmarks stop working.
 crunchRouter.post('/import-token', async (req, res) => {
   const userId = currentUserId(req)
   const token = randomBytes(32).toString('base64url')
@@ -172,7 +172,7 @@ crunchImportRouter.post('/', async (req, res) => {
   const token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
   const record = token ? await CrunchImportToken.findOne({ tokenHash: sha256(token) }) : null
   if (!record || record.expiresAt.getTime() < Date.now()) {
-    throw new HttpError(401, 'This bookmark is out of date. Open Connectors in Jackal and get a new one.')
+    throw new HttpError(401, 'This bookmark is out of date. Open Connectors in Valkyrie and get a new one.')
   }
   const userId = record.userId
 

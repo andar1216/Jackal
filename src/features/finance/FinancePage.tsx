@@ -24,7 +24,7 @@ const BUDGETS: Record<string, number> = {
 const CATEGORIES = Object.keys(BUDGETS)
 
 const isFinanceConnector = (i: Integration) => i.category === 'finance'
-const VIEW_KEY = 'jackal.finance.view'
+const VIEW_KEY = 'valkyrie.finance.view'
 const BY_HAND = 'Added by hand'
 /** The name an account added by hand goes by on this page. */
 const manualLabel = (a: ManualAccount) => (a.mask ? `${a.name} ••${a.mask}` : a.name)

@@ -62,8 +62,8 @@ const WIDGET_SIZES: Record<WidgetId, PanelSize> = {
 
 /* ---------- Habits data ---------- */
 
-const HIDE_STREAKS_KEY = 'jackal.habits.hideStreaks'
-const CALENDAR_HIDDEN_KEY = 'jackal.habits.calendarHidden'
+const HIDE_STREAKS_KEY = 'valkyrie.habits.hideStreaks'
+const CALENDAR_HIDDEN_KEY = 'valkyrie.habits.calendarHidden'
 
 const loadIds = (key: string): string[] => {
   try {

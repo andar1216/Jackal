@@ -86,7 +86,7 @@ export const integrationsApi = {
 }
 
 /** Pages showing transactions listen for this, so they refresh after a bank import. */
-export const TRANSACTIONS_CHANGED = 'jackal:transactions-changed'
+export const TRANSACTIONS_CHANGED = 'valkyrie:transactions-changed'
 const notifyTransactionsChanged = () => window.dispatchEvent(new Event(TRANSACTIONS_CHANGED))
 
 export type NewTransaction = Pick<Transaction, 'type' | 'amountCents' | 'category' | 'date' | 'note'>
@@ -165,12 +165,12 @@ export const plaidApi = {
 }
 
 /** Fitness listens for this, so it reloads after Crunch is connected or disconnected from the Connectors dialog. */
-export const CRUNCH_CHANGED = 'jackal:crunch-changed'
+export const CRUNCH_CHANGED = 'valkyrie:crunch-changed'
 const notifyCrunchChanged = () => window.dispatchEvent(new Event(CRUNCH_CHANGED))
 
 export const crunchApi = {
   data: () => request<CrunchData>('GET', '/integrations/crunch/data'),
-  /** The secret inside the "Send to Jackal" bookmark. Getting a new one makes the old bookmark stop working. */
+  /** The secret inside the "Send to Valkyrie" bookmark. Getting a new one makes the old bookmark stop working. */
   importToken: () => request<{ token: string }>('POST', '/integrations/crunch/import-token'),
   /** Tells the Fitness page to reload, for data that arrived by another route (the bookmark). */
   changed: () => notifyCrunchChanged(),

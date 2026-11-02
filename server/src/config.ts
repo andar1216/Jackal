@@ -4,7 +4,7 @@ export const config = {
   port: Number(process.env.PORT) || 4000,
   // Only this computer by default. Set HOST=0.0.0.0 to accept connections from other machines.
   host: process.env.HOST || '127.0.0.1',
-  mongoUri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/jackal',
+  mongoUri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/valkyrie',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   isProduction: process.env.NODE_ENV === 'production',
   // Set ALLOW_REGISTRATION=false to stop new sign-ups once your own account exists.

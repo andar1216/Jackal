@@ -15,7 +15,7 @@ let base = ''
 
 before(async () => {
   mongod = await MongoMemoryServer.create()
-  await connectDb(mongod.getUri('jackal-test'))
+  await connectDb(mongod.getUri('valkyrie-test'))
   server = createApp().listen(0)
   const address = server.address()
   assert(address && typeof address === 'object')
@@ -36,8 +36,8 @@ const makeClient = () => {
     if (body) headers['content-type'] = 'application/json'
     if (cookie) headers.cookie = cookie
     const res = await fetch(base + path, { method, headers, body: body ? JSON.stringify(body) : undefined })
-    const set = res.headers.getSetCookie().find((c) => c.startsWith('jackal_sid='))
-    if (set) cookie = set.startsWith('jackal_sid=;') ? '' : set.split(';')[0]
+    const set = res.headers.getSetCookie().find((c) => c.startsWith('valkyrie_sid='))
+    if (set) cookie = set.startsWith('valkyrie_sid=;') ? '' : set.split(';')[0]
     const text = await res.text()
     return { status: res.status, body: text ? JSON.parse(text) : null, setCookie: set }
   }
@@ -522,7 +522,7 @@ describe('crunch', () => {
     assert.equal((await call('POST', '/integrations/crunch/sync')).status, 409)
   })
 
-  it('says a wrong password plainly, without signing the person out of Jackal', async () => {
+  it('says a wrong password plainly, without signing the person out of Valkyrie', async () => {
     crunch.fail = new CrunchError('BAD_LOGIN', "Crunch didn't accept that email and password.")
     const r = await call('POST', '/integrations/crunch/connect', { email: 'me@example.com', password: 'nope' })
     assert.equal(r.status, 422)
@@ -610,7 +610,7 @@ describe('crunch bookmark (data sent from the browser)', () => {
     classes: [{ program_name: 'Yoga', occurrence_start_time: '2026-10-05 06:30pm', club: { name: 'Club One' }, status: 'attended', fee_amount: null }],
     billing: { invoices: [{ mms_club_id: '1', amount: '19.99', service_name: 'Dues', purchase_date: '10/01/26' }], total_balance: '0.00' },
   }
-  /** What the bookmark does: a plain request from the Crunch site, with no Jackal sign-in cookie. */
+  /** What the bookmark does: a plain request from the Crunch site, with no Valkyrie sign-in cookie. */
   const send = (token: string | undefined, body: unknown = payload, origin = CRUNCH_SITE) =>
     fetch(`${base}/integrations/crunch/import`, {
       method: 'POST',
@@ -648,7 +648,7 @@ describe('crunch bookmark (data sent from the browser)', () => {
     assert.equal((await ask('https://evil.example')).headers.get('access-control-allow-origin'), CRUNCH_SITE)
   })
 
-  it('imports with the secret, without a Jackal sign-in, and marks the link as not refreshable by Jackal', async () => {
+  it('imports with the secret, without a Valkyrie sign-in, and marks the link as not refreshable by Valkyrie', async () => {
     const res = await send(token)
     assert.equal(res.status, 200)
     assert.equal(res.headers.get('access-control-allow-origin'), CRUNCH_SITE)
@@ -669,7 +669,7 @@ describe('crunch bookmark (data sent from the browser)', () => {
   it('has nothing to sign in with, and says what to do instead', async () => {
     const r = await call('POST', '/integrations/crunch/sync')
     assert.equal(r.status, 409)
-    assert.match(r.body.error, /Send to Jackal/)
+    assert.match(r.body.error, /Send to Valkyrie/)
   })
 
   it('refuses a missing, wrong or replaced secret, and Crunch data in a shape it does not know', async () => {

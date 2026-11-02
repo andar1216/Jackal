@@ -4,7 +4,7 @@ import PlaidLauncher from './PlaidLauncher'
 import { clearLinkToken, importNewBank, loadLinkToken } from './plaidImport'
 
 /**
- * The page a bank like Citi sends you back to after you approve Jackal on the bank's own site.
+ * The page a bank like Citi sends you back to after you approve Valkyrie on the bank's own site.
  * It reopens Plaid Link where it left off, then imports the new bank and returns to the app.
  */
 export default function PlaidOAuthReturn() {
@@ -41,7 +41,7 @@ export default function PlaidOAuthReturn() {
 
   return (
     <div className="auth-status">
-      <div className="brand">Jackal</div>
+      <div className="brand">Valkyrie</div>
       {launch && token && (
         <PlaidLauncher
           token={token}
@@ -72,7 +72,7 @@ export default function PlaidOAuthReturn() {
       {!launch && (
         <div>
           <button className="primary" onClick={goHome}>
-            Back to Jackal
+            Back to Valkyrie
           </button>
         </div>
       )}

@@ -4,7 +4,7 @@ import type { Types } from 'mongoose'
 import { config } from '../config.js'
 import { Session } from '../models.js'
 
-export const COOKIE_NAME = 'jackal_sid'
+export const COOKIE_NAME = 'valkyrie_sid'
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 // Only a hash of the token is stored, so a database leak doesn't hand out working sessions.

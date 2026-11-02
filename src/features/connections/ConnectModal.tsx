@@ -160,7 +160,7 @@ export default function ConnectModal({ onClose, filter, title = 'Connectors' }: 
     return () => window.clearInterval(timer)
   }, [waitingSince])
 
-  // Whether Jackal can refresh Crunch by itself (it can if it was given a login) decides which buttons show.
+  // Whether Valkyrie can refresh Crunch by itself (it can if it was given a login) decides which buttons show.
   const crunchConnected = items?.some((i) => i.id === 'crunch' && i.status === 'connected') ?? false
   useEffect(() => {
     if (!crunchConnected) return
@@ -177,11 +177,11 @@ export default function ConnectModal({ onClose, filter, title = 'Connectors' }: 
   const disconnect = (item: Integration) => {
     if (
       item.id === 'plaid' &&
-      !window.confirm('Disconnect your banks? Bank transactions imported into Jackal are removed too. Ones you added by hand stay.')
+      !window.confirm('Disconnect your banks? Bank transactions imported into Valkyrie are removed too. Ones you added by hand stay.')
     ) {
       return
     }
-    if (item.id === 'crunch' && !window.confirm('Disconnect Crunch? Your saved login and the imported history are removed from Jackal.')) return
+    if (item.id === 'crunch' && !window.confirm('Disconnect Crunch? Your saved login and the imported history are removed from Valkyrie.')) return
     return run(item.id, () => integrationsApi.disconnect(item.id))
   }
 
@@ -284,7 +284,7 @@ export default function ConnectModal({ onClose, filter, title = 'Connectors' }: 
                               }}
                               onClick={(e) => e.preventDefault()}
                             >
-                              Send to Jackal
+                              Send to Valkyrie
                             </a>{' '}
                             to your bookmarks bar.{' '}
                             <button type="button" className="link" onClick={() => void navigator.clipboard?.writeText(crunchSetup.code)}>
@@ -297,7 +297,7 @@ export default function ConnectModal({ onClose, filter, title = 'Connectors' }: 
                           </li>
                         </ol>
                         <p className="stat-label">
-                          Your Crunch password stays on Crunch's page. The bookmark carries a secret that can only send Crunch data to Jackal.
+                          Your Crunch password stays on Crunch's page. The bookmark carries a secret that can only send Crunch data to Valkyrie.
                           If your browser asks to allow access to local devices, choose Allow. Click the bookmark again whenever you want fresh data.
                         </p>
                         <div className="row">
@@ -312,7 +312,7 @@ export default function ConnectModal({ onClose, filter, title = 'Connectors' }: 
                               setCrunchForm({ email: '', password: '' })
                             }}
                           >
-                            Or let Jackal sign in for me, so it can refresh by itself
+                            Or let Valkyrie sign in for me, so it can refresh by itself
                           </button>
                         </div>
                       </div>

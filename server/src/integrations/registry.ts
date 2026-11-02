@@ -18,7 +18,7 @@ export type Provider = {
 }
 
 /**
- * Every outside service Jackal should connect to (the project's Todo list).
+ * Every outside service Valkyrie should connect to (the project's Todo list).
  * We build them one at a time: finish one, flip `implemented` to true, then start the next.
  */
 export const providers: Provider[] = [
@@ -58,7 +58,7 @@ export const providers: Provider[] = [
     api: 'unofficial',
     url: 'https://members.crunch.com/',
     implemented: true,
-    note: 'Crunch has no public API. You sign in on members.crunch.com and a bookmark sends your data to Jackal (or let Jackal sign in for you, with your password stored encrypted). Either way it can break if Crunch changes their site.',
+    note: 'Crunch has no public API. You sign in on members.crunch.com and a bookmark sends your data to Valkyrie (or let Valkyrie sign in for you, with your password stored encrypted). Either way it can break if Crunch changes their site.',
   },
   {
     id: 'samsung-screen-time',

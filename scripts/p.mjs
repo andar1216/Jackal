@@ -1,4 +1,4 @@
-// npm run p: everything needed to use Jackal through the public https address (for bank OAuth, like Citi).
+// npm run p: everything needed to use Valkyrie through the public https address (for bank OAuth, like Citi).
 //   1. starts the local MongoDB service if it's installed and stopped
 //   2. starts the web app, the API, and the ngrok tunnel together
 // The address below is set only for this run, so plain `npm run n` still works on localhost.
@@ -50,7 +50,7 @@ if (process.platform === 'win32') {
 }
 
 // 2. App + tunnel. Values set here win over .env (the API and Vite only fill in what is missing).
-console.log(`[p] Open Jackal at ${ORIGIN}`)
+console.log(`[p] Open Valkyrie at ${ORIGIN}`)
 console.log(`[p] Plaid must list ${ORIGIN}/plaid-oauth under Allowed redirect URIs.`)
 
 const child = spawn(

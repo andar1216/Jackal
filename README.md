@@ -1,6 +1,6 @@
-# Jackal
+# Valkyrie
 
-Jackal is a personal "track anything in life" app. It combines streak tracking, finances, fitness and calories, time tracking, and a calendar in one React app.
+Valkyrie is a personal "track anything in life" app. It combines streak tracking, finances, fitness and calories, time tracking, and a calendar in one React app.
 
 > **Status:** the frontend UI is built and interactive, and a Node + MongoDB backend API (`server/`) is set up and tested. **You sign in with an account (email + password), and your data is private to it.** **The Dashboard is connected to the API**: skills, logged days and per-skill average weeks are saved in MongoDB. The other screens (Streaks, Finances, Fitness, Time, Calendar) are not connected yet. They keep state in memory, reset on refresh, and start with sample data. The dashboard widget layout and the theme are also not saved yet.
 
@@ -69,7 +69,7 @@ You can also run them separately: `npm run dev` for the frontend and `npm run se
 
 The database starts empty, so the Dashboard shows no skills at first. Add some in the Skills widget, or run `npm run seed` inside `server/` to add the defaults (Exercise, Calories, Finances) with sample history. The seed does nothing if skills already exist.
 
-**No MongoDB installed?** Run `npm run dev:memory` inside `server/` instead of `npm run server`. It starts the API on a temporary in-memory database, with a demo account (`demo@jackal.local` / `demo-password-1`) and the default skills. Data is lost when you stop it. The first run downloads a MongoDB binary.
+**No MongoDB installed?** Run `npm run dev:memory` inside `server/` instead of `npm run server`. It starts the API on a temporary in-memory database, with a demo account (`demo@valkyrie.local` / `demo-password-1`) and the default skills. Data is lost when you stop it. The first run downloads a MongoDB binary.
 
 If the backend isn't reachable, the Dashboard shows an error banner with a Retry button. By default the frontend calls `/api` (proxied by Vite in development). To point it at an API on another host, set `VITE_API_URL` (for example `https://api.example.com/api`) when building, and set `CLIENT_ORIGIN` on the server to the frontend's URL.
 
@@ -78,7 +78,7 @@ Backend scripts (run inside `server/`, or from the root with the `server:*` scri
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Start the API with auto-restart on changes |
-| `npm run dev:memory` | Start the API on a temporary in-memory MongoDB, with a demo account (`demo@jackal.local` / `demo-password-1`) and the default skills |
+| `npm run dev:memory` | Start the API on a temporary in-memory MongoDB, with a demo account (`demo@valkyrie.local` / `demo-password-1`) and the default skills |
 | `npm run seed` | Add the default skills to your database if it has none |
 | `npm run build` | Compile to `server/dist/` |
 | `npm start` | Run the compiled build |
@@ -112,7 +112,7 @@ The output in `dist/` is a static site. Host it on Netlify, Vercel, GitHub Pages
 ## Project structure
 
 ```
-Jackal/
+Valkyrie/
 ├── public/
 │   └── favicon.svg
 ├── src/
@@ -216,7 +216,7 @@ The Dashboard's **Connect** button lists the outside services we want to pull da
 | Google Calendar | Official API (OAuth) | Not started |
 | Plaid (bank accounts) | Official API (Plaid Link) | **Built** (Sandbox tested; see below) |
 | MyFitnessPal | Likely partner-only API | Not started, may not be possible |
-| Crunch Fitness | Unofficial (no public API). Connect opens https://members.crunch.com/ in a new tab; you sign in there and click a "Send to Jackal" bookmark, which sends the same data the My Profile page shows. Optionally Jackal can sign in for you instead (password stored encrypted; needs INTEGRATION_ENCRYPTION_KEY) so it refreshes by itself | Built: check-in progress and history, class history, payment history on the Fitness page |
+| Crunch Fitness | Unofficial (no public API). Connect opens https://members.crunch.com/ in a new tab; you sign in there and click a "Send to Valkyrie" bookmark, which sends the same data the My Profile page shows. Optionally Valkyrie can sign in for you instead (password stored encrypted; needs INTEGRATION_ENCRYPTION_KEY) so it refreshes by itself | Built: check-in progress and history, class history, payment history on the Fitness page |
 | Samsung S23 screen time | No public API, needs a companion app | Not started |
 | Windows screen time | Needs a local background agent | Not started |
 
@@ -229,7 +229,7 @@ How it works:
 1. **Connect** (Dashboard) asks the server for a one-time link token and opens Plaid Link in the browser.
 2. When you finish, Link gives the browser a one-time `public_token`, which the server trades for a long-lived `access_token`. The access token is stored **AES-256-GCM encrypted** in MongoDB (`PlaidItem`) and is never sent to the browser.
 3. The server imports your history with Plaid's cursor-based `/transactions/sync` (up to 365 days) and saves it as normal `Transaction`s marked `source: 'plaid'`. Syncing again never duplicates, and picks up changes and removals. **Sync banks** (Finances) and **Sync now** (Connect dialog) fetch the latest. There are no webhooks yet, so nothing syncs by itself.
-4. Plaid says money out is positive. Jackal turns that into expense/income, maps Plaid's categories onto the Finances budgets (Food, Rent, Transport, Fun, Other), and **skips transfers between your accounts and credit card payments** so nothing counts twice.
+4. Plaid says money out is positive. Valkyrie turns that into expense/income, maps Plaid's categories onto the Finances budgets (Food, Rent, Transport, Fun, Other), and **skips transfers between your accounts and credit card payments** so nothing counts twice.
 5. **Disconnect** revokes access at Plaid, deletes the stored token, and removes the imported transactions (ones you typed in stay).
 
 Testing with fake banks: in Sandbox, Plaid Link accepts the username `user_good` and password `pass_good` (use `1234` if asked for a code). A fresh link can take several seconds before transactions show up; the Connect dialog keeps checking for about 25 seconds.
@@ -238,7 +238,7 @@ Going to real banks: Plaid's Trial plan uses `PLAID_ENV=production` with your Pr
 
 1. Start an https tunnel to the dev server: `ngrok http 5173` (it prints an `https://...` address).
 2. In `.env` set `PLAID_REDIRECT_URI=https://<that address>/plaid-oauth` and `CLIENT_ORIGIN=https://<that address>`, add the same redirect URI in the Plaid dashboard, and restart `npm run n`.
-3. Open Jackal at the tunnel address (not localhost), sign in (the cookie is per address, same account and data), then Connect > Add a bank. After you approve on the bank's site it returns to `/plaid-oauth`, which finishes the link and imports the transactions.
+3. Open Valkyrie at the tunnel address (not localhost), sign in (the cookie is per address, same account and data), then Connect > Add a bank. After you approve on the bank's site it returns to `/plaid-oauth`, which finishes the link and imports the transactions.
 
 ---
 

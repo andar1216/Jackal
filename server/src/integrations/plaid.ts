@@ -12,9 +12,9 @@ const MAX_BANKS_PER_USER = 5
 /** Bump when the way we import changes. Banks imported with an older version are fetched again once. */
 const SYNC_VERSION = 2
 
-/* ---------- Turning Plaid transactions into Jackal transactions ---------- */
+/* ---------- Turning Plaid transactions into Valkyrie transactions ---------- */
 
-// Jackal's Finances screen budgets by these categories. Anything else becomes "Other".
+// Valkyrie's Finances screen budgets by these categories. Anything else becomes "Other".
 const CATEGORY_MAP: Record<string, string> = {
   FOOD_AND_DRINK: 'Food',
   RENT_AND_UTILITIES: 'Rent',
@@ -283,7 +283,7 @@ plaidRouter.post('/sync', async (req, res) => {
   res.json(total)
 })
 
-// Every account Jackal knows about, so the Finances screen can list them even with no activity this month.
+// Every account Valkyrie knows about, so the Finances screen can list them even with no activity this month.
 plaidRouter.get('/accounts', async (req, res) => {
   const items = await PlaidItem.find({ userId: currentUserId(req) }).sort({ createdAt: 1 })
   res.json(

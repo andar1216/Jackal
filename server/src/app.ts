@@ -14,7 +14,7 @@ export function createApp() {
 
   app.disable('x-powered-by')
 
-  // The "Send to Jackal" bookmark posts from members.crunch.com, so this one route answers that one website and
+  // The "Send to Valkyrie" bookmark posts from members.crunch.com, so this one route answers that one website and
   // nothing else. It sits ahead of the rules below (own-site only, sign-in cookie), and proves itself with the
   // bookmark's secret instead. Newer Chrome asks before a public site talks to a local one, hence the extra header.
   app.use(

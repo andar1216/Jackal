@@ -6,7 +6,7 @@
  */
 
 const BASE = 'https://members.crunch.com'
-const UA = 'Jackal/1.0 (personal tracker; reads your own Crunch member data)'
+const UA = 'Valkyrie/1.0 (personal tracker; reads your own Crunch member data)'
 const TIMEOUT_MS = 20_000
 /** Crunch's own history pages start no earlier than this. Asking for everything keeps the data complete. */
 const HISTORY_FROM = '2015-01-01'
@@ -94,7 +94,7 @@ export const parseClassTime = (v: unknown): string | undefined => {
 const asRecord = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {})
 
 export function parseCheckIns(json: unknown): CrunchCheckIn[] {
-  if (!Array.isArray(json)) throw new CrunchError('UNEXPECTED', 'Crunch sent check-ins in a shape Jackal does not recognize.')
+  if (!Array.isArray(json)) throw new CrunchError('UNEXPECTED', 'Crunch sent check-ins in a shape Valkyrie does not recognize.')
   const out: CrunchCheckIn[] = []
   for (const raw of json) {
     const r = asRecord(raw)
@@ -108,7 +108,7 @@ export function parseCheckIns(json: unknown): CrunchCheckIn[] {
 }
 
 export function parseClasses(json: unknown): CrunchClass[] {
-  if (!Array.isArray(json)) throw new CrunchError('UNEXPECTED', 'Crunch sent class history in a shape Jackal does not recognize.')
+  if (!Array.isArray(json)) throw new CrunchError('UNEXPECTED', 'Crunch sent class history in a shape Valkyrie does not recognize.')
   const out: CrunchClass[] = []
   for (const raw of json) {
     const r = asRecord(raw)
@@ -128,7 +128,7 @@ export function parseClasses(json: unknown): CrunchClass[] {
 
 export function parseBilling(json: unknown): { payments: CrunchPayment[]; balanceCents?: number } {
   const r = asRecord(json)
-  if (!Array.isArray(r.invoices)) throw new CrunchError('UNEXPECTED', 'Crunch sent billing history in a shape Jackal does not recognize.')
+  if (!Array.isArray(r.invoices)) throw new CrunchError('UNEXPECTED', 'Crunch sent billing history in a shape Valkyrie does not recognize.')
   const payments: CrunchPayment[] = []
   for (const raw of r.invoices) {
     const i = asRecord(raw)

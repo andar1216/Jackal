@@ -98,7 +98,7 @@ const realGateway: PlaidGateway = {
     const res = await call(() =>
       api().linkTokenCreate({
         user: { client_user_id: userId },
-        client_name: 'Jackal',
+        client_name: 'Valkyrie',
         products: [Products.Transactions],
         country_codes: [CountryCode.Us],
         language: 'en',

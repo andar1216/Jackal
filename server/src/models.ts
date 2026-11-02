@@ -192,9 +192,9 @@ export const PlaidItem = mongoose.model(
 const crunchLinkSchema = ownedSchema({
   // One login per person. Declared here, because ownedSchema already adds a plain index on userId and a second one clashes with it.
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
-  email: { type: String, trim: true }, // only when the person let Jackal sign in for them
+  email: { type: String, trim: true }, // only when the person let Valkyrie sign in for them
   password: { type: String, select: false }, // encrypted, see lib/secrets.ts. Missing when the data was sent from the browser instead.
-  // Whether Jackal can sign in and refresh by itself. Older links (made before this field) all had a password.
+  // Whether Valkyrie can sign in and refresh by itself. Older links (made before this field) all had a password.
   autoSync: Boolean,
   memberId: { type: String, required: true },
   workoutGoal: Number, // check-ins per week, set on Crunch's site
@@ -204,7 +204,7 @@ const crunchLinkSchema = ownedSchema({
 })
 export const CrunchLink = mongoose.model('CrunchLink', crunchLinkSchema)
 
-/** The secret in the "Send to Jackal" bookmark. It can only send Crunch data for this one person. Only a hash is kept. */
+/** The secret in the "Send to Valkyrie" bookmark. It can only send Crunch data for this one person. Only a hash is kept. */
 export const CrunchImportToken = mongoose.model(
   'CrunchImportToken',
   ownedSchema({

@@ -30,9 +30,9 @@ const DEVICES: Device[] = [
     icon: <Smartphone size={ICON} aria-hidden />,
     summary: 'Screen-on time and time in each app.',
     steps: [
-      'Install the Jackal companion app on your phone.',
+      'Install the Valkyrie companion app on your phone.',
       'Allow it to read app usage when the phone asks.',
-      'Sign in with your Jackal account. It sends your daily totals after that.',
+      'Sign in with your Valkyrie account. It sends your daily totals after that.',
     ],
     color: '#4f46e5',
   },
@@ -42,8 +42,8 @@ const DEVICES: Device[] = [
     icon: <Monitor size={ICON} aria-hidden />,
     summary: 'Time in each app and in the active window.',
     steps: [
-      'Install the Jackal agent on your computer.',
-      'Sign in with your Jackal account.',
+      'Install the Valkyrie agent on your computer.',
+      'Sign in with your Valkyrie account.',
       'Leave it running in the background. It sends your daily totals.',
     ],
     color: '#16a34a',

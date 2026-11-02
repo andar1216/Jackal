@@ -5,7 +5,7 @@ import type { PanelState } from '../types'
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 const SIZES = ['third', 'half', 'full']
-const cacheKey = (page: string) => `jackal.layout.${page}`
+const cacheKey = (page: string) => `valkyrie.layout.${page}`
 
 const isPanelState = (x: unknown): x is PanelState =>
   !!x &&

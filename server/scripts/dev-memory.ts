@@ -4,7 +4,7 @@
 import { MongoMemoryServer } from 'mongodb-memory-server'
 
 const mongod = await MongoMemoryServer.create()
-process.env.MONGODB_URI = mongod.getUri('jackal-dev')
+process.env.MONGODB_URI = mongod.getUri('valkyrie-dev')
 
 // Imported after MONGODB_URI is set, because config reads the environment on import.
 const { createApp } = await import('../src/app.js')
@@ -14,7 +14,7 @@ const { connectDb, disconnectDb } = await import('../src/db.js')
 const { User, syncAllIndexes } = await import('../src/models.js')
 const { seedSkills } = await import('../src/seed.js')
 
-const DEMO_EMAIL = 'demo@jackal.local'
+const DEMO_EMAIL = 'demo@valkyrie.local'
 const DEMO_PASSWORD = 'demo-password-1'
 
 await connectDb(config.mongoUri)

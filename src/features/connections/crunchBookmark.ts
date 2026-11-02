@@ -1,12 +1,12 @@
 /**
- * The "Send to Jackal" bookmark. Crunch's site can't be read from Jackal's page (different website, different login),
+ * The "Send to Valkyrie" bookmark. Crunch's site can't be read from Valkyrie's page (different website, different login),
  * but a bookmark runs inside whatever page it is clicked on. Clicked on members.crunch.com while signed in, it asks
- * Crunch for the same three lists the My Profile page shows and posts them to Jackal with a secret that can only do that.
+ * Crunch for the same three lists the My Profile page shows and posts them to Valkyrie with a secret that can only do that.
  * Crunch's password never leaves Crunch's page.
  */
 export function crunchBookmarkCode(apiUrl: string, token: string) {
   const source = `(async () => {
-  const say = (m) => alert('Jackal: ' + m);
+  const say = (m) => alert('Valkyrie: ' + m);
   try {
     if (location.hostname !== 'members.crunch.com') { say('Click this on members.crunch.com after signing in.'); return; }
     const get = async (path) => {
@@ -33,10 +33,10 @@ export function crunchBookmarkCode(apiUrl: string, token: string) {
         body: JSON.stringify({ memberId: id, workoutGoal: goal, checkIns, classes, billing }),
       });
     } catch (e) {
-      throw new Error("couldn't reach Jackal. Is it running? If your browser asks to allow access to local devices, choose Allow.");
+      throw new Error("couldn't reach Valkyrie. Is it running? If your browser asks to allow access to local devices, choose Allow.");
     }
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error || 'Jackal answered ' + r.status);
+    if (!r.ok) throw new Error(j.error || 'Valkyrie answered ' + r.status);
     say('sent ' + j.checkIns + ' check-ins, ' + j.classes + ' classes and ' + j.payments + ' payments.');
   } catch (e) {
     say('could not send. ' + ((e && e.message) || e));

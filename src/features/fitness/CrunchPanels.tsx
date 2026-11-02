@@ -23,7 +23,7 @@ function Status({ crunch }: { crunch: Crunch }) {
       </span>
       {data.autoSync === false ? (
         <>
-          <span className="stat-label">· To refresh, click your "Send to Jackal" bookmark on the Crunch tab.</span>
+          <span className="stat-label">· To refresh, click your "Send to Valkyrie" bookmark on the Crunch tab.</span>
           <a className="link" href="https://members.crunch.com/" target="_blank" rel="noopener noreferrer">
             Open Crunch ↗
           </a>
