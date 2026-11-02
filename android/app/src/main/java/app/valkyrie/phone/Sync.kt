@@ -16,17 +16,19 @@ import org.json.JSONObject
 /** Reads this phone's screen time and sends it to Valkyrie. */
 object Sync {
     private const val WORK_NAME = "valkyrie-sync"
-    private const val FIRST_DAYS = 7 // Android only keeps about a week of detail
+    private const val HISTORY_DAYS = 1100 // asks for about three years; the phone only has what it has
+    private const val MAX_DAYS_PER_SEND = 31
     private const val REFRESH_DAYS = 3
     private const val EVERY_MINUTES = 30L
 
     /** Packages are called by their labels everywhere else, so two apps with one label are one line. */
     class Reading(val days: Map<LocalDate, Map<String, Long>>, val packageOf: Map<String, String>)
 
-    fun readByLabel(context: Context, days: Int): Reading {
+    fun readByLabel(context: Context, days: Int, history: Boolean = false): Reading {
         val labels = HashMap<String, String?>()
         val packageOf = HashMap<String, String>()
-        val byDay = UsageReader.read(context, days).mapValues { (_, apps) ->
+        val read = if (history) UsageReader.readHistory(context, days) else UsageReader.read(context, days)
+        val byDay = read.mapValues { (_, apps) ->
             val named = HashMap<String, Long>()
             for ((pkg, seconds) in apps) {
                 val label = labels.getOrPut(pkg) { UsageReader.label(context, pkg) } ?: continue // uninstalled since
@@ -49,17 +51,25 @@ object Sync {
         if (token.isNullOrBlank() || store.server.isBlank()) return "Not paired yet."
         val message = try {
             if (!UsageReader.hasAccess(context)) throw ApiException(-1, "Usage access is off. Turn it on for Valkyrie in Settings.")
-            val reading = readByLabel(context, if (store.lastSyncMs == 0L) FIRST_DAYS else REFRESH_DAYS)
+            // The first sync after pairing (or after an update) takes in everything the phone still has.
+            val everything = !store.historyDone
+            val reading = if (everything) readByLabel(context, HISTORY_DAYS, history = true) else readByLabel(context, REFRESH_DAYS)
 
-            val days = JSONArray()
             var apps = 0
-            for ((day, byApp) in reading.days.toSortedMap()) {
-                val list = JSONArray()
-                for ((name, seconds) in byApp) list.put(JSONObject().put("app", name).put("seconds", seconds))
-                apps += byApp.size
-                days.put(JSONObject().put("day", day.toString()).put("apps", list))
+            val sent = LinkedHashSet<String>()
+            // The server takes a month at a time.
+            for (chunk in reading.days.toSortedMap().entries.chunked(MAX_DAYS_PER_SEND)) {
+                val days = JSONArray()
+                for ((day, byApp) in chunk) {
+                    val list = JSONArray()
+                    for ((name, seconds) in byApp) list.put(JSONObject().put("app", name).put("seconds", seconds))
+                    apps += byApp.size
+                    days.put(JSONObject().put("day", day.toString()).put("apps", list))
+                }
+                sent.addAll(Api.sync(store.server, token, days))
             }
-            val wanted = Api.sync(store.server, token, days)
+            if (everything) store.historyDone = true
+            val wanted = sent.toList()
 
             // The server asks for a picture of each app it has none for. A failure here must not fail the sync.
             runCatching {

@@ -7,15 +7,15 @@ import { iconSources } from './icons.js'
 /** What the Screen Time page reads. The numbers come from ActivityWatch (see activityWatch.ts). */
 export const screenTimeRouter = Router()
 
-const HISTORY_DAYS = 90
+const HISTORY_DAYS = 1100
 
-// The last 90 days of totals, one row per day and app, and one per day and website.
+// Up to the last three years of totals, one row per day and app, and one per day and website.
 screenTimeRouter.get('/data', async (req, res) => {
   const userId = currentUserId(req)
   const since = new Date(Date.now() - HISTORY_DAYS * 24 * 3600 * 1000).toLocaleDateString('en-CA')
   const [usage, sites] = await Promise.all([
-    ScreenTimeUsage.find({ userId, day: { $gte: since } }).sort({ day: -1 }).limit(50000),
-    ScreenTimeSite.find({ userId, day: { $gte: since } }).sort({ day: -1 }).limit(50000),
+    ScreenTimeUsage.find({ userId, day: { $gte: since } }).sort({ day: -1 }).limit(200000),
+    ScreenTimeSite.find({ userId, day: { $gte: since } }).sort({ day: -1 }).limit(200000),
   ])
   res.json({
     usage: usage.map((u) => ({ device: u.device, kind: u.source === 'phone' ? 'phone' : 'computer', day: u.day, app: u.app, seconds: u.seconds })),

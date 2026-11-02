@@ -28,9 +28,14 @@ class Store(context: Context) {
         get() = prefs.getString("lastMessage", "") ?: ""
         set(value) = prefs.edit().putString("lastMessage", value).apply()
 
+    /** Whether all the history the phone has was already sent once. */
+    var historyDone: Boolean
+        get() = prefs.getBoolean("historyDone", false)
+        set(value) = prefs.edit().putBoolean("historyDone", value).apply()
+
     val paired get() = !token.isNullOrBlank()
 
     fun forgetPairing() {
-        prefs.edit().remove("token").remove("lastSyncMs").remove("lastMessage").apply()
+        prefs.edit().remove("token").remove("lastSyncMs").remove("lastMessage").remove("historyDone").apply()
     }
 }

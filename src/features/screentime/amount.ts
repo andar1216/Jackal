@@ -4,8 +4,8 @@ import { useState } from 'react'
 export type Amount = { choice: string; custom: number }
 export type AmountOption = { value: string; label: string }
 
-/** Valkyrie keeps 90 days of screen time, so a custom number of days can't go past that. */
-export const MAX_DAYS = 90
+/** Valkyrie shows up to three years of screen time, so a custom number of days can't go past that. */
+export const MAX_DAYS = 1100
 /** The most items a custom list can show. */
 export const MAX_ITEMS = 200
 

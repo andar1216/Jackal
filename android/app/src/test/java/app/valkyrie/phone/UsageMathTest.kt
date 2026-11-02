@@ -109,4 +109,28 @@ class UsageMathTest {
     fun nothingHappenedMeansNothingCounted() {
         assertTrue(totals(emptyList()).isEmpty())
     }
+
+    @Test
+    fun olderDaysComeFromAndroidsDailyTotalsAndStopWhereTheLogBegins() {
+        val old = LocalDate.of(2026, 9, 1)
+        val result = UsageMath.older(
+            listOf(
+                DailyStat(at(old, 0), "yt", 1_800_000),
+                DailyStat(at(old, 0), "yt", 1_500_000), // a second total for the same day: the bigger one counts, not the sum
+                DailyStat(at(old, 0), "home", 600_000), // ignored
+                DailyStat(at(old, 0), "maps", 0), // nothing on screen
+                DailyStat(at(day1, 0), "yt", 900_000), // the log covers this day
+            ),
+            day1, zone, setOf("home"),
+        )
+        assertEquals(setOf(old), result.keys)
+        assertEquals(mapOf("yt" to 1800L), result[old])
+    }
+
+    @Test
+    fun aDailyTotalThatStartsAnHourOffStillLandsOnItsOwnDay() {
+        val old = LocalDate.of(2026, 9, 1)
+        val result = UsageMath.older(listOf(DailyStat(at(old, 1), "yt", 60_000)), day1, zone, emptySet())
+        assertEquals(mapOf("yt" to 60L), result[old])
+    }
 }

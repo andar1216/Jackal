@@ -7,6 +7,9 @@ import java.time.ZoneId
 /** One thing Android noted: at `time`, something happened to the app `pkg`. `type` is a UsageEvents.Event constant. */
 data class Ev(val time: Long, val type: Int, val pkg: String)
 
+/** Android's own total for one app on one day (`UsageStats`): the day's start in milliseconds and the milliseconds on screen. */
+data class DailyStat(val firstMs: Long, val pkg: String, val millis: Long)
+
 /**
  * Turns Android's log of "this app came to the front / went away" into seconds per app per day.
  * It is plain Kotlin so it can be tested without a phone.
@@ -61,5 +64,24 @@ object UsageMath {
         close(to) // still on screen right now
 
         return millis.mapValues { (_, apps) -> apps.mapValues { (it.value + 500) / 1000 }.filterValues { it > 0 } }
+    }
+
+    /**
+     * Seconds per app for the days before `before`, from the daily totals Android keeps for far longer than the detailed log.
+     * Android may hold more than one total for the same app and day (for example after the clock zone changed), so the
+     * biggest one is taken rather than adding them. A total belongs to the day in the middle of its span.
+     */
+    fun older(stats: List<DailyStat>, before: LocalDate, zone: ZoneId, ignore: Set<String>): Map<LocalDate, Map<String, Long>> {
+        val best = HashMap<LocalDate, HashMap<String, Long>>()
+        for (s in stats) {
+            if (s.pkg in ignore || s.millis <= 0) continue
+            val day = Instant.ofEpochMilli(s.firstMs + 12 * 3_600_000L).atZone(zone).toLocalDate()
+            if (!day.isBefore(before)) continue
+            val apps = best.getOrPut(day) { HashMap() }
+            apps[s.pkg] = maxOf(apps[s.pkg] ?: 0L, s.millis)
+        }
+        return best
+            .mapValues { (_, apps) -> apps.mapValues { (it.value + 500) / 1000 }.filterValues { it > 0 } }
+            .filterValues { it.isNotEmpty() }
     }
 }

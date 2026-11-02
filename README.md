@@ -244,7 +244,7 @@ Then on the Screen Time page press **Pair a phone**. It shows this computer's ad
 
 How it works:
 
-- The app works out seconds per app per day from Android's app-opened/closed events (the home screen and the screen being off are not counted), and sends the last 3 days (7 the first time: Android only keeps about a week) every 30 minutes, when it is opened, and on **Sync now**. Each sync replaces those days, so repeats are harmless.
+- The app works out seconds per app per day from Android's app-opened/closed events (the home screen and the screen being off are not counted), and sends the last 3 days every 30 minutes. The first sync after pairing also takes in all the older history the phone still has (up to about 3 years): Android's detailed log only goes back about a week, so earlier days use the daily per-app totals it keeps for longer, which can differ slightly from Digital Wellbeing. Syncs also happen when the app is opened and on **Sync now**. Each sync replaces those days, so repeats are harmless.
 - It also sends a small icon for each app, which the Most used apps panel shows. Only app names, icons and seconds ever leave the phone.
 - Traffic is plain `http` on your home network (the key is not protected from someone else on your Wi-Fi). Away from home the phone can't reach the server, so it catches up on the next sync at home, up to a week back.
 - The numbers are stored with the computer's, marked `source: 'phone'` and filed under the phone's name. The sync logic and tests are in `server/src/integrations/phone.ts`; the reading logic and its unit tests are in `android/app/src/main/java/app/valkyrie/phone/UsageMath.kt`.
