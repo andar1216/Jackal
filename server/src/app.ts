@@ -4,6 +4,7 @@ import mongoose from 'mongoose'
 import { requireSameOrigin } from './auth/middleware.js'
 import { config } from './config.js'
 import { crunchImportRouter } from './integrations/crunch.js'
+import { screenTimeAgentRouter } from './integrations/screenTime.js'
 import { errorHandler, notFound } from './lib/errors.js'
 import { api } from './routes.js'
 
@@ -27,6 +28,9 @@ export function createApp() {
     express.json({ limit: '3mb' }),
     crunchImportRouter,
   )
+  // The computer agent is a program, not a browser page: no cookie and no origin, just its own secret.
+  app.use('/api/screen-time/agent', express.json({ limit: '1mb' }), screenTimeAgentRouter)
+
   // `credentials: true` lets the browser send the session cookie. Only our own frontend is allowed.
   app.use(cors({ origin: config.clientOrigin, credentials: true }))
   app.use(express.json({ limit: '100kb' }))

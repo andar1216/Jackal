@@ -1143,3 +1143,14 @@ button:disabled {
   display: grid;
   gap: 4px;
 }
+
+.device-command {
+  margin: 4px 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 0.8rem;
+}

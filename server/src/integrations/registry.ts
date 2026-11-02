@@ -75,8 +75,8 @@ export const providers: Provider[] = [
     description: 'Track time spent in apps on this PC.',
     category: 'screen-time',
     api: 'unofficial',
-    implemented: false,
-    note: 'Needs a small background agent running on the PC.',
+    implemented: true,
+    note: 'Windows has no API for this. A small agent on the PC (agent/valkyrie-agent.mjs) reads which app is in front and sends the daily totals. Set it up on the Screen Time page.',
   },
 ]
 

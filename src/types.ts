@@ -41,6 +41,13 @@ export type CrunchData = {
   payments: CrunchPayment[]
 }
 
+/** Active seconds in one app on one day, from one device. */
+export type ScreenTimeUsage = { device: string; day: string; app: string; seconds: number }
+export type ScreenTimeDevice = { name: string; kind: 'computer' | 'phone'; lastSeenAt: string | null }
+/** The computer agent on the machine Valkyrie runs on. */
+export type AgentStatus = { supported: boolean; running: boolean; startup: boolean }
+export type ScreenTimeData = { devices: ScreenTimeDevice[]; usage: ScreenTimeUsage[] }
+
 export type Integration = {
   id: string
   name: string

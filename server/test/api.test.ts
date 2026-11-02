@@ -443,7 +443,7 @@ describe('meals and time entries', () => {
 })
 
 describe('integrations', () => {
-  it('lists every planned integration as not connected, and only Crunch (which needs no keys) as available', async () => {
+  it('lists every planned integration as not connected, and only Crunch and the computer agent (which need no keys) as available', async () => {
     const { status, body } = await call('GET', '/integrations')
     assert.equal(status, 200)
     assert.deepEqual(
@@ -452,7 +452,7 @@ describe('integrations', () => {
     )
     for (const item of body) {
       assert.equal(item.status, 'not_connected')
-      assert.equal(item.available, item.id === 'crunch')
+      assert.equal(item.available, item.id === 'crunch' || item.id === 'windows-screen-time')
     }
   })
 
@@ -688,6 +688,142 @@ describe('crunch bookmark (data sent from the browser)', () => {
     assert.equal((await call('DELETE', '/integrations/crunch/connection')).status, 204)
     assert.equal((await send(token)).status, 401)
     assert.equal((await call('GET', '/integrations/crunch/data')).body.connected, false)
+  })
+})
+
+describe('screen time (computer agent)', () => {
+  const report = (token: string | undefined, body: unknown) =>
+    fetch(`${base}/screen-time/agent/usage`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    })
+  const day = '2026-11-01'
+  const sent = (apps: { app: string; seconds: number }[], device = 'DESKTOP-1') => ({ device, days: [{ day, apps }] })
+  let token = ''
+
+  // A pretend agent, so the tests never start a real program.
+  const fake = { running: false, startup: false, started: [] as { server: string; token: string; device: string }[] }
+  before(async () => {
+    const { setAgentControl } = await import('../src/integrations/localAgent.js')
+    setAgentControl({
+      status: () => ({ supported: true, running: fake.running, startup: fake.startup }),
+      start: async (o) => {
+        fake.started.push(o)
+        fake.running = true
+      },
+      stop: async () => {
+        fake.running = false
+      },
+      setStartup: (on) => {
+        fake.startup = on
+      },
+    })
+  })
+
+  it('runs and stops the agent from the page, handing it a working secret directly', async () => {
+    assert.equal((await makeClient()('POST', '/integrations/screen-time/agent/start')).status, 401)
+    assert.deepEqual((await call('GET', '/integrations/screen-time/agent')).body, { supported: true, running: false, startup: false })
+
+    const started = await call('POST', '/integrations/screen-time/agent/start')
+    assert.equal(started.status, 200)
+    assert.equal(started.body.running, true)
+    const { server, token: secret, device } = fake.started[0]
+    assert.match(server, /^http:\/\/127\.0\.0\.1:\d+$/)
+    assert.ok(device.length > 0)
+    // The secret it was given is accepted by the agent route.
+    assert.equal((await report(secret, sent([{ app: 'chrome', seconds: 5 }], 'RUN-TEST'))).status, 200)
+
+    assert.equal((await call('PUT', '/integrations/screen-time/agent/startup', { enabled: true })).body.startup, true)
+    assert.equal((await call('PUT', '/integrations/screen-time/agent/startup', { enabled: 'yes' })).status, 400)
+    assert.equal((await call('POST', '/integrations/screen-time/agent/stop')).body.running, false)
+
+    await call('DELETE', '/integrations/screen-time/devices/RUN-TEST')
+    fake.startup = false
+  })
+
+  it('only gives the agent secret to a signed-in person, and keeps just a hash', async () => {
+    assert.equal((await makeClient()('POST', '/integrations/screen-time/token')).status, 401)
+    const r = await call('POST', '/integrations/screen-time/token')
+    assert.equal(r.status, 201)
+    token = r.body.token
+    const { ScreenTimeToken } = await import('../src/models.js')
+    assert.equal(await ScreenTimeToken.countDocuments({ tokenHash: token }), 0)
+  })
+
+  it('takes totals from the agent without a sign-in cookie, and lists the computer as connected', async () => {
+    const res = await report(token, sent([{ app: 'chrome', seconds: 600 }, { app: 'Code', seconds: 300 }]))
+    assert.equal(res.status, 200)
+    const { body } = await call('GET', '/integrations/screen-time/data')
+    assert.equal(body.devices.length, 1)
+    assert.equal(body.devices[0].name, 'DESKTOP-1')
+    assert.deepEqual(
+      body.usage.map((u: { app: string; seconds: number }) => [u.app, u.seconds]).sort(),
+      [['Code', 300], ['chrome', 600]],
+    )
+    const list = await call('GET', '/integrations')
+    assert.equal(list.body.find((i: { id: string }) => i.id === 'windows-screen-time').status, 'connected')
+  })
+
+  it('keeps the larger total when a report is repeated or arrives late', async () => {
+    await report(token, sent([{ app: 'chrome', seconds: 900 }]))
+    await report(token, sent([{ app: 'chrome', seconds: 100 }]))
+    const { body } = await call('GET', '/integrations/screen-time/data')
+    const chrome = body.usage.filter((u: { app: string }) => u.app === 'chrome')
+    assert.equal(chrome.length, 1)
+    assert.equal(chrome[0].seconds, 900)
+  })
+
+  it('refuses a missing or wrong secret and nonsense totals', async () => {
+    assert.equal((await report(undefined, sent([]))).status, 401)
+    assert.equal((await report('nope', sent([]))).status, 401)
+    assert.equal((await report(token, sent([{ app: 'x', seconds: 999999 }]))).status, 400)
+    assert.equal((await report(token, { device: 'PC', days: [{ day: 'today', apps: [] }] })).status, 400)
+  })
+
+  it('takes website totals from the Chrome extension with its own secret, separate from the agent', async () => {
+    const mk = await call('POST', '/integrations/screen-time/token', { purpose: 'extension' })
+    assert.equal(mk.status, 201)
+    const ext = mk.body.token
+    assert.ok(mk.body.device.length > 0)
+    const web = (secret: string | undefined, body: unknown) =>
+      fetch(`${base}/screen-time/agent/web`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(secret ? { authorization: `Bearer ${secret}` } : {}) },
+        body: JSON.stringify(body),
+      })
+    const sites = (list: { site: string; seconds: number }[]) => ({ device: 'DESKTOP-1', days: [{ day, sites: list }] })
+
+    assert.equal((await web(ext, sites([{ site: 'YouTube.com', seconds: 300 }, { site: 'github.com', seconds: 120 }]))).status, 200)
+    await web(ext, sites([{ site: 'youtube.com', seconds: 200 }])) // smaller: ignored
+    const { body } = await call('GET', '/integrations/screen-time/data')
+    assert.deepEqual(
+      body.sites.map((s: { site: string; seconds: number }) => [s.site, s.seconds]).sort(),
+      [['github.com', 120], ['youtube.com', 300]],
+    )
+    assert.ok(body.devices.find((d: { name: string }) => d.name === 'DESKTOP-1').webSeenAt)
+
+    // Each kind of secret only works on its own route, and making one does not break the other.
+    assert.equal((await web(token, sites([]))).status, 401, 'the agent secret is not the extension secret')
+    assert.equal((await report(ext, sent([]))).status, 401)
+    assert.equal((await report(token, sent([{ app: 'chrome', seconds: 1 }]))).status, 200, 'the agent still works')
+    assert.equal((await web(undefined, sites([]))).status, 401)
+    assert.equal((await web(ext, { device: 'PC', days: [{ day, sites: [{ site: '', seconds: 1 }] }] })).status, 400)
+  })
+  it("keeps people's screen time apart", async () => {
+    const other = makeClient()
+    await other('POST', '/auth/register', { email: 'screen-other@example.com', name: 'Other', password: PASSWORD })
+    const seen = await other('GET', '/integrations/screen-time/data')
+    assert.deepEqual(seen.body, { devices: [], usage: [], sites: [] })
+  })
+
+  it('forgets a computer, and everything stops once the connector is disconnected', async () => {
+    assert.equal((await call('DELETE', '/integrations/screen-time/devices/DESKTOP-1')).status, 204)
+    assert.deepEqual((await call('GET', '/integrations/screen-time/data')).body, { devices: [], usage: [], sites: [] })
+    await report(token, sent([{ app: 'chrome', seconds: 60 }]))
+    assert.equal((await call('DELETE', '/integrations/windows-screen-time/connection')).status, 204)
+    assert.equal((await report(token, sent([{ app: 'chrome', seconds: 60 }]))).status, 401)
+    assert.deepEqual((await call('GET', '/integrations/screen-time/data')).body, { devices: [], usage: [], sites: [] })
   })
 })
 

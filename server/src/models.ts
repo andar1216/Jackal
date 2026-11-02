@@ -244,6 +244,46 @@ export const CrunchPayment = mongoose.model(
   }),
 )
 
+/** The secret the computer agent sends with its totals. It can only send screen time for this one person. Only a hash is kept. */
+const screenTimeTokenSchema = ownedSchema({
+  // The computer agent and the Chrome extension each have their own, so setting one up never breaks the other.
+  purpose: { type: String, enum: ['agent', 'extension'], default: 'agent' },
+  tokenHash: { type: String, required: true, unique: true },
+  expiresAt: { type: Date, required: true, index: { expires: 0 } },
+})
+screenTimeTokenSchema.index({ userId: 1, purpose: 1 }, { unique: true }) // one of each at a time
+export const ScreenTimeToken = mongoose.model('ScreenTimeToken', screenTimeTokenSchema)
+
+/** A computer (later also phones) that reports screen time. */
+const screenTimeDeviceSchema = ownedSchema({
+  name: { type: String, required: true, trim: true },
+  kind: { type: String, enum: ['computer', 'phone'], default: 'computer' },
+  lastSeenAt: Date, // the agent's last report
+  webSeenAt: Date, // the Chrome extension's last report
+})
+screenTimeDeviceSchema.index({ userId: 1, name: 1 }, { unique: true })
+export const ScreenTimeDevice = mongoose.model('ScreenTimeDevice', screenTimeDeviceSchema)
+
+/** Seconds of active use of one app on one day. The agent sends running totals, so a resend never counts twice. */
+const screenTimeUsageSchema = ownedSchema({
+  device: { type: String, required: true },
+  day,
+  app: { type: String, required: true },
+  seconds: { type: Number, required: true, min: 0 },
+})
+screenTimeUsageSchema.index({ userId: 1, device: 1, day: 1, app: 1 }, { unique: true })
+export const ScreenTimeUsage = mongoose.model('ScreenTimeUsage', screenTimeUsageSchema)
+
+/** Seconds on one website on one day, from the Chrome extension. Only the site's name is kept, never the page. */
+const screenTimeSiteSchema = ownedSchema({
+  device: { type: String, required: true },
+  day,
+  site: { type: String, required: true },
+  seconds: { type: Number, required: true, min: 0 },
+})
+screenTimeSiteSchema.index({ userId: 1, device: 1, day: 1, site: 1 }, { unique: true })
+export const ScreenTimeSite = mongoose.model('ScreenTimeSite', screenTimeSiteSchema)
+
 /** Every model that belongs to a user. */
 /** A bank or card the person lists by hand (for example one Plaid can't reach yet). It shows up under Finances > By account. */
 export const ManualAccount = mongoose.model(
@@ -295,7 +335,7 @@ const boardLayoutSchema = ownedSchema({
 boardLayoutSchema.index({ userId: 1, page: 1 }, { unique: true })
 export const BoardLayout = mongoose.model('BoardLayout', boardLayoutSchema)
 
-export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment]
+export const ownedModels = [Skill, Tracker, Transaction, Meal, Workout, TimeEntry, CalendarEvent, Connection, PlaidItem, ManualAccount, AccountView, SubscriptionMark, BoardLayout, CrunchLink, CrunchImportToken, CrunchCheckIn, CrunchClass, CrunchPayment, ScreenTimeToken, ScreenTimeDevice, ScreenTimeUsage, ScreenTimeSite]
 
 /**
  * Data created before accounts existed has no owner. The first account to be created inherits it.
