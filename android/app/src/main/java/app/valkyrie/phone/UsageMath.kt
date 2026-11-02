@@ -69,13 +69,14 @@ object UsageMath {
     /**
      * Seconds per app for the days before `before`, from the daily totals Android keeps for far longer than the detailed log.
      * Android may hold more than one total for the same app and day (for example after the clock zone changed), so the
-     * biggest one is taken rather than adding them. A total belongs to the day in the middle of its span.
+     * biggest one is taken rather than adding them. A day's total starts when the phone was first used after midnight
+     * (not at midnight itself), so it belongs to the day it starts on.
      */
     fun older(stats: List<DailyStat>, before: LocalDate, zone: ZoneId, ignore: Set<String>): Map<LocalDate, Map<String, Long>> {
         val best = HashMap<LocalDate, HashMap<String, Long>>()
         for (s in stats) {
             if (s.pkg in ignore || s.millis <= 0) continue
-            val day = Instant.ofEpochMilli(s.firstMs + 12 * 3_600_000L).atZone(zone).toLocalDate()
+            val day = Instant.ofEpochMilli(s.firstMs).atZone(zone).toLocalDate()
             if (!day.isBefore(before)) continue
             val apps = best.getOrPut(day) { HashMap() }
             apps[s.pkg] = maxOf(apps[s.pkg] ?: 0L, s.millis)

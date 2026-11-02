@@ -33,9 +33,14 @@ class Store(context: Context) {
         get() = prefs.getBoolean("historyDone", false)
         set(value) = prefs.edit().putBoolean("historyDone", value).apply()
 
+    /** What the last pull of all the history found, kept apart so later syncs don't wipe it. */
+    var historyMessage: String
+        get() = prefs.getString("historyMessage", "") ?: ""
+        set(value) = prefs.edit().putString("historyMessage", value).apply()
+
     val paired get() = !token.isNullOrBlank()
 
     fun forgetPairing() {
-        prefs.edit().remove("token").remove("lastSyncMs").remove("lastMessage").remove("historyDone").apply()
+        prefs.edit().remove("token").remove("lastSyncMs").remove("lastMessage").remove("historyDone").remove("historyMessage").apply()
     }
 }

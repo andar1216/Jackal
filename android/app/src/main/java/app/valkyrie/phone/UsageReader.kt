@@ -52,10 +52,10 @@ object UsageReader {
 
     /**
      * Everything the phone still has, up to `days` days back. The recent days come from the detailed log, which is exact
-     * but only goes back a week or so. Days before that come from the daily totals Android keeps for much longer, so only
-     * days that have something are in the result.
+     * but only goes back a week or so, then Android's real daily totals (about 10 days). Nothing is estimated: days Android
+     * has no daily numbers for are left out. Only days that have something are in the result.
      */
-    fun readHistory(context: Context, days: Int): Map<LocalDate, Map<String, Long>> {
+    fun readHistory(context: Context, days: Int): History {
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         val first = today.minusDays((days - 1).toLong())
@@ -76,8 +76,16 @@ object UsageReader {
 
         val recent = generateSequence(exactFrom) { it.plusDays(1) }.takeWhile { it <= today }
             .associateWith { exact[it] ?: emptyMap() }
-        return older + recent
+
+        // Only what Android really has: Android keeps real daily numbers for about 10 days and nothing finer further back.
+        val real = older + recent
+        val note = "Android has real days from ${real.keys.minOrNull() ?: "nowhere"} (${real.size} days). " +
+            "It gave ${stats.size} daily totals, and the log starts ${firstLogged ?: "nowhere"}."
+        return History(real, note)
     }
+
+    /** What `readHistory` found, and a line about where it came from, to show when something looks short. */
+    class History(val days: Map<LocalDate, Map<String, Long>>, val note: String)
 
     // The home screen and the system's own screens are not time "in an app".
     private fun ignored(context: Context): Set<String> {

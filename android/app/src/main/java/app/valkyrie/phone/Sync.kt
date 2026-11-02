@@ -22,12 +22,13 @@ object Sync {
     private const val EVERY_MINUTES = 30L
 
     /** Packages are called by their labels everywhere else, so two apps with one label are one line. */
-    class Reading(val days: Map<LocalDate, Map<String, Long>>, val packageOf: Map<String, String>)
+    class Reading(val days: Map<LocalDate, Map<String, Long>>, val packageOf: Map<String, String>, val note: String = "")
 
     fun readByLabel(context: Context, days: Int, history: Boolean = false): Reading {
         val labels = HashMap<String, String?>()
         val packageOf = HashMap<String, String>()
-        val read = if (history) UsageReader.readHistory(context, days) else UsageReader.read(context, days)
+        var note = ""
+        val read = if (history) UsageReader.readHistory(context, days).also { note = it.note }.days else UsageReader.read(context, days)
         val byDay = read.mapValues { (_, apps) ->
             val named = HashMap<String, Long>()
             for ((pkg, seconds) in apps) {
@@ -37,22 +38,22 @@ object Sync {
             }
             named as Map<String, Long>
         }
-        return Reading(byDay, packageOf)
+        return Reading(byDay, packageOf, note)
     }
 
     private val lock = Any()
 
     /** Does one sync and returns what to tell the person. Safe to call from any background thread. */
-    fun run(context: Context): String = synchronized(lock) { runLocked(context) }
+    fun run(context: Context, everything: Boolean = false): String = synchronized(lock) { runLocked(context, everything) }
 
-    private fun runLocked(context: Context): String {
+    private fun runLocked(context: Context, forceEverything: Boolean): String {
         val store = Store(context)
         val token = store.token
         if (token.isNullOrBlank() || store.server.isBlank()) return "Not paired yet."
+        // The first sync after pairing (or after an update) takes in everything the phone still has.
+        val everything = forceEverything || !store.historyDone
         val message = try {
             if (!UsageReader.hasAccess(context)) throw ApiException(-1, "Usage access is off. Turn it on for Valkyrie in Settings.")
-            // The first sync after pairing (or after an update) takes in everything the phone still has.
-            val everything = !store.historyDone
             val reading = if (everything) readByLabel(context, HISTORY_DAYS, history = true) else readByLabel(context, REFRESH_DAYS)
 
             var apps = 0
@@ -80,7 +81,9 @@ object Sync {
             }
 
             store.lastSyncMs = System.currentTimeMillis()
-            "Sent $apps app totals for ${reading.days.size} days."
+            val oldest = reading.days.keys.minOrNull()
+            "Sent $apps app totals for ${reading.days.size} days" + (oldest?.let { ", the oldest being $it" } ?: "") + "." +
+                (if (everything) "\n${reading.note}" else "")
         } catch (e: ApiException) {
             if (e.status == 401) {
                 store.forgetPairing()
@@ -91,6 +94,7 @@ object Sync {
             "Usage access is off. Turn it on for Valkyrie in Settings."
         }
         store.lastMessage = message
+        if (everything) store.historyMessage = message
         return message
     }
 

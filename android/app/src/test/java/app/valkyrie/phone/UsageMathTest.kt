@@ -128,9 +128,10 @@ class UsageMathTest {
     }
 
     @Test
-    fun aDailyTotalThatStartsAnHourOffStillLandsOnItsOwnDay() {
+    fun aDailyTotalThatStartsLateInTheDayStillLandsOnItsOwnDay() {
+        // Android starts a day's total when the phone is first used after midnight, which can be the afternoon.
         val old = LocalDate.of(2026, 9, 1)
-        val result = UsageMath.older(listOf(DailyStat(at(old, 1), "yt", 60_000)), day1, zone, emptySet())
+        val result = UsageMath.older(listOf(DailyStat(at(old, 15), "yt", 60_000)), day1, zone, emptySet())
         assertEquals(mapOf("yt" to 60L), result[old])
     }
 }

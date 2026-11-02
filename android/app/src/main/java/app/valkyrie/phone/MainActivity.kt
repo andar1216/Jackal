@@ -42,6 +42,8 @@ class MainActivity : Activity() {
     private lateinit var connectedText: TextView
     private lateinit var lastText: TextView
     private lateinit var syncButton: Button
+    private lateinit var historyButton: Button
+    private lateinit var historyText: TextView
     private lateinit var todayText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,10 +90,12 @@ class MainActivity : Activity() {
         // After pairing
         connectedText = text("", 15f)
         lastText = text("", 14f, color = Color.DKGRAY)
+        historyText = text("", 12f, color = Color.GRAY).apply { setPadding(0, dp(6), 0, 0) }
         syncButton = button("Sync now", primary = true) { syncInBackground() }
+        historyButton = button("Send all history again") { syncInBackground(everything = true) }
         connectedCard = card(
             text("2. Connected to Valkyrie", 17f, bold = true),
-            connectedText, lastText, space(8), syncButton, space(8),
+            connectedText, lastText, space(8), syncButton, space(8), historyButton, historyText, space(8),
             button("Let it run in the background") { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) },
             text("It syncs about every half hour, only while your phone can reach Valkyrie. Samsung phones sometimes pause apps you don't open: choose \"Unrestricted\" for Valkyrie under battery settings if syncs stop.", 12f, color = Color.GRAY).apply { setPadding(0, dp(6), 0, dp(8)) },
             button("Unpair this phone") { confirmUnpair() },
@@ -122,6 +126,7 @@ class MainActivity : Activity() {
         val last = store.lastSyncMs
         val when_ = if (last > 0) "Last synced ${DateUtils.getRelativeTimeSpanString(last, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)}.\n" else ""
         lastText.text = when_ + store.lastMessage
+        historyText.text = if (store.historyMessage.isBlank()) "Sends every day this phone still has, not just the last few." else "Last time: ${store.historyMessage}"
 
         if (!access) {
             todayText.text = "Turn on usage access to see today's total here."
@@ -188,13 +193,15 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun syncInBackground() {
+    private fun syncInBackground(everything: Boolean = false) {
         syncButton.isEnabled = false
+        historyButton.isEnabled = false
         syncButton.text = "Syncing..."
         thread {
-            Sync.run(this)
+            Sync.run(this, everything)
             runOnUiThread {
                 syncButton.isEnabled = true
+                historyButton.isEnabled = true
                 syncButton.text = "Sync now"
                 update()
             }
