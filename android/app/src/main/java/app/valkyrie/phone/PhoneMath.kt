@@ -164,3 +164,30 @@ object DietMath {
     /** The last `n` days, newest first, ending today. */
     fun lastDays(today: LocalDate, n: Int = 7): List<String> = (0 until n).map { today.minusDays(it.toLong()).toString() }
 }
+
+/** The sums behind the Crunch panels on Fitness. Same rules as the website, so the numbers match. */
+object CrunchMath {
+    const val AVERAGE_WEEKS = 12
+
+    class Progress(val thisWeek: Int, val goal: Int?, val average: Double, val best: Int)
+
+    /** Crunch counts a week from Monday. Looks at the last 12 weeks (this one included) and always divides by 12. */
+    fun progress(checkIns: List<LocalDate>, goal: Int?, today: LocalDate): Progress {
+        fun monday(day: LocalDate): LocalDate = day.minusDays((day.dayOfWeek.value - 1).toLong())
+        val perWeek = checkIns.groupingBy { monday(it) }.eachCount()
+        val weeks = (AVERAGE_WEEKS - 1 downTo 0).map { monday(today.minusWeeks(it.toLong())) }
+        val counts = weeks.map { perWeek[it] ?: 0 }
+        return Progress(counts.last(), goal?.takeIf { it > 0 }, counts.sum().toDouble() / AVERAGE_WEEKS, perWeek.values.maxOrNull() ?: 0)
+    }
+
+    /**
+     * When something happened, on this phone's clock. Check-ins arrive as "2026-10-30T17:05" (already local), classes as
+     * a full timestamp ("2026-10-30T22:00:00.000Z").
+     */
+    fun time(text: String, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): java.time.LocalDateTime =
+        if (text.endsWith("Z") || Regex("""[+-]\d\d:\d\d$""").containsMatchIn(text)) {
+            java.time.OffsetDateTime.parse(text).atZoneSameInstant(zone).toLocalDateTime()
+        } else {
+            java.time.LocalDateTime.parse(text)
+        }
+}

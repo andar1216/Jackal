@@ -98,10 +98,9 @@ crunchRouter.post('/connect', async (req, res) => {
   res.status(201).json(counts(snap))
 })
 
-// Sign in again with the saved login and refresh everything.
-crunchRouter.post('/sync', async (req, res) => {
+// Sign in again with the saved login and refresh everything. Also used by the phone app's Sync now.
+export async function syncCrunch(userId: unknown) {
   requireKey()
-  const userId = currentUserId(req)
   const link = await CrunchLink.findOne({ userId }).select('+password')
   if (!link) throw new HttpError(409, 'Crunch is not connected yet.')
   if (!link.password || !link.email) {
@@ -133,9 +132,12 @@ crunchRouter.post('/sync', async (req, res) => {
     await replaceData(userId, fetched)
     return fetched
   })
-  res.json(counts(snap))
-})
+  return counts(snap)
+}
 
+crunchRouter.post('/sync', async (req, res) => {
+  res.json(await syncCrunch(currentUserId(req)))
+})
 /* ---------- The person signs in on Crunch's own site and sends the data from there ---------- */
 
 const IMPORT_TOKEN_DAYS = 180
@@ -220,19 +222,15 @@ crunchImportRouter.post('/', async (req, res) => {
 /* ---------- Reading it back ---------- */
 
 // Everything the Fitness page shows, newest first. The password never leaves the server.
-crunchRouter.get('/data', async (req, res) => {
-  const userId = currentUserId(req)
+export async function crunchData(userId: unknown) {
   const link = await CrunchLink.findOne({ userId })
-  if (!link) {
-    res.json({ connected: false, checkIns: [], classes: [], payments: [] })
-    return
-  }
+  if (!link) return { connected: false, checkIns: [], classes: [], payments: [] }
   const [checkIns, classes, payments] = await Promise.all([
     CrunchCheckIn.find({ userId }).sort({ at: -1 }),
     CrunchClass.find({ userId }).sort({ startsAt: -1 }),
     CrunchPayment.find({ userId }).sort({ date: -1 }),
   ])
-  res.json({
+  return {
     connected: true,
     email: link.email ?? null,
     autoSync: link.autoSync ?? true,
@@ -243,9 +241,12 @@ crunchRouter.get('/data', async (req, res) => {
     checkIns: checkIns.map((c) => ({ id: c.externalId, at: c.at.toISOString().slice(0, 16), club: c.club ?? '' })),
     classes: classes.map((c) => ({ id: c.id, program: c.program, startsAt: c.startsAt, club: c.club ?? '', status: c.status, feeCents: c.feeCents ?? null })),
     payments: payments.map((p) => ({ id: p.id, service: p.service, amountCents: p.amountCents, date: p.date })),
-  })
-})
+  }
+}
 
+crunchRouter.get('/data', async (req, res) => {
+  res.json(await crunchData(currentUserId(req)))
+})
 /** Forget the login, the bookmark's secret and everything imported from Crunch. */
 export async function disconnectCrunch(userId: unknown) {
   await Promise.all([

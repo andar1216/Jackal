@@ -1452,7 +1452,16 @@ describe('phone', () => {
     assert.deepEqual((await asPhone('GET', '/app/workouts?from=2031-04-01&to=2031-04-01')).body.map((w: { type: string }) => w.type), ['Run'])
     assert.equal((await asPhone('DELETE', `/app/workouts/${run.body.id}`)).status, 204)
 
-    for (const path of ['/app/meals', '/app/workouts']) assert.equal((await asPhone('GET', path, undefined, 'wrong')).status, 401)
+    for (const path of ['/app/meals', '/app/workouts', '/app/fitness']) assert.equal((await asPhone('GET', path, undefined, 'wrong')).status, 401)
+
+    // Fitness connectors and Crunch's data, as the website's Fitness page has them.
+    const fitness = (await asPhone('GET', '/app/fitness')).body
+    assert.deepEqual(fitness.connectors.map((c: { id: string }) => c.id).sort(), ['crunch', 'myfitnesspal'])
+    assert.equal(fitness.connectors.every((c: { category: string }) => c.category === 'fitness'), true)
+    assert.equal(fitness.crunch.connected, false)
+    assert.deepEqual([fitness.crunch.checkIns, fitness.crunch.classes, fitness.crunch.payments], [[], [], []])
+    assert.ok([409, 503].includes((await asPhone('POST', '/app/fitness/crunch/sync')).status), 'nothing to sync until Crunch is connected')
+    assert.equal((await asPhone('POST', '/app/fitness/crunch/sync', undefined, 'wrong')).status, 401)
   })
 
   it("does not show one person's phone to another", async () => {

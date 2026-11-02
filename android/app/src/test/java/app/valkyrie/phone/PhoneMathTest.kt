@@ -125,4 +125,25 @@ class PhoneMathTest {
         assertEquals(1650, DietMath.remaining(800, 250))
         assertEquals(listOf("2026-11-01", "2026-10-31", "2026-10-30"), DietMath.lastDays(today, 3))
     }
+
+    @Test
+    fun crunchWeeksStartOnMondayAndTheAverageIsAlwaysOverTwelveWeeks() {
+        // Today is Sunday 2026-11-01, so this week began Monday 2026-10-26.
+        val checkIns = listOf("2026-10-26", "2026-10-28", "2026-10-31", "2026-10-25", "2026-10-19", "2026-10-20").map { LocalDate.parse(it) }
+        val p = CrunchMath.progress(checkIns, 3, today)
+        assertEquals(3, p.thisWeek) // the 26th, 28th and 31st; the 25th is a Sunday and belongs to the week before
+        assertEquals(3, p.goal)
+        assertEquals(3, p.best)
+        assertEquals(6.0 / 12, p.average, 0.0001)
+        assertEquals(null, CrunchMath.progress(checkIns, 0, today).goal)
+        assertEquals(0, CrunchMath.progress(emptyList(), null, today).best)
+    }
+
+    @Test
+    fun crunchTimesAreReadOnThePhonesClock() {
+        val newYork = java.time.ZoneId.of("America/New_York")
+        // A check-in is already local; a class arrives as a full timestamp in UTC.
+        assertEquals(java.time.LocalDateTime.of(2026, 10, 30, 17, 5), CrunchMath.time("2026-10-30T17:05", newYork))
+        assertEquals(java.time.LocalDateTime.of(2026, 10, 30, 18, 0), CrunchMath.time("2026-10-30T22:00:00.000Z", newYork))
+    }
 }

@@ -3,11 +3,12 @@ import { currentUserId } from '../auth/middleware.js'
 import { HttpError } from '../lib/errors.js'
 import { Connection } from '../models.js'
 import { crunchRouter, disconnectCrunch } from './crunch.js'
-import { disconnectPlaid, plaidRouter, plaidStatus } from './plaid.js'
+import { disconnectPlaid, plaidRouter } from './plaid.js'
 import { ACTIVITYWATCH_PROVIDER, activityWatchRouter, disconnectActivityWatch } from './activityWatch.js'
 import { PHONE_PROVIDER, disconnectPhones, phoneRouter } from './phone.js'
 import { screenTimeRouter } from './screenTime.js'
-import { findProvider, providers } from './registry.js'
+import { integrationList } from './list.js'
+import { findProvider } from './registry.js'
 
 export const integrations = Router()
 
@@ -26,32 +27,8 @@ integrations.use('/phone', phoneRouter)
 
 // List every integration with this user's connection state.
 integrations.get('/', async (req, res) => {
-  const userId = currentUserId(req)
-  const connections = await Connection.find({ userId })
-  const byProvider = new Map(connections.map((c) => [c.provider, c]))
-  const plaid = await plaidStatus(userId)
-
-  res.json(
-    providers.map((p) => {
-      // Plaid keeps its own records (one per bank), so its state comes from there.
-      const connection = p.id === 'plaid' ? plaid : byProvider.get(p.id)
-      return {
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        category: p.category,
-        api: p.api,
-        url: p.url,
-        note: p.note,
-        available: p.implemented && (p.isConfigured?.() ?? true),
-        status: connection ? 'connected' : 'not_connected',
-        connectedAt: connection?.connectedAt,
-        accountLabel: connection?.accountLabel,
-      }
-    }),
-  )
+  res.json(await integrationList(currentUserId(req)))
 })
-
 // Start connecting. Each provider's real flow (OAuth redirect, Plaid Link, ...) gets added here
 // as we build them one at a time.
 integrations.post('/:id/connect', (req) => {

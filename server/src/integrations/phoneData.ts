@@ -5,6 +5,8 @@ import { requireId } from '../lib/crud.js'
 import { HttpError } from '../lib/errors.js'
 import { ManualAccount, Meal, PhoneDevice, Skill, Transaction, Workout } from '../models.js'
 import { dateString, mealSchema, skillSchema, workoutSchema } from '../validation.js'
+import { crunchData, syncCrunch } from './crunch.js'
+import { integrationList } from './list.js'
 import { plaidAccounts } from './plaid.js'
 import { saveCategory, screenTimeData } from './screenTime.js'
 
@@ -101,6 +103,18 @@ phoneDataRouter.delete('/workouts/:id', async (req, res) => {
   if (gone.deletedCount === 0) throw new HttpError(404, 'Not found')
   res.status(204).end()
 })
+// The fitness connectors (Crunch, MyFitnessPal) with whether each is connected, and Crunch's own data.
+phoneDataRouter.get('/fitness', async (_req, res) => {
+  const userId = ownerOf(res)
+  const connectors = (await integrationList(userId)).filter((i) => i.category === 'fitness')
+  res.json({ connectors, crunch: await crunchData(userId) })
+})
+
+// Refreshes Crunch from Crunch's site, like Sync now on the website.
+phoneDataRouter.post('/fitness/crunch/sync', async (_req, res) => {
+  res.json(await syncCrunch(ownerOf(res)))
+})
+
 /* ---------- Screen Time ---------- */
 
 const DAYS_FOR_PHONE = 45 // the phone's longest "last 30 days" plus some room, and it keeps the answer small

@@ -29,10 +29,24 @@ abstract class Screen(val activity: Activity, val store: Store) {
         setPadding(dp(16), dp(12), dp(16), dp(24))
     }
 
-    val root: View = ScrollView(activity).apply {
+    /** Stays at the top while the rest scrolls. Empty (and out of the way) unless a screen puts something in it. */
+    protected val header = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
         setBackgroundColor(Palette.background)
-        isFillViewport = true
-        addView(column)
+        visibility = View.GONE
+    }
+
+    val root: View = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
+        setBackgroundColor(Palette.background)
+        addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        addView(
+            ScrollView(activity).apply {
+                isFillViewport = true
+                addView(column)
+            },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f),
+        )
     }
 
     /** Called each time the screen comes into view, or the app is opened again. Reload what it shows. */

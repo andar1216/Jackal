@@ -1,6 +1,8 @@
 package app.valkyrie.phone
 
 import android.app.Activity
+import android.view.Gravity
+import android.view.View
 import android.widget.LinearLayout
 import java.time.LocalDate
 import org.json.JSONObject
@@ -14,8 +16,36 @@ class FinanceScreen(activity: Activity, store: Store) : Screen(activity, store) 
     private var month = LocalDate.now().toString().take(7)
     private var loaded = false
 
+    // The month and its buttons stay at the top while the rest scrolls.
+    private val monthLabel = text("", 17f, bold = true).apply {
+        gravity = Gravity.CENTER
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    private val earlier = chip("<", false) { move(-1) }
+    private val later = chip(">", false) { move(1) }
+
     init {
+        header.visibility = View.VISIBLE
+        header.setPadding(dp(16), dp(12), dp(16), dp(12))
+        header.addView(row(earlier.apply { setPadding(dp(18), dp(8), dp(18), dp(8)) }, monthLabel, later.apply { setPadding(dp(18), dp(8), dp(18), dp(8)) }))
         column.addView(content)
+        drawHeader()
+    }
+
+    private fun drawHeader() {
+        monthLabel.text = FinanceMath.monthName(month)
+        // The future has nothing in it, so the next month can't be opened from this one.
+        val canGoLater = month < LocalDate.now().toString().take(7)
+        later.alpha = if (canGoLater) 1f else 0.35f
+        later.isEnabled = canGoLater
+    }
+
+    private fun move(by: Int) {
+        val next = FinanceMath.shift(month, by)
+        if (next > LocalDate.now().toString().take(7)) return
+        month = next
+        drawHeader()
+        show()
     }
 
     override fun show() {
@@ -34,19 +64,6 @@ class FinanceScreen(activity: Activity, store: Store) : Screen(activity, store) 
 
     private fun draw(data: JSONObject) {
         content.removeAllViews()
-        val current = LocalDate.now().toString().take(7)
-
-        content.addView(
-            row(
-                button("<") { month = FinanceMath.shift(month, -1); show() },
-                text(FinanceMath.monthName(month), 17f, bold = true).apply {
-                    gravity = android.view.Gravity.CENTER
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                },
-                button(">") { month = FinanceMath.shift(month, 1); show() }.apply { isEnabled = month < current },
-            ),
-        )
-
         val net = data.optLong("netCents")
         val withoutBalance = data.optInt("withoutBalance")
         content.addView(

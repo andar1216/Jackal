@@ -32,12 +32,12 @@ object Api {
     }
 
     /** The raw answer, since some screens are lists rather than one object. */
-    private fun request(server: String, method: String, path: String, token: String?, body: JSONObject? = null): String {
+    private fun request(server: String, method: String, path: String, token: String?, body: JSONObject? = null, readTimeoutMs: Int = 30_000): String {
         val connection = URL("$server/api/phone$path").openConnection() as HttpURLConnection
         try {
             connection.requestMethod = method
             connection.connectTimeout = 8_000
-            connection.readTimeout = 30_000
+            connection.readTimeout = readTimeoutMs
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("User-Agent", "Valkyrie-Android/1.0")
             connection.setRequestProperty("ngrok-skip-browser-warning", "true") // ngrok's "you are about to visit" page is for browsers
@@ -137,6 +137,14 @@ object Api {
 
     fun deleteWorkout(server: String, token: String, id: String) {
         request(server, "DELETE", "/app/workouts/$id", token)
+    }
+
+    /** The fitness connectors (Crunch and so on) with whether each is connected, and Crunch's data. */
+    fun fitness(server: String, token: String): JSONObject = JSONObject(request(server, "GET", "/app/fitness", token))
+
+    /** Asks the server to refresh Crunch from Crunch's site. Signing in there can take a while. */
+    fun syncCrunch(server: String, token: String) {
+        request(server, "POST", "/app/fitness/crunch/sync", token, JSONObject(), readTimeoutMs = 120_000)
     }
 
     fun screenTime(server: String, token: String): JSONObject = JSONObject(request(server, "GET", "/app/screen-time", token))
